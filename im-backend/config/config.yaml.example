@@ -1,0 +1,34 @@
+# d-im 配置文件示例
+
+# 服务器配置
+server:
+  api_port: 8080  # API 服务器端口
+  ws_port: 9000   # WebSocket 服务器端口
+
+# MongoDB 配置
+mongodb:
+  uri: "mongodb://localhost:27017"
+  database: "go_im"
+
+# Redis 配置
+redis:
+  addr: "localhost:6379"
+  password: ""
+  db: 0
+
+# JWT 配置
+jwt:
+  public_key_path: "./config/keys/public.pem"
+
+# 日志配置
+log:
+  level: "info"  # debug, info, warn, error
+  format: "json" # json, text
+  output: "stdout" # stdout, stderr, file
+
+# WebSocket 配置
+websocket:
+  heartbeat_interval: 30s  # 心跳间隔
+  heartbeat_timeout: 10s   # 心跳超时
+  read_timeout: 60s        # 读取超时
+  write_timeout: 10s       # 写入超时 

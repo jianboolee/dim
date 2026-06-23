@@ -1,0 +1,96 @@
+import { MessageType, type Conversation, type Message } from '@/sdk/im'
+
+export function getPeerUserId(conversation: Conversation, currentUserId: string): string {
+  return conversation.participants.find((id) => id !== currentUserId) ?? ''
+}
+
+export function getUnreadCount(conversation: Conversation, currentUserId: string): number {
+  if (!currentUserId) return 0
+  return conversation.unread_counts[currentUserId] ?? 0
+}
+
+export function sortConversationsByActivity(conversations: Conversation[]): Conversation[] {
+  return [...conversations].sort((a, b) => {
+    const timeA = a.last_message?.created_at || a.updated_at || a.last_activity
+    const timeB = b.last_message?.created_at || b.updated_at || b.last_activity
+    return new Date(timeB).getTime() - new Date(timeA).getTime()
+  })
+}
+
+function previewImageFromMessage(message: Message): string {
+  if (message.type === MessageType.Card) return message.card_info?.image_url ?? ''
+  if (message.type === MessageType.Image) return message.media_info?.url ?? ''
+  return ''
+}
+
+function matchesMessage(conversation: Conversation, message: Message): boolean {
+  const fromId = message.from_id
+  if (!fromId) return false
+  return conversation.participants.includes(fromId) && conversation.participants.includes(message.to_id)
+}
+
+export function buildConversationFromMessage(message: Message, currentUserId: string): Conversation {
+  const fromId = message.from_id ?? ''
+  const timestamp = message.created_at ?? new Date().toISOString()
+
+  return {
+    id: [fromId, message.to_id].sort().join(':'),
+    type: 'private',
+    participants: [fromId, message.to_id],
+    last_message: message,
+    image_url: previewImageFromMessage(message),
+    unread_counts: message.to_id === currentUserId ? { [currentUserId]: 1 } : {},
+    created_at: timestamp,
+    updated_at: timestamp,
+    last_activity: timestamp,
+  }
+}
+
+/** 收到实时消息后，不可变地更新会话列表 */
+export function applyIncomingMessage(
+  conversations: Conversation[],
+  message: Message,
+  currentUserId: string,
+): Conversation[] {
+  const index = conversations.findIndex((conversation) => matchesMessage(conversation, message))
+
+  if (index === -1) {
+    return sortConversationsByActivity([
+      buildConversationFromMessage(message, currentUserId),
+      ...conversations,
+    ])
+  }
+
+  const existing = conversations[index]!
+  const previewImage = previewImageFromMessage(message)
+
+  const updated: Conversation = {
+    ...existing,
+    last_message: message,
+    updated_at: message.created_at ?? existing.updated_at,
+    last_activity: message.created_at ?? existing.last_activity,
+    image_url: previewImage || existing.image_url,
+    unread_counts:
+      message.to_id === currentUserId
+        ? {
+            ...existing.unread_counts,
+            [currentUserId]: (existing.unread_counts[currentUserId] ?? 0) + 1,
+          }
+        : existing.unread_counts,
+  }
+
+  const next = [...conversations]
+  next[index] = updated
+  return sortConversationsByActivity(next)
+}
+
+export function collectPeerUserIds(conversations: Conversation[], currentUserId: string): string[] {
+  const ids = new Set<string>()
+
+  for (const conversation of conversations) {
+    const peerId = getPeerUserId(conversation, currentUserId)
+    if (peerId) ids.add(peerId)
+  }
+
+  return [...ids]
+}
