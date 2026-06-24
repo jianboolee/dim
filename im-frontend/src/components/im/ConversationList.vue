@@ -132,7 +132,19 @@ const conversationItems = computed(() => {
 })
 
 const selectConversation = (item: { id: string; peerId: string }) => {
-  if (!item.id || item.id === props.activeConversationId) return
+  if (!item.id) return
+
+  if (item.id === props.activeConversationId) {
+    emit('select', '')
+    if (props.navigateMode === 'none') return
+    const emptyLocation = { name: 'im-chat-empty' as const }
+    if (props.navigateMode === 'replace') {
+      router.replace(emptyLocation)
+      return
+    }
+    router.push(emptyLocation)
+    return
+  }
 
   clearUnreadForPeer(item.peerId)
   emit('select', item.id)

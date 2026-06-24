@@ -8,7 +8,7 @@
         <ConversationList embedded navigate-mode="replace" :active-conversation-id="conversationId" />
       </aside>
 
-      <div class="chat-main">
+      <div v-if="hasSelectedConversation" class="chat-main">
     <div class="nav-bar">
       <div class="nav-bar-content">
         <!-- <button class="nav-side-btn back-btn" type="button" @click="handleBack">
@@ -99,6 +99,11 @@
       />
     </div>
       </div>
+      <div v-else class="chat-main chat-empty-main">
+        <div class="chat-empty-state">
+          <i class="ri-chat-3-line"></i>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -143,6 +148,7 @@ const showMoreOptions = ref(false)
 const isConnected = computed(() => imStore.isConnected)
 const currentUserId = computed(() => userStore.userInfo?.id)
 const conversationId = computed(() => props.conversationId)
+const hasSelectedConversation = computed(() => Boolean(conversationId.value))
 const peerUserId = computed(
   () =>
     conversation.value?.to_user_info?.id ||
@@ -719,8 +725,9 @@ const initChat = async () => {
   }
 
   if (!conversationId.value) {
-    showToast('无效的会话')
-    router.replace({ name: 'im-home' })
+    resetChatState()
+    imStore.initSDK()
+    imStore.addMessageHandler(handleNewMessage)
     return
   }
 
@@ -749,7 +756,7 @@ onMounted(() => {
 watch(
   () => props.conversationId,
   (nextConversationId, prevConversationId) => {
-    if (nextConversationId && nextConversationId !== prevConversationId) {
+    if (nextConversationId !== prevConversationId) {
       imStore.removeMessageHandler(handleNewMessage)
       initChat()
     }
@@ -759,7 +766,7 @@ watch(
 watch(
   () => imStore.isConnected,
   (connected, wasConnected) => {
-    if (connected && wasConnected === false) {
+    if (hasSelectedConversation.value && connected && wasConnected === false) {
       syncLatestMessages()
     }
   },
@@ -810,6 +817,27 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   background: white;
+}
+
+.chat-empty-main {
+  align-items: center;
+  justify-content: center;
+  background: #fafbfe;
+}
+
+.chat-empty-state {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  color: #8a96aa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-empty-state i {
+  font-size: 38px;
+  line-height: 1;
 }
 
 @media (max-width: 767px) {
