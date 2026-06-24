@@ -4,8 +4,27 @@
       <aside class="chat-sidebar">
         <div class="sidebar-header">
           <span class="sidebar-title">消息</span>
+          <button class="sidebar-icon-btn" type="button" aria-label="搜索会话">
+            <i class="ri-search-line"></i>
+          </button>
         </div>
         <ConversationList embedded navigate-mode="replace" :active-conversation-id="conversationId" />
+        <div ref="sidebarMenuRef" class="sidebar-footer">
+          <button
+            class="sidebar-menu-btn"
+            type="button"
+            :class="{ 'is-active': showSidebarMenu }"
+            aria-label="更多"
+            @click="showSidebarMenu = !showSidebarMenu"
+          >
+            <i class="ri-menu-line"></i>
+          </button>
+          <div v-if="showSidebarMenu" class="sidebar-menu">
+            <button type="button" class="sidebar-menu-item" @click="handleLogout">
+              退出登录
+            </button>
+          </div>
+        </div>
       </aside>
 
       <div v-if="hasSelectedConversation" class="chat-main">
@@ -26,7 +45,7 @@
       </div>
     </div>
 
-    <div class="message-container" @click="showMoreOptions = false">
+    <div class="message-container" @click="showMoreOptions = false; showSidebarMenu = false">
       <div ref="messageListRef" class="message-list" @scroll="handleScroll">
         <div v-if="loading" class="loading-spinner">
           <div class="spinner"></div>
@@ -146,7 +165,9 @@ const messages = ref<ChatMessage[]>([])
 const conversation = ref<Conversation | null>(null)
 const targetUser = ref<UserInfo | null>(null)
 const messageListRef = ref<HTMLElement | null>(null)
+const sidebarMenuRef = ref<HTMLElement | null>(null)
 const showMoreOptions = ref(false)
+const showSidebarMenu = ref(false)
 const isMobileViewport = ref(false)
 let cleanupViewportListener: (() => void) | null = null
 
@@ -195,6 +216,21 @@ const handleBack = () => {
   }
 
   router.replace({ name: 'im-home' })
+}
+
+const handleLogout = () => {
+  showSidebarMenu.value = false
+  userStore.logout()
+  router.replace({ name: 'im-login' })
+}
+
+const handleDocumentPointerDown = (event: PointerEvent) => {
+  if (!showSidebarMenu.value) return
+  const target = event.target
+  if (target instanceof Node && sidebarMenuRef.value?.contains(target)) {
+    return
+  }
+  showSidebarMenu.value = false
 }
 
 const pageSize = 20
@@ -763,8 +799,10 @@ onMounted(() => {
   }
   isMobileViewport.value = mediaQuery.matches
   mediaQuery.addEventListener('change', handleViewportChange)
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
   cleanupViewportListener = () => {
     mediaQuery.removeEventListener('change', handleViewportChange)
+    document.removeEventListener('pointerdown', handleDocumentPointerDown)
   }
 
   initChat()
@@ -821,12 +859,81 @@ onUnmounted(() => {
   flex-shrink: 0;
   padding: 14px var(--spacing-base);
   border-bottom: 1px solid var(--border-color-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-small);
 }
 
 .sidebar-title {
   font-size: 16px;
   font-weight: 600;
   color: var(--text-color-dark);
+}
+
+.sidebar-icon-btn,
+.sidebar-menu-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-color-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-icon-btn i,
+.sidebar-menu-btn i {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.sidebar-icon-btn:hover,
+.sidebar-menu-btn:hover,
+.sidebar-menu-btn.is-active {
+  background: var(--bg-color-gray);
+  color: var(--text-color-dark);
+}
+
+.sidebar-footer {
+  position: relative;
+  flex-shrink: 0;
+  padding: 10px var(--spacing-base);
+  border-top: 1px solid var(--border-color-light);
+}
+
+.sidebar-menu {
+  position: absolute;
+  left: var(--spacing-base);
+  bottom: calc(100% + 6px);
+  min-width: 132px;
+  padding: 6px;
+  border: 1px solid var(--border-color-light);
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
+  z-index: 20;
+}
+
+.sidebar-menu-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--text-color-dark);
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-menu-item:hover {
+  background: var(--bg-color-gray);
 }
 
 .chat-main {

@@ -361,7 +361,7 @@ defineExpose({ refresh })
 
 .last-message {
   color: var(--text-color-secondary);
-  font-size: 14px;
+  font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
