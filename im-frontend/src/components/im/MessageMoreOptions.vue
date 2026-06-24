@@ -67,7 +67,7 @@ const uploadFiles = async (files: File | File[]) => {
   }
   
   try {
-    const response = await request('/api/im/uploads', {
+    const response = await request('/im/api/uploads', {
       method: 'POST',
       body: formData,
       headers: {

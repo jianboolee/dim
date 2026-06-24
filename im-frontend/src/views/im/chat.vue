@@ -276,10 +276,15 @@ const fetchHistoryMessages = async (loadMore = false) => {
     const oldScrollTop = messageListRef.value?.scrollTop || 0
     const oldScrollHeight = messageListRef.value?.scrollHeight || 0
 
+    const oldestMessage = loadMore && messages.value.length > 0 ? messages.value[0] : undefined
+    const beforeId = oldestMessage?.id && !oldestMessage.id.startsWith('temp-')
+      ? oldestMessage.id
+      : undefined
+
     const response = await imStore.imSDK.getMessages({
-      to_id: peerUserId.value,
+      receiver_id: peerUserId.value,
       limit: pageSize,
-      skip: loadMore ? messages.value.length : 0,
+      before_id: beforeId,
     })
 
     const newMessages = response.sort(
@@ -328,7 +333,7 @@ const markMessageAsRead = async (messageId: string) => {
 
 const fetchTargetUser = async () => {
   try {
-    const response = await request<ApiResponse<UserInfo>>(`/api/im/users/${peerUserId.value}`)
+    const response = await request<ApiResponse<UserInfo>>(`/im/api/users/${peerUserId.value}`)
     if (response.code === 200) {
       targetUser.value = response.data
     }

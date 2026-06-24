@@ -9,6 +9,11 @@ const router = createRouter({
       redirect: '/im/home',
     },
     {
+      path: '/im/enter',
+      name: 'im-enter',
+      component: () => import('@/views/im/enter.vue'),
+    },
+    {
       path: '/im/login',
       name: 'im-login',
       component: () => import('@/views/im/login.vue'),

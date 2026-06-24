@@ -13,7 +13,7 @@ export function useUserProfiles() {
     if (cached) return cached
 
     try {
-      const response = await request<ApiResponse<UserInfo>>(`/api/im/users/${userId}`)
+      const response = await request<ApiResponse<UserInfo>>(`/im/api/users/${userId}`)
       if (response.code === 200) {
         cache.value = { ...cache.value, [userId]: response.data }
         return response.data

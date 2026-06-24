@@ -25,29 +25,14 @@ func NewConversationService(repo *repository.ConversationRepository) *Conversati
 	}
 }
 
-// CreatePrivateConversation 创建单聊会话
+// CreatePrivateConversation 创建或获取单聊会话
 func (s *ConversationService) CreatePrivateConversation(ctx context.Context, senderID, receiverID string) (*models.Conversation, error) {
-	// 创建新的会话
-	participants := []string{senderID, receiverID}
-	now := time.Now()
-	conversationID, err := s.repo.UpsertConversationByParticipants(ctx, participants, bson.M{
-		"$set": bson.M{
-			"type":         models.ConversationTypePrivate,
-			"participants": participants,
-			"created_at":   now,
-			"updated_at":   now,
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create conversation: %w", err)
-	}
+	return s.repo.UpsertConversationByParticipants(ctx, []string{senderID, receiverID})
+}
 
-	conversation, err := s.repo.GetConversation(ctx, conversationID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get conversation: %w", err)
-	}
-
-	return conversation, nil
+// GetOrCreatePrivateConversation 获取或创建单聊会话（参与者顺序无关）
+func (s *ConversationService) GetOrCreatePrivateConversation(ctx context.Context, userAID, userBID string) (*models.Conversation, error) {
+	return s.repo.UpsertConversationByParticipants(ctx, []string{userAID, userBID})
 }
 
 // GetConversation 获取会话详情
@@ -195,40 +180,24 @@ func (s *ConversationService) CreateOrUpdateConversationByMessage(ctx context.Co
 		UpdatedAt:    now,
 	}
 
-	set := bson.M{
-		"updated_at": now,
-	}
-
-	// 如果是卡片消息，更新会话的图片
-	if message.Payload != nil && message.Type == models.MessageTypeCard {
-		set["image_url"] = message.Payload.ImageURL
-	}
-
 	// Upsert 执行：根据 participants，插入或更新会话
-	upsertedID, err := s.repo.UpsertConversationByParticipants(ctx, conversation.Participants, bson.M{
-		"$set": set,
-		"$setOnInsert": bson.M{
-			"type":         conversation.Type,
-			"participants": conversation.Participants,
-			"created_at":   conversation.CreatedAt,
-		},
-		"$inc": bson.M{
-			"unread_counts." + message.ReceiverID: 1,
-		},
-	})
+	upsertedConversation, err := s.repo.UpsertConversationByParticipants(ctx, conversation.Participants)
 	if err != nil {
 		return nil, err
 	}
 
-	message.ConversationID = upsertedID
+	message.ConversationID = upsertedConversation.ID
+	conversation.ID = upsertedConversation.ID
 
-	conversation.ID = upsertedID
-
-	// 更新会话的最后一条消息， 异步执行
+	// 更新会话的最后一条消息与未读数
 	go func() {
-		err = s.repo.UpdateConversation(context.Background(), upsertedID, bson.M{
+		err = s.repo.UpdateConversation(context.Background(), upsertedConversation.ID, bson.M{
 			"$set": bson.M{
 				"last_message": message,
+				"updated_at":   time.Now(),
+			},
+			"$inc": bson.M{
+				"unread_counts." + message.ReceiverID: 1,
 			},
 		})
 		if err != nil {

@@ -3,7 +3,7 @@ export const config = {
   wsURL: '/',
 
   api: {
-    users: '/api/im/users',
-    uploads: '/api/im/uploads',
+    users: '/im/api/users',
+    uploads: '/im/api/uploads',
   },
-} 
+}

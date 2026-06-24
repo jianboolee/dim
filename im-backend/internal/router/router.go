@@ -16,14 +16,14 @@ func SetupAPI(
 	messageHandler *handler.MessageHandler,
 	conversationHandler *handler.ConversationHandler,
 	sessionHandler *handler.SessionHandler,
+	userHandler *handler.UserHandler,
+	integrationHandler *handler.IntegrationHandler,
 	jwtAuthMiddleware gin.HandlerFunc,
+	integrationAPIKeyMiddleware gin.HandlerFunc,
 ) *gin.Engine {
 	r := gin.Default()
-
-	// 添加中间件
 	r.Use(gin.Recovery())
 
-	// 健康检查路由 - 不需要认证
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status": "ok",
@@ -31,32 +31,33 @@ func SetupAPI(
 		})
 	})
 
-	// API服务不包含WebSocket路由
-
-	// IM 路由组
 	im := r.Group("/im")
 
-	// IM 相关路由
+	integration := im.Group("/api/integration")
+	integration.Use(integrationAPIKeyMiddleware)
+	{
+		integration.POST("/conversations", integrationHandler.CreateConversation)
+	}
+
 	api := im.Group("/api")
 	api.Use(jwtAuthMiddleware)
 	{
-		// 消息相关路由
-		api.GET("/messages", messageHandler.GetMessages)                 // 获取消息列表
-		api.POST("/messages", messageHandler.SendMessageHTTP)            // 发送消息
-		api.GET("/messages/unread/count", messageHandler.GetUnreadCount) // 获取未读消息数
-		api.PUT("/messages/:id/read", messageHandler.MarkMessageAsRead)  // 标记消息为已读
+		api.GET("/users/me", userHandler.GetMe)
+		api.GET("/users/:id", userHandler.GetUser)
 
-		// 会话相关路由
-		api.GET("/conversations", conversationHandler.GetUserConversations)                // 获取会话列表
-		api.GET("/conversations/:id/messages", messageHandler.GetMessagesByConversationID) // 获取会话消息
-		api.POST("/conversations", conversationHandler.CreateConversation)                 // 创建会话
-		api.GET("/conversations/:id", conversationHandler.GetConversation)                 // 获取会话详情
+		api.GET("/messages", messageHandler.GetMessages)
+		api.POST("/messages", messageHandler.SendMessageHTTP)
+		api.GET("/messages/unread/count", messageHandler.GetUnreadCount)
+		api.PUT("/messages/:id/read", messageHandler.MarkMessageAsRead)
 
-		// 会话状态相关路由
+		api.GET("/conversations", conversationHandler.GetUserConversations)
+		api.GET("/conversations/:id/messages", messageHandler.GetMessagesByConversationID)
+		api.POST("/conversations", conversationHandler.CreateConversation)
+		api.GET("/conversations/:id", conversationHandler.GetConversation)
+
 		api.GET("/sessions/:user_id", sessionHandler.GetUserStatus)
 		api.POST("/sessions/keepalive", sessionHandler.KeepAlive)
 		api.POST("/sessions/batch", sessionHandler.GetUsersStatus)
-
 		api.GET("/sessions/online/count", sessionHandler.GetOnlineUserCount)
 	}
 
@@ -69,11 +70,8 @@ func SetupWS(
 	wsHandler *handler.WSHandler,
 ) *gin.Engine {
 	r := gin.Default()
-
-	// 添加中间件
 	r.Use(gin.Recovery())
 
-	// 健康检查路由
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status": "ok",
@@ -81,7 +79,6 @@ func SetupWS(
 		})
 	})
 
-	// WebSocket 连接
 	r.GET("/im/ws", wsHandler.HandleWebSocket)
 
 	return r

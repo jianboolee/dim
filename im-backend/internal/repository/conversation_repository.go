@@ -59,7 +59,7 @@ func (r *ConversationRepository) GetConversation(ctx context.Context, id primiti
 
 // GetConversationByParticipants 根据参与者获取会话
 func (r *ConversationRepository) GetConversationByParticipants(ctx context.Context, participants []string) (*models.Conversation, error) {
-	hashID := GenerateConversationHashID(participants)
+	hashID := GenerateConversationHashID(utils.NormalizeParticipantIDs(participants)).Hex()
 
 	var conversation models.Conversation
 	err := r.collection.FindOne(ctx, bson.M{"hash_id": hashID}).Decode(&conversation)
@@ -160,39 +160,41 @@ func (r *ConversationRepository) GetUnreadCount(ctx context.Context, userID stri
 	return result.TotalUnread, nil
 }
 
-// UpsertConversationByParticipants 创建或更新会话
+// UpsertConversationByParticipants 创建或更新私聊会话（参与者顺序无关）
 func (r *ConversationRepository) UpsertConversationByParticipants(
 	ctx context.Context,
 	participants []string,
-	update bson.M,
-) (primitive.ObjectID, error) {
-	hashID := GenerateConversationHashID(participants)
+) (*models.Conversation, error) {
+	normalized := utils.NormalizeParticipantIDs(participants)
+	hashID := GenerateConversationHashID(normalized).Hex()
+	now := time.Now()
 
-	filter := bson.M{
-		"hash_id": hashID,
+	filter := bson.M{"hash_id": hashID}
+	update := bson.M{
+		"$set": bson.M{
+			"type":         models.ConversationTypePrivate,
+			"participants": normalized,
+			"updated_at":   now,
+		},
+		"$setOnInsert": bson.M{
+			"hash_id":       hashID,
+			"unread_counts": bson.M{},
+			"created_at":    now,
+		},
 	}
 
 	opts := options.Update().SetUpsert(true)
-
-	result, err := r.collection.UpdateOne(ctx, filter, update, opts)
+	_, err := r.collection.UpdateOne(ctx, filter, update, opts)
 	if err != nil {
-		return primitive.NilObjectID, err
+		return nil, err
 	}
 
-	if result.UpsertedID != nil {
-		if oid, ok := result.UpsertedID.(primitive.ObjectID); ok {
-			return oid, nil
-		}
-	}
-
-	// 如果是更新现有文档，直接返回 conversationID, 确保返回的ID是唯一的
 	var conversation models.Conversation
-	err = r.collection.FindOne(ctx, filter).Decode(&conversation)
-	if err != nil {
-		return primitive.NilObjectID, err
+	if err := r.collection.FindOne(ctx, filter).Decode(&conversation); err != nil {
+		return nil, err
 	}
 
 	logger.Debug("UpsertConversationByParticipants", zap.Any("conversation", conversation))
 
-	return conversation.ID, nil
+	return &conversation, nil
 }

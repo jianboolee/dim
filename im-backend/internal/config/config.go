@@ -6,8 +6,9 @@ import (
 
 type Config struct {
 	App struct {
-		Name          string
-		DefaultAvatar string
+		Name            string
+		DefaultAvatar   string
+		FrontendBaseURL string
 	}
 	Server struct {
 		APIPort int
@@ -23,7 +24,12 @@ type Config struct {
 		DB       int
 	}
 	JWT struct {
-		PublicKeyPath string
+		Secret string
+		Expire int
+		Issuer string
+	}
+	Integration struct {
+		APIKey string
 	}
 }
 
@@ -31,7 +37,6 @@ func LoadConfig() (*Config, error) {
 	viper.SetConfigFile(".env")
 	viper.AutomaticEnv()
 
-	// 设置默认值
 	viper.SetDefault("API_SERVER_PORT", 8080)
 	viper.SetDefault("WS_SERVER_PORT", 9000)
 
@@ -42,9 +47,14 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("REDIS_PASSWORD", "")
 	viper.SetDefault("REDIS_DB", 0)
 
-	viper.SetDefault("JWT_PUBLIC_KEY_PATH", "./config/keys/public.pem")
+	viper.SetDefault("JWT_SECRET", "")
+	viper.SetDefault("JWT_EXPIRE", 3600)
+	viper.SetDefault("JWT_ISSUER", "d-im")
 
-	viper.SetDefault("APP_NAME", "XIM")
+	viper.SetDefault("INTEGRATION_API_KEY", "")
+	viper.SetDefault("IM_FRONTEND_BASE_URL", "http://localhost:5173")
+
+	viper.SetDefault("APP_NAME", "d-im")
 	viper.SetDefault("APP_DEFAULT_AVATAR", "")
 
 	if err := viper.ReadInConfig(); err != nil {
@@ -55,7 +65,6 @@ func LoadConfig() (*Config, error) {
 
 	cfg := &Config{}
 
-	// 从环境变量读取配置
 	cfg.Server.APIPort = viper.GetInt("API_SERVER_PORT")
 	cfg.Server.WSPort = viper.GetInt("WS_SERVER_PORT")
 
@@ -66,7 +75,12 @@ func LoadConfig() (*Config, error) {
 	cfg.Redis.Password = viper.GetString("REDIS_PASSWORD")
 	cfg.Redis.DB = viper.GetInt("REDIS_DB")
 
-	cfg.JWT.PublicKeyPath = viper.GetString("JWT_PUBLIC_KEY_PATH")
+	cfg.JWT.Secret = viper.GetString("JWT_SECRET")
+	cfg.JWT.Expire = viper.GetInt("JWT_EXPIRE")
+	cfg.JWT.Issuer = viper.GetString("JWT_ISSUER")
+
+	cfg.Integration.APIKey = viper.GetString("INTEGRATION_API_KEY")
+	cfg.App.FrontendBaseURL = viper.GetString("IM_FRONTEND_BASE_URL")
 
 	cfg.App.Name = viper.GetString("APP_NAME")
 	cfg.App.DefaultAvatar = viper.GetString("APP_DEFAULT_AVATAR")

@@ -14,7 +14,7 @@ export const useUnreadMessageStore = defineStore('unreadMessage', () => {
     // 获取未读消息数
     const fetchUnreadCount = async () => {
         try {
-            const response = await request('/api/im/messages/unread/count') as { unread_count: number }
+            const response = await request('/im/api/messages/unread/count') as { unread_count: number }
             if (response) {
                 unreadCount.value = response.unread_count
             }

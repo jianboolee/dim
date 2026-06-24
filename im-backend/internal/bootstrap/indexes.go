@@ -107,9 +107,8 @@ func InitConversationIndexes(ctx context.Context, db *mongo.Database) error {
 				SetName("idx_type_participants"),
 		},
 		{
-			Keys: bson.D{{Key: "hash_id", Value: 1}},
-			Options: options.Index().
-				SetName("idx_hash_id"),
+			Keys:    bson.D{{Key: "hash_id", Value: 1}},
+			Options: options.Index().SetUnique(true).SetName("unique_hash_id"),
 		},
 		{
 			Keys: bson.D{{Key: "updated_at", Value: -1}},

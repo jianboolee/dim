@@ -15,15 +15,15 @@ import (
 )
 
 type WSHandler struct {
-	wsManager    *service.WSManager
-	jwtValidator *jwtpkg.JWTValidator
-	upgrader     websocket.Upgrader
+	wsManager  *service.WSManager
+	jwtService *jwtpkg.Service
+	upgrader   websocket.Upgrader
 }
 
-func NewWSHandler(wsManager *service.WSManager, jwtValidator *jwtpkg.JWTValidator) *WSHandler {
+func NewWSHandler(wsManager *service.WSManager, jwtService *jwtpkg.Service) *WSHandler {
 	return &WSHandler{
-		wsManager:    wsManager,
-		jwtValidator: jwtValidator,
+		wsManager:  wsManager,
+		jwtService: jwtService,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true // 在生产环境中应该更严格
@@ -43,7 +43,7 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 
 	// 验证 token
 	claims := &jwtpkg.AuthTokenClaims{}
-	if err := h.jwtValidator.Parse(token, claims); err != nil {
+	if err := h.jwtService.Parse(token, claims); err != nil {
 		log.Printf("Token validation error: %v", err)
 		response.Error(c, http.StatusUnauthorized, http.StatusUnauthorized, err.Error())
 		return

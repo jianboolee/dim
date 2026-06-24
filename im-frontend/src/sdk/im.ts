@@ -88,11 +88,73 @@ export enum MessageType {
   
   // 消息查询参数接口
   export interface MessageQueryParams {
-    to_id?: string;
+    receiver_id?: string;
+    before_id?: string;
     start_time?: string;
     end_time?: string;
     limit?: number;
-    skip?: number;
+  }
+
+  interface ApiResponse<T> {
+    code: number;
+    message?: string;
+    data: T;
+  }
+
+  function normalizeMessage(raw: Record<string, unknown>): Message {
+    return {
+      id: raw.id != null ? String(raw.id) : undefined,
+      from_id: String(raw.sender_id ?? raw.from_id ?? ''),
+      to_id: String(raw.receiver_id ?? raw.to_id ?? ''),
+      type: (raw.type as MessageType) ?? MessageType.Text,
+      content: String(raw.content ?? ''),
+      status: raw.status as MessageStatus | undefined,
+      media_info: raw.media_info as MediaInfo | undefined,
+      card_info: raw.card_info as CardInfo | undefined,
+      link_info: raw.link_info as LinkInfo | undefined,
+      created_at: raw.created_at as string | undefined,
+      updated_at: raw.updated_at as string | undefined,
+    };
+  }
+
+  function normalizeConversation(raw: Record<string, unknown>): Conversation {
+    const conv = raw as unknown as Conversation
+    return {
+      ...conv,
+      id: String(raw.id ?? conv.id ?? ''),
+    }
+  }
+
+  async function apiRequest<T>(
+    baseURL: string,
+    path: string,
+    token: string,
+    init: RequestInit = {},
+  ): Promise<T> {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+      ...(init.headers as Record<string, string> | undefined),
+    };
+
+    if (init.body && !(init.headers as Record<string, string> | undefined)?.['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    const response = await fetch(`${baseURL}${path}`, {
+      ...init,
+      headers,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Request failed: ${response.statusText}`);
+    }
+
+    const json = await response.json();
+    if (json && typeof json.code === 'number' && 'data' in json) {
+      return (json as ApiResponse<T>).data;
+    }
+
+    return json as T;
   }
   
   // 连接状态接口
@@ -138,7 +200,7 @@ export enum MessageType {
      */
     async connect(): Promise<void> {
       try {
-        this.ws = new WebSocket(`${this.baseURL.replace('http', 'ws')}/api/im/ws?token=${this.token}`);
+        this.ws = new WebSocket(`${this.baseURL.replace('http', 'ws')}/im/ws?token=${this.token}`);
         
         this.ws.onopen = () => {
           this._notifyConnectionHandlers({ status: 'connected' });
@@ -149,7 +211,8 @@ export enum MessageType {
         };
         
         this.ws.onmessage = (event: MessageEvent) => {
-          const message = JSON.parse(event.data);
+          const raw = JSON.parse(event.data);
+          const message = normalizeMessage(raw);
           this._notifyMessageHandlers(message);
         };
         
@@ -289,20 +352,29 @@ export enum MessageType {
         message.link_info = linkInfo;
       }
   
-      const response = await fetch(`${this.baseURL}/api/im/messages`, {
+      const response = await fetch(`${this.baseURL}/im/api/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.token}`
         },
-        body: JSON.stringify(message)
+        body: JSON.stringify({
+          receiver_id: toID,
+          type,
+          content,
+        })
       });
-  
+
       if (!response.ok) {
         throw new Error(`Failed to send message: ${response.statusText}`);
       }
-  
-      return response.json();
+
+      const json = await response.json();
+      if (json && typeof json.code === 'number' && json.data) {
+        return normalizeMessage(json.data);
+      }
+
+      return normalizeMessage(json);
     }
   
     /**
@@ -310,56 +382,58 @@ export enum MessageType {
      */
     async getMessages(params: MessageQueryParams = {}): Promise<Message[]> {
       const queryParams = new URLSearchParams();
-      if (params.to_id) queryParams.append('to_id', params.to_id);
+      if (params.receiver_id) queryParams.append('receiver_id', params.receiver_id);
+      if (params.before_id) queryParams.append('before_id', params.before_id);
       if (params.start_time) queryParams.append('start_time', params.start_time);
       if (params.end_time) queryParams.append('end_time', params.end_time);
       if (params.limit) queryParams.append('limit', params.limit.toString());
-      if (params.skip) queryParams.append('skip', params.skip.toString());
-  
-      const response = await fetch(`${this.baseURL}/api/im/messages?${queryParams}`, {
-        headers: {
-          'Authorization': `Bearer ${this.token}`
-        }
-      });
-  
-      if (!response.ok) {
-        throw new Error(`Failed to get messages: ${response.statusText}`);
-      }
-  
-      return response.json();
+
+      const data = await apiRequest<Record<string, unknown>[]>(
+        this.baseURL,
+        `/im/api/messages?${queryParams}`,
+        this.token,
+      );
+
+      return (data ?? []).map((item) => normalizeMessage(item));
     }
   
     /**
      * 获取会话列表
      */
     async getConversations(): Promise<Conversation[]> {
-      const response = await fetch(`${this.baseURL}/api/im/conversations`, {
-        headers: {
-          'Authorization': `Bearer ${this.token}`
-        }
-      });
-  
-      if (!response.ok) {
-        throw new Error(`Failed to get conversations: ${response.statusText}`);
-      }
-  
-      return response.json();
+      const data = await apiRequest<Record<string, unknown>[]>(
+        this.baseURL,
+        '/im/api/conversations',
+        this.token,
+      );
+
+      return (data ?? []).map((item) => normalizeConversation(item));
+    }
+
+    async getConversation(conversationId: string): Promise<Conversation> {
+      const data = await apiRequest<Record<string, unknown>>(
+        this.baseURL,
+        `/im/api/conversations/${conversationId}`,
+        this.token,
+      );
+
+      return normalizeConversation(data);
     }
   
     /**
      * 获取未读消息数
      */
     async getUnreadCount(): Promise<{ unread_count: number }> {
-      const response = await fetch(`${this.baseURL}/api/im/messages/unread/count`, {
+      const response = await fetch(`${this.baseURL}/im/api/messages/unread/count`, {
         headers: {
           'Authorization': `Bearer ${this.token}`
         }
       });
-  
+
       if (!response.ok) {
         throw new Error(`Failed to get unread count: ${response.statusText}`);
       }
-  
+
       return response.json();
     }
   
@@ -367,7 +441,7 @@ export enum MessageType {
      * 标记消息为已读
      */
     async markMessageAsRead(messageID: string): Promise<boolean> {
-      const response = await fetch(`${this.baseURL}/api/im/messages/${messageID}/read`, {
+      const response = await fetch(`${this.baseURL}/im/api/messages/${messageID}/read`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${this.token}`
@@ -385,33 +459,25 @@ export enum MessageType {
      * 获取用户在线状态
      */
     async getUserStatus(userID: string): Promise<Session> {
-      const response = await fetch(`${this.baseURL}/api/im/sessions/${userID}`, {
-        headers: {
-          'Authorization': `Bearer ${this.token}`
-        }
-      });
-  
-      if (!response.ok) {
-        throw new Error(`Failed to get user status: ${response.statusText}`);
-      }
-  
-      return response.json();
+      const data = await apiRequest<Session>(
+        this.baseURL,
+        `/im/api/sessions/${userID}`,
+        this.token,
+      );
+
+      return data;
     }
   
     /**
      * 保持在线状态
      */
     async keepAlive(): Promise<void> {
-      const response = await fetch(`${this.baseURL}/api/im/sessions/keepalive`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.token}`
-        }
-      });
-  
-      if (!response.ok) {
-        throw new Error(`Failed to keep alive: ${response.statusText}`);
-      }
+      await apiRequest<void>(
+        this.baseURL,
+        '/im/api/sessions/keepalive',
+        this.token,
+        { method: 'POST' },
+      );
     }
   
     /**
