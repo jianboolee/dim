@@ -20,8 +20,19 @@
             <i class="ri-menu-line"></i>
           </button>
           <div v-if="showSidebarMenu" class="sidebar-menu">
+            <div class="sidebar-user">
+              <img
+                class="sidebar-user-avatar"
+                :src="userStore.userInfo?.avatar || ''"
+                alt=""
+              >
+              <span class="sidebar-user-name">
+                {{ userStore.userInfo?.nickname || '当前用户' }}
+              </span>
+            </div>
             <button type="button" class="sidebar-menu-item" @click="handleLogout">
-              退出登录
+              <i class="ri-logout-box-r-line"></i>
+              <span>退出登录</span>
             </button>
           </div>
         </div>
@@ -41,10 +52,10 @@
           <i class="ri-arrow-left-s-line"></i>
         </button> -->
         <div class="nav-bar-center">
-          <div v-if="isConnected" class="user-info">
-            <h1 class="title">{{ targetUser?.nickname || '未知用户' }}</h1>
+          <div class="user-info">
+            <h1 class="title">{{ targetUser?.nickname || '-' }}</h1>
           </div>
-          <i v-else class="ri-loader-4-line nav-reconnect-icon" aria-label="连接中"></i>
+          <i v-if="!isConnected"  class="ri-loader-4-line nav-reconnect-icon" aria-label="连接中"></i>
         </div>
         <button class="nav-side-btn" type="button">
           <i class="ri-more-line"></i>
@@ -63,27 +74,31 @@
         >
           没有更多消息了
         </div>
-        <div
-          v-for="msg in messages"
-          :key="msg.id ?? msg.created_at"
-          class="message-item"
-          :class="{ 'message-mine': msg.from_id === currentUserId }"
-        >
-          <div class="message-avatar">
-            <img
-              :src="msg.from_id === currentUserId ? userStore.userInfo?.avatar || '' : targetUser?.avatar || ''"
-              alt=""
-            >
+        <template v-for="item in timelineItems" :key="item.id">
+          <div v-if="item.type === 'time'" class="message-time-divider">
+            {{ item.text }}
           </div>
-          <div class="message-wrapper">
-            <component
-              :is="MessageComponents[msg.type || MessageType.Text] ?? MessageComponents[MessageType.Text]"
-              :message="msg"
-              :isMine="msg.from_id === currentUserId"
-              @retry="retryMessage(msg)"
-            />
+          <div
+            v-else
+            class="message-item"
+            :class="{ 'message-mine': item.message.from_id === currentUserId }"
+          >
+            <div class="message-avatar">
+              <img
+                :src="item.message.from_id === currentUserId ? userStore.userInfo?.avatar || '' : targetUser?.avatar || ''"
+                alt=""
+              >
+            </div>
+            <div class="message-wrapper">
+              <component
+                :is="MessageComponents[item.message.type || MessageType.Text] ?? MessageComponents[MessageType.Text]"
+                :message="item.message"
+                :isMine="item.message.from_id === currentUserId"
+                @retry="retryMessage(item.message)"
+              />
+            </div>
           </div>
-        </div>
+        </template>
       </div>
     </div>
 
@@ -156,6 +171,7 @@ import MessageMoreOptions from '@/components/im/MessageMoreOptions.vue'
 import MultilineInput from '@/components/im/MultilineInput.vue'
 import ConversationList from '@/components/im/ConversationList.vue'
 import { usePageTitleNotification } from '@/composables/usePageTitleNotification'
+import { buildMessageTimeline } from '@/utils/im/timeline'
 
 const props = defineProps<{
   conversationId: string
@@ -186,6 +202,7 @@ const conversationId = computed(() => props.conversationId)
 const hasSelectedConversation = computed(() => Boolean(conversationId.value))
 const inputMinRows = computed(() => (isMobileViewport.value ? 1 : 2))
 const inputMaxRows = computed(() => (isMobileViewport.value ? 4 : 6))
+const timelineItems = computed(() => buildMessageTimeline(messages.value))
 const peerUserId = computed(
   () =>
     conversation.value?.to_user_info?.id ||
@@ -946,13 +963,43 @@ onUnmounted(() => {
   position: absolute;
   left: var(--spacing-base);
   bottom: calc(100% + 6px);
-  min-width: 132px;
+  min-width: 176px;
   padding: 6px;
   border: 1px solid var(--border-color-light);
   border-radius: 8px;
   background: white;
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
   z-index: 20;
+}
+
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 8px 9px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border-color-light);
+}
+
+.sidebar-user-avatar {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #eef1f6;
+  object-fit: cover;
+}
+
+.sidebar-user-name {
+  min-width: 0;
+  color: var(--text-color-dark);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sidebar-menu-item {
@@ -964,8 +1011,18 @@ onUnmounted(() => {
   color: var(--text-color-dark);
   font-size: 14px;
   line-height: 1.4;
-  text-align: left;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+
+.sidebar-menu-item i {
+  flex-shrink: 0;
+  color: var(--text-color-secondary);
+  font-size: 16px;
+  line-height: 1;
 }
 
 .sidebar-menu-item:hover {
@@ -1100,8 +1157,8 @@ onUnmounted(() => {
 }
 
 .nav-reconnect-icon {
-  font-size: 20px;
-  color: var(--text-color-secondary);
+  font-size: 16px;
+  color: var(--text-color-dark);
   animation: nav-reconnect-spin 0.8s linear infinite;
 }
 
@@ -1146,6 +1203,19 @@ onUnmounted(() => {
   display: flex;
   align-items: flex-start;
   margin-bottom: var(--spacing-large);
+}
+
+.message-time-divider {
+  width: fit-content;
+  max-width: calc(100% - 48px);
+  margin: 12px auto 16px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: transparent;
+  color: #8a93a3;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
 }
 
 .message-mine {

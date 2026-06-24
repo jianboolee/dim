@@ -326,7 +326,7 @@ defineExpose({ refresh })
 }
 
 .is-embedded .conversation-item.is-active {
-  background: var(--bg-color-gray);
+  background: white;
 }
 
 .conversation-list-root:not(.is-embedded) .conversation-item {
@@ -381,7 +381,7 @@ defineExpose({ refresh })
 }
 
 .nickname {
-  font-weight: 500;
+  font-weight: 700;
   font-size: var(--font-size-base);
   overflow: hidden;
   text-overflow: ellipsis;
