@@ -2,14 +2,12 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { request } from '@/utils/request'
 import { normalizeUnreadCount } from '@/utils/im/format'
-import { useIMStore } from './im'
 import { useUserStore } from './user'
 
 export const useUnreadMessageStore = defineStore('unreadMessage', () => {
     const unreadCount = ref(0)
     const heartbeatTimer = ref<ReturnType<typeof setInterval> | null>(null)
 
-    const imStore = useIMStore()
     const userStore = useUserStore()
 
     // 获取未读消息数
@@ -41,17 +39,10 @@ export const useUnreadMessageStore = defineStore('unreadMessage', () => {
 
     // 启动心跳
     const startHeartbeat = (interval = 60000) => {
-        // 清除可能存在的旧定时器
         stopHeartbeat()
         if (!userStore.token) return
 
-        if (imStore.isConnected) {
-            imStore.closeConnection()
-        }
-
-        // 立即执行一次
         fetchUnreadCount()
-        // 定期执行
         heartbeatTimer.value = setInterval(() => {
             fetchUnreadCount()
         }, interval)

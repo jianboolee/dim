@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { request } from '@/utils/request'
 import { refreshAccessToken } from '@/utils/authRefresh'
 import { startTokenRefresh, stopTokenRefresh } from '@/composables/useTokenRefresh'
+import { useConversationList } from '@/composables/useConversationList'
 import { useIMStore } from '@/stores/im'
 import { useUnreadMessageStore } from '@/stores/unreadMessage'
 import type { UserInfo } from '@/types/user'
@@ -65,6 +66,8 @@ export const useUserStore = defineStore('user', () => {
     token.value = null
     userInfo.value = null
     localStorage.removeItem(TOKEN_KEY)
+    const { resetConversations } = useConversationList()
+    resetConversations()
   }
 
   const refreshToken = async (): Promise<string | null> => {

@@ -52,18 +52,22 @@ export function applyIncomingMessage(
   conversations: Conversation[],
   message: Message,
   currentUserId: string,
+  activePeerId?: string,
 ): Conversation[] {
   const index = conversations.findIndex((conversation) => matchesMessage(conversation, message))
 
   if (index === -1) {
-    return sortConversationsByActivity([
-      buildConversationFromMessage(message, currentUserId),
-      ...conversations,
-    ])
+    const created = buildConversationFromMessage(message, currentUserId)
+    if (activePeerId && message.from_id === activePeerId && message.to_id === currentUserId) {
+      created.unread_counts = { [currentUserId]: 0 }
+    }
+    return sortConversationsByActivity([created, ...conversations])
   }
 
   const existing = conversations[index]!
   const previewImage = previewImageFromMessage(message)
+  const shouldIncrementUnread =
+    message.to_id === currentUserId && message.from_id !== activePeerId
 
   const updated: Conversation = {
     ...existing,
@@ -71,18 +75,42 @@ export function applyIncomingMessage(
     updated_at: message.created_at ?? existing.updated_at,
     last_activity: message.created_at ?? existing.last_activity,
     image_url: previewImage || existing.image_url,
-    unread_counts:
-      message.to_id === currentUserId
-        ? {
-            ...existing.unread_counts,
-            [currentUserId]: normalizeUnreadCount(existing.unread_counts[currentUserId] ?? 0) + 1,
-          }
-        : existing.unread_counts,
+    unread_counts: shouldIncrementUnread
+      ? {
+          ...existing.unread_counts,
+          [currentUserId]: normalizeUnreadCount(existing.unread_counts[currentUserId] ?? 0) + 1,
+        }
+      : existing.unread_counts,
   }
 
   const next = [...conversations]
   next[index] = updated
   return sortConversationsByActivity(next)
+}
+
+/** 清除指定会话的未读数（进入聊天或标已读后同步侧栏） */
+export function withClearedUnreadForPeer(
+  conversations: Conversation[],
+  peerId: string,
+  currentUserId: string,
+): Conversation[] {
+  if (!peerId || !currentUserId) {
+    return conversations
+  }
+
+  return conversations.map((conversation) => {
+    if (getPeerUserId(conversation, currentUserId) !== peerId) {
+      return conversation
+    }
+
+    return {
+      ...conversation,
+      unread_counts: {
+        ...conversation.unread_counts,
+        [currentUserId]: 0,
+      },
+    }
+  })
 }
 
 export function collectPeerUserIds(conversations: Conversation[], currentUserId: string): string[] {

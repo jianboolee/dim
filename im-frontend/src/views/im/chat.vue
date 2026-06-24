@@ -1,5 +1,14 @@
 <template>
   <div class="chat-page">
+    <div class="chat-layout">
+      <aside class="chat-sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-title">消息</span>
+        </div>
+        <ConversationList embedded navigate-mode="replace" :active-peer-id="peerUserId" />
+      </aside>
+
+      <div class="chat-main">
     <div class="nav-bar">
       <div class="nav-bar-content">
         <button class="nav-side-btn back-btn" type="button" @click="handleBack">
@@ -89,6 +98,8 @@
         @upload-error="handleUploadError"
       />
     </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -98,6 +109,8 @@ import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { useUserStore } from '@/stores/user'
 import { useIMStore } from '@/stores/im'
+import { useUnreadMessageStore } from '@/stores/unreadMessage'
+import { useConversationList } from '@/composables/useConversationList'
 import { request } from '@/utils/request'
 import { MessageType } from '@/sdk/im'
 import type { MediaInfo } from '@/sdk/im'
@@ -106,6 +119,7 @@ import type { UserInfo } from '@/types/user'
 import { MessageComponents } from '@/components/im'
 import MessageMoreOptions from '@/components/im/MessageMoreOptions.vue'
 import MultilineInput from '@/components/im/MultilineInput.vue'
+import ConversationList from '@/components/im/ConversationList.vue'
 
 interface ApiResponse<T> {
   code: number
@@ -119,6 +133,8 @@ const props = defineProps<{
 const router = useRouter()
 const userStore = useUserStore()
 const imStore = useIMStore()
+const unreadMessageStore = useUnreadMessageStore()
+const { clearUnreadForPeer } = useConversationList()
 
 const messageText = ref('')
 const messages = ref<ChatMessage[]>([])
@@ -132,10 +148,14 @@ const peerUserId = computed(() => props.userId)
 
 const handleBack = () => {
   const back = window.history.state?.back
-  if (back != null) {
+  const backToAnotherChat =
+    typeof back === 'string' && /\/im\/chat\/[^/]+/.test(back)
+
+  if (typeof back === 'string' && !backToAnotherChat) {
     router.back()
     return
   }
+
   router.replace({ name: 'im-home' })
 }
 
@@ -187,7 +207,7 @@ const handleMessageInputFocus = () => {
   showMoreOptions.value = false
 }
 
-const handleNewMessage = (message: ChatMessage) => {
+const handleNewMessage = async (message: ChatMessage) => {
   if (!isCurrentChatMessage(message)) return
 
   const existingIndex = messages.value.findIndex((msg) => msg.id && msg.id === message.id)
@@ -208,7 +228,8 @@ const handleNewMessage = (message: ChatMessage) => {
   scrollToBottom(true, message.from_id === currentUserId.value)
 
   if (message.from_id === peerUserId.value && message.id) {
-    markMessageAsRead(message.id)
+    await markMessageAsRead(message.id)
+    await syncUnreadState()
   }
 }
 
@@ -308,6 +329,10 @@ const fetchHistoryMessages = async (loadMore = false) => {
       await markMessageAsRead(msg.id)
       msg.status = 'read'
     }
+
+    if (!loadMore && markedIds.size > 0) {
+      await syncUnreadState()
+    }
   } catch (error) {
     console.error('获取历史消息失败:', error)
     showToast('加载消息失败')
@@ -318,6 +343,11 @@ const fetchHistoryMessages = async (loadMore = false) => {
       initialized.value = true
     }
   }
+}
+
+const syncUnreadState = async () => {
+  clearUnreadForPeer(peerUserId.value)
+  await unreadMessageStore.fetchUnreadCount()
 }
 
 const markMessageAsRead = async (messageId: string) => {
@@ -497,12 +527,14 @@ const initChat = async () => {
   }
 
   resetChatState()
+  clearUnreadForPeer(peerUserId.value)
   imStore.initSDK()
   imStore.addMessageHandler(handleNewMessage)
 
   try {
     await Promise.all([fetchTargetUser(), waitForConnection()])
     await fetchHistoryMessages()
+    await unreadMessageStore.fetchUnreadCount()
   } catch (error) {
     console.error('初始化聊天失败:', error)
     showToast('连接失败，请稍后重试')
@@ -531,9 +563,49 @@ onUnmounted(() => {
 <style scoped>
 .chat-page {
   height: 100dvh;
+  background: white;
+}
+
+.chat-layout {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+
+.chat-sidebar {
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: #f6f7f9;
+  border-right: 1px solid var(--border-color-light);
+  min-height: 0;
+}
+
+.sidebar-header {
+  flex-shrink: 0;
+  padding: 14px var(--spacing-base);
+  border-bottom: 1px solid var(--border-color-light);
+}
+
+.sidebar-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-color-dark);
+}
+
+.chat-main {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background: white;
+}
+
+@media (max-width: 767px) {
+  .chat-sidebar {
+    display: none;
+  }
 }
 
 .nav-bar {
