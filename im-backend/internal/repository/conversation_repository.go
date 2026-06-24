@@ -107,6 +107,28 @@ func (r *ConversationRepository) UpdateConversation(ctx context.Context, id prim
 	return err
 }
 
+// UpdateUnreadCount 增减会话未读数；扣减时仅在当前未读数大于 0 时执行
+func (r *ConversationRepository) UpdateUnreadCount(
+	ctx context.Context,
+	id primitive.ObjectID,
+	userID string,
+	delta int,
+) error {
+	field := "unread_counts." + userID
+	filter := bson.M{"_id": id}
+	if delta < 0 {
+		filter[field] = bson.M{"$gt": 0}
+	}
+
+	update := bson.M{
+		"$inc": bson.M{field: delta},
+		"$set": bson.M{"updated_at": time.Now()},
+	}
+
+	_, err := r.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
 // DeleteConversation 删除会话
 func (r *ConversationRepository) DeleteConversation(ctx context.Context, id primitive.ObjectID) error {
 	_, err := r.collection.DeleteOne(ctx, bson.M{"_id": id})
@@ -125,7 +147,12 @@ func (r *ConversationRepository) GetUnreadCount(ctx context.Context, userID stri
 		},
 		{
 			"$project": bson.M{
-				"unread": bson.M{"$ifNull": []interface{}{fmt.Sprintf("$unread_counts.%s", userID), 0}},
+				"unread": bson.M{
+					"$max": []interface{}{
+						0,
+						bson.M{"$ifNull": []interface{}{fmt.Sprintf("$unread_counts.%s", userID), 0}},
+					},
+				},
 			},
 		},
 		{

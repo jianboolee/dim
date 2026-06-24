@@ -301,8 +301,12 @@ const fetchHistoryMessages = async (loadMore = false) => {
     const unreadMessages = messages.value.filter(
       (msg) => msg.status !== 'read' && msg.from_id === peerUserId.value && msg.id,
     )
+    const markedIds = new Set<string>()
     for (const msg of unreadMessages) {
-      await markMessageAsRead(msg.id!)
+      if (!msg.id || markedIds.has(msg.id)) continue
+      markedIds.add(msg.id)
+      await markMessageAsRead(msg.id)
+      msg.status = 'read'
     }
   } catch (error) {
     console.error('获取历史消息失败:', error)
@@ -584,7 +588,7 @@ onUnmounted(() => {
 
 .nav-reconnect-icon {
   font-size: 20px;
-  color: #1989fa;
+  color: var(--text-color-secondary);
   animation: nav-reconnect-spin 0.8s linear infinite;
 }
 

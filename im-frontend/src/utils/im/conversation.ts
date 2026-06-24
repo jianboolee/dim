@@ -1,4 +1,5 @@
 import { MessageType, type Conversation, type Message } from '@/sdk/im'
+import { normalizeUnreadCount } from '@/utils/im/format'
 
 export function getPeerUserId(conversation: Conversation, currentUserId: string): string {
   return conversation.participants.find((id) => id !== currentUserId) ?? ''
@@ -6,7 +7,7 @@ export function getPeerUserId(conversation: Conversation, currentUserId: string)
 
 export function getUnreadCount(conversation: Conversation, currentUserId: string): number {
   if (!currentUserId) return 0
-  return conversation.unread_counts[currentUserId] ?? 0
+  return normalizeUnreadCount(conversation.unread_counts[currentUserId] ?? 0)
 }
 
 export function sortConversationsByActivity(conversations: Conversation[]): Conversation[] {
@@ -74,7 +75,7 @@ export function applyIncomingMessage(
       message.to_id === currentUserId
         ? {
             ...existing.unread_counts,
-            [currentUserId]: (existing.unread_counts[currentUserId] ?? 0) + 1,
+            [currentUserId]: normalizeUnreadCount(existing.unread_counts[currentUserId] ?? 0) + 1,
           }
         : existing.unread_counts,
   }

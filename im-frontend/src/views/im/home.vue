@@ -7,7 +7,7 @@
       <div class="nav-bar-right">
         <div class="nav-bar-right-item">
           <button class="btn btn-primary" type="button">
-            <i class="bi bi-three-dots"></i>
+            <i class="ri-more-line"></i>
           </button>
         </div>
       </div>
@@ -37,7 +37,7 @@
             text=""
             aspect="1:1"
           />
-          <span v-if="item.unreadCount" class="unread-badge">
+          <span v-if="item.unreadCount > 0" class="unread-badge">
             {{ item.unreadBadge }}
           </span>
         </div>
@@ -221,7 +221,7 @@ onUnmounted(() => {
 .conversation-item {
   display: flex;
   align-items: flex-start;
-  padding: var(--spacing-base);
+  padding: 10px var(--spacing-base);
   background: white;
   cursor: pointer;
 }
@@ -262,6 +262,7 @@ onUnmounted(() => {
 .conversation-info {
   flex: 1;
   min-width: 0;
+  padding-bottom: 10px;
 }
 
 .conversation-header {
@@ -269,6 +270,7 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 4px;
+  font-size: 16px;
 }
 
 .nickname {
@@ -301,7 +303,7 @@ onUnmounted(() => {
 
 .last-message {
   color: var(--text-color-secondary);
-  font-size: 13px;
+  font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

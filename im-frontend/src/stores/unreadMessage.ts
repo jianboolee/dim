@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { request } from '@/utils/request'
+import { normalizeUnreadCount } from '@/utils/im/format'
 import { useIMStore } from './im'
 import { useUserStore } from './user'
 
@@ -16,7 +17,7 @@ export const useUnreadMessageStore = defineStore('unreadMessage', () => {
         try {
             const response = await request('/im/api/messages/unread/count') as { unread_count: number }
             if (response) {
-                unreadCount.value = response.unread_count
+                unreadCount.value = normalizeUnreadCount(response.unread_count)
             }
         } catch (error) {
             console.error('获取未读消息数失败:', error)
@@ -25,12 +26,12 @@ export const useUnreadMessageStore = defineStore('unreadMessage', () => {
 
     // 设置未读消息数
     const setUnreadCount = (count: number) => {
-        unreadCount.value = count
+        unreadCount.value = normalizeUnreadCount(count)
     }
 
     // 增加未读消息数
     const increment = () => {
-        unreadCount.value++
+        unreadCount.value = normalizeUnreadCount(unreadCount.value + 1)
     }
 
     // 重置未读消息数

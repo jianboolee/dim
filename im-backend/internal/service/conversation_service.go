@@ -88,14 +88,9 @@ func (s *ConversationService) UpdateLastMessage(ctx context.Context, conversatio
 	return s.repo.UpdateConversation(ctx, conversationID, update)
 }
 
-// UpdateUnreadCount 更新未读消息数
+// UpdateUnreadCount 更新未读消息数（扣减时不会低于 0）
 func (s *ConversationService) UpdateUnreadCount(ctx context.Context, conversationID primitive.ObjectID, userID string, increment int) error {
-	update := bson.M{
-		"$inc": bson.M{"unread_counts." + userID: increment},
-		"$set": bson.M{"updated_at": time.Now()},
-	}
-
-	return s.repo.UpdateConversation(ctx, conversationID, update)
+	return s.repo.UpdateUnreadCount(ctx, conversationID, userID, increment)
 }
 
 // GetConversations 获取会话列表

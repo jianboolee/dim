@@ -208,6 +208,11 @@ func (s *MessageService) MarkMessageAsRead(ctx context.Context, messageID primit
 		return fmt.Errorf("permission denied: only message recipient can mark message as read")
 	}
 
+	// 已读消息不重复扣减未读数
+	if message.Status == models.MessageStatusRead {
+		return nil
+	}
+
 	// 更新消息状态
 	if err := s.repo.UpdateStatus(ctx, messageID, models.MessageStatusRead); err != nil {
 		return err

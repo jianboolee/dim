@@ -35,6 +35,21 @@ export function formatLastMessagePreview(message?: Message): string {
   return message.content || ''
 }
 
-export function formatUnreadBadge(count: number): string | number {
-  return count > 99 ? '99+' : count
+/** 将未读数规范为非负整数 */
+export function normalizeUnreadCount(count: number): number {
+  if (!Number.isFinite(count)) {
+    return 0
+  }
+
+  return Math.max(0, Math.floor(count))
+}
+
+/** 会话列表未读角标：0 不展示，超过 99 显示 99 */
+export function formatUnreadBadge(count: number): string {
+  const normalized = normalizeUnreadCount(count)
+  if (normalized <= 0) {
+    return ''
+  }
+
+  return normalized > 99 ? '99' : String(normalized)
 }
