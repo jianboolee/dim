@@ -9,7 +9,7 @@
       <button type="button" class="btn btn-default" @click="refresh">重试</button>
     </div>
 
-    <div v-else class="conversation-list">
+    <div v-else class="conversation-list" @scroll="handleScroll">
       <div
         v-for="item in conversationItems"
         :key="item.id"
@@ -46,6 +46,10 @@
       <div v-if="conversationItems.length === 0" class="empty-state">
         <i class="ri-chat-3-line"></i>
         <p>暂无消息</p>
+      </div>
+
+      <div v-else-if="loadingMore" class="list-footer">
+        <div class="spinner"></div>
       </div>
     </div>
   </div>
@@ -91,9 +95,12 @@ const imStore = useIMStore()
 const {
   conversations,
   loading,
+  loadingMore,
   error,
+  hasMore,
   currentUserId,
   loadConversations,
+  loadMoreConversations,
   handleIncomingMessage,
   clearUnreadForPeer,
 } = useConversationList()
@@ -152,6 +159,22 @@ const onIncomingMessage = async (message: Parameters<typeof handleIncomingMessag
 const refresh = async () => {
   await loadConversations()
   mergeUsers(conversations.value.map((conversation) => conversation.to_user_info))
+}
+
+const loadMore = async () => {
+  if (!hasMore.value || loadingMore.value) return
+  await loadMoreConversations()
+  mergeUsers(conversations.value.map((conversation) => conversation.to_user_info))
+}
+
+const handleScroll = (event: Event) => {
+  const target = event.target as HTMLElement
+  if (!target || loading.value || loadingMore.value || !hasMore.value) return
+
+  const distanceToBottom = target.scrollHeight - target.scrollTop - target.clientHeight
+  if (distanceToBottom < 80) {
+    void loadMore()
+  }
 }
 
 onMounted(async () => {
@@ -349,5 +372,11 @@ defineExpose({ refresh })
 .empty-state p {
   font-size: var(--font-size-base);
   margin: 0;
+}
+
+.list-footer {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
 }
 </style>

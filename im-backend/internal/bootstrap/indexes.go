@@ -116,6 +116,15 @@ func InitConversationIndexes(ctx context.Context, db *mongo.Database) error {
 				SetName("idx_updated_at_desc"),
 		},
 		{
+			Keys: bson.D{
+				{Key: "participants", Value: 1},
+				{Key: "updated_at", Value: -1},
+				{Key: "_id", Value: -1},
+			},
+			Options: options.Index().
+				SetName("idx_participants_updated_id_desc"),
+		},
+		{
 			Keys: bson.D{{Key: "created_at", Value: -1}},
 			Options: options.Index().
 				SetName("idx_created_at_desc"),

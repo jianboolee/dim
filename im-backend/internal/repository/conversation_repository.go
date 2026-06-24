@@ -78,7 +78,7 @@ func (r *ConversationRepository) ListConversations(ctx context.Context, filter b
 	if skip > 0 {
 		opts.SetSkip(skip)
 	}
-	opts.SetSort(bson.M{"updated_at": -1}) // 默认按更新时间倒序
+	opts.SetSort(bson.D{{Key: "updated_at", Value: -1}, {Key: "_id", Value: -1}}) // 默认按更新时间倒序
 
 	cursor, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {

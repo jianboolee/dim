@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"errors"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -10,7 +12,6 @@ import (
 	"d-im/internal/dto"
 	"d-im/internal/response"
 	"d-im/internal/service"
-	"log"
 )
 
 type ConversationHandler struct {
@@ -71,18 +72,12 @@ func (h *ConversationHandler) GetUserConversations(c *gin.Context) {
 		return
 	}
 
-	var beforeID *primitive.ObjectID
-	if query.BeforeID != nil {
-		beforeObjectId, err := primitive.ObjectIDFromHex(*query.BeforeID)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid before_id"})
+	conversations, err := h.conversationService.GetUserConversations(c.Request.Context(), senderID, query.Limit, query.Cursor)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidConversationCursor) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid cursor"})
 			return
 		}
-		beforeID = &beforeObjectId
-	}
-
-	conversations, err := h.conversationService.GetUserConversations(c.Request.Context(), senderID, query.Limit, beforeID)
-	if err != nil {
 		log.Printf("Error getting conversations: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get conversations"})
 		return

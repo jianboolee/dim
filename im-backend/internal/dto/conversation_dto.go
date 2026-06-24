@@ -23,8 +23,14 @@ type ConversationDTO struct {
 
 // ConversationQuery 会话查询参数
 type ConversationQuery struct {
-	Limit    int64   `json:"limit,omitempty"`
-	BeforeID *string `json:"before_id,omitempty"`
+	Limit  int64  `form:"limit,omitempty"`
+	Cursor string `form:"cursor,omitempty"`
+}
+
+type ConversationListResponse struct {
+	Items      []*ConversationDTO `json:"items"`
+	NextCursor string             `json:"next_cursor,omitempty"`
+	HasMore    bool               `json:"has_more"`
 }
 
 // ConversationCreateRequest 创建会话的请求

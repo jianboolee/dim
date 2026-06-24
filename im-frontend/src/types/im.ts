@@ -8,6 +8,7 @@ export type {
   CardInfo,
   LinkInfo,
   Conversation,
+  ConversationPage,
 } from '@/sdk/im'
 
 /** 聊天 UI 层扩展的消息状态 */

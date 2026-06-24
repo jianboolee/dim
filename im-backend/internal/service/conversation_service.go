@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -19,6 +22,18 @@ import (
 type ConversationService struct {
 	repo     *repository.ConversationRepository
 	userRepo *repository.UserRepository
+}
+
+const (
+	defaultConversationPageSize = int64(20)
+	maxConversationPageSize     = int64(50)
+)
+
+var ErrInvalidConversationCursor = errors.New("invalid conversation cursor")
+
+type conversationCursor struct {
+	UpdatedAt time.Time `json:"updated_at"`
+	ID        string    `json:"id"`
 }
 
 func NewConversationService(repo *repository.ConversationRepository, userRepo *repository.UserRepository) *ConversationService {
@@ -50,19 +65,37 @@ func (s *ConversationService) GetConversation(ctx context.Context, id primitive.
 }
 
 // GetUserConversations 获取用户的所有会话
-func (s *ConversationService) GetUserConversations(ctx context.Context, senderID string, limit int64, beforeID *primitive.ObjectID) ([]*dto.ConversationDTO, error) {
+func (s *ConversationService) GetUserConversations(ctx context.Context, senderID string, limit int64, cursorValue string) (*dto.ConversationListResponse, error) {
+	limit = normalizeConversationLimit(limit)
 
 	filter := bson.M{"participants": senderID}
 
-	if beforeID == nil {
-		filter["updated_at"] = bson.M{"$lt": time.Now()}
-	} else {
-		filter["updated_at"] = bson.M{"$lt": beforeID}
+	if cursorValue != "" {
+		cursor, err := decodeConversationCursor(cursorValue)
+		if err != nil {
+			return nil, err
+		}
+		cursorID, err := primitive.ObjectIDFromHex(cursor.ID)
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid cursor id", ErrInvalidConversationCursor)
+		}
+		filter["$or"] = []bson.M{
+			{"updated_at": bson.M{"$lt": cursor.UpdatedAt}},
+			{
+				"updated_at": cursor.UpdatedAt,
+				"_id":        bson.M{"$lt": cursorID},
+			},
+		}
 	}
 
-	conversations, err := s.repo.ListConversations(ctx, filter, limit, 0)
+	conversations, err := s.repo.ListConversations(ctx, filter, limit+1, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversations: %w", err)
+	}
+
+	hasMore := int64(len(conversations)) > limit
+	if hasMore {
+		conversations = conversations[:limit]
 	}
 
 	for i := range conversations {
@@ -70,7 +103,16 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, senderID
 		conversations[i].GetLastActivity()
 	}
 
-	return s.toConversationDTOs(ctx, conversations, senderID), nil
+	nextCursor := ""
+	if hasMore && len(conversations) > 0 {
+		nextCursor = encodeConversationCursor(conversations[len(conversations)-1])
+	}
+
+	return &dto.ConversationListResponse{
+		Items:      s.toConversationDTOs(ctx, conversations, senderID),
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+	}, nil
 }
 
 // UpdateLastMessage 更新会话的最后一条消息
@@ -108,6 +150,44 @@ func (s *ConversationService) GetConversations(ctx context.Context, userID strin
 	}
 
 	return s.toConversationDTOs(ctx, conversations, userID), nil
+}
+
+func normalizeConversationLimit(limit int64) int64 {
+	if limit <= 0 {
+		return defaultConversationPageSize
+	}
+	if limit > maxConversationPageSize {
+		return maxConversationPageSize
+	}
+	return limit
+}
+
+func encodeConversationCursor(conversation *models.Conversation) string {
+	payload, err := json.Marshal(conversationCursor{
+		UpdatedAt: conversation.UpdatedAt,
+		ID:        conversation.ID.Hex(),
+	})
+	if err != nil {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString(payload)
+}
+
+func decodeConversationCursor(value string) (*conversationCursor, error) {
+	payload, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidConversationCursor, err)
+	}
+
+	var cursor conversationCursor
+	if err := json.Unmarshal(payload, &cursor); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidConversationCursor, err)
+	}
+	if cursor.UpdatedAt.IsZero() || cursor.ID == "" {
+		return nil, ErrInvalidConversationCursor
+	}
+
+	return &cursor, nil
 }
 
 func (s *ConversationService) toConversationDTO(ctx context.Context, conversation *models.Conversation, currentUserID string) *dto.ConversationDTO {

@@ -88,6 +88,17 @@ export enum MessageType {
     updated_at: string;
     last_activity: string;
   }
+
+  export interface ConversationPage {
+    items: Conversation[];
+    next_cursor?: string;
+    has_more: boolean;
+  }
+
+  export interface ConversationQueryParams {
+    limit?: number;
+    cursor?: string;
+  }
   
   // 会话状态接口
   export interface Session {
@@ -548,14 +559,39 @@ export enum MessageType {
     /**
      * 获取会话列表
      */
-    async getConversations(): Promise<Conversation[]> {
-      const data = await apiRequest<Record<string, unknown>[]>(
+    async getConversationPage(params: ConversationQueryParams = {}): Promise<ConversationPage> {
+      const queryParams = new URLSearchParams();
+      if (params.limit) queryParams.append('limit', params.limit.toString());
+      if (params.cursor) queryParams.append('cursor', params.cursor);
+
+      const suffix = queryParams.toString() ? `?${queryParams}` : '';
+      const data = await apiRequest<Record<string, unknown>[] | Record<string, unknown>>(
         this.baseURL,
-        '/im/api/conversations',
+        `/im/api/conversations${suffix}`,
         this.token,
       );
 
-      return (data ?? []).map((item) => normalizeConversation(item));
+      if (Array.isArray(data)) {
+        return {
+          items: data.map((item) => normalizeConversation(item)),
+          has_more: false,
+        };
+      }
+
+      const items = Array.isArray(data.items)
+        ? (data.items as Record<string, unknown>[]).map((item) => normalizeConversation(item))
+        : [];
+
+      return {
+        items,
+        next_cursor: typeof data.next_cursor === 'string' ? data.next_cursor : undefined,
+        has_more: Boolean(data.has_more),
+      };
+    }
+
+    async getConversations(params: ConversationQueryParams = {}): Promise<Conversation[]> {
+      const page = await this.getConversationPage(params);
+      return page.items;
     }
 
     async getConversation(conversationId: string): Promise<Conversation> {
