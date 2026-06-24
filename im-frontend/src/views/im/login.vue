@@ -4,7 +4,6 @@
       <i class="bi bi-chat-dots icon"></i>
       <h1>即时消息</h1>
       <p>请从业务系统进入聊天，IM 不提供独立登录。</p>
-      <p v-if="redirect" class="hint">登录后将跳转到：{{ redirect }}</p>
     </div>
   </div>
 </template>
