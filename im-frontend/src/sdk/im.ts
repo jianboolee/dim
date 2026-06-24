@@ -59,6 +59,7 @@ export enum MessageType {
   // 消息接口
   export interface Message {
     id?: string;
+    client_message_id?: string;
     conversation_id?: string;
     from_id?: string;
     to_id: string;
@@ -138,6 +139,7 @@ export enum MessageType {
 
     return {
       id,
+      client_message_id: raw.client_message_id == null ? undefined : String(raw.client_message_id),
       conversation_id: raw.conversation_id == null ? undefined : String(raw.conversation_id),
       from_id: String(raw.sender_id ?? raw.from_id ?? ''),
       to_id: String(raw.receiver_id ?? raw.to_id ?? ''),
@@ -413,7 +415,8 @@ export enum MessageType {
       content: string = '',
       mediaInfo?: MediaInfo,
       cardInfo?: CardInfo,
-      linkInfo?: LinkInfo
+      linkInfo?: LinkInfo,
+      clientMessageId?: string
     ): Promise<void> {
       return new Promise((resolve, reject) => {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
@@ -423,6 +426,7 @@ export enum MessageType {
   
         try {
           const message: Message = {
+            client_message_id: clientMessageId,
             conversation_id: conversationId,
             to_id: '',
             type,
@@ -476,9 +480,11 @@ export enum MessageType {
       content: string = '',
       mediaInfo?: MediaInfo,
       cardInfo?: CardInfo,
-      linkInfo?: LinkInfo
+      linkInfo?: LinkInfo,
+      clientMessageId?: string
     ): Promise<Message> {
       const message: Message = {
+        client_message_id: clientMessageId,
         conversation_id: conversationId,
         to_id: '',
         type,
@@ -519,6 +525,7 @@ export enum MessageType {
           'Authorization': `Bearer ${this.token}`
         },
         body: JSON.stringify({
+          client_message_id: clientMessageId,
           type,
           content,
           payload,

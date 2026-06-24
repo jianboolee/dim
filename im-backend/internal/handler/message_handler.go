@@ -131,7 +131,7 @@ func (h *MessageHandler) SendMessageToConversation(c *gin.Context) {
 	// 从上下文中获取发送者ID
 	senderID := contextx.MustGetUserID(c)
 
-	msg, err := h.messageService.SendMessageToConversationHTTP(c.Request.Context(), senderID, conversationID, req.Content, req.Type, req.Payload)
+	msg, err := h.messageService.SendMessageToConversationHTTP(c.Request.Context(), senderID, conversationID, req.ClientMessageID, req.Content, req.Type, req.Payload)
 	if err != nil {
 		if errors.Is(err, service.ErrConversationAccessDenied) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})

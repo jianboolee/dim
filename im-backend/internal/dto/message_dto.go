@@ -6,9 +6,10 @@ import (
 
 // SendMessageRequest 发送会话消息请求；会话 ID 来自 URL，接收方由后端根据会话参与者推导。
 type SendMessageRequest struct {
-	Content string              `json:"content"`
-	Type    *models.MessageType `json:"type,omitempty"`
-	Payload *models.Payload     `json:"payload,omitempty"`
+	ClientMessageID string              `json:"client_message_id,omitempty"`
+	Content         string              `json:"content"`
+	Type            *models.MessageType `json:"type,omitempty"`
+	Payload         *models.Payload     `json:"payload,omitempty"`
 }
 
 type ConversationMessageQuery struct {

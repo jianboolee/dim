@@ -56,6 +56,20 @@ func (r *MessageRepository) FindByID(ctx context.Context, id primitive.ObjectID)
 	return &message, nil
 }
 
+func (r *MessageRepository) FindByClientMessageID(ctx context.Context, conversationID primitive.ObjectID, senderID string, clientMessageID string) (*models.Message, error) {
+	var message models.Message
+	err := r.collection.FindOne(ctx, bson.M{
+		"conversation_id":   conversationID,
+		"sender_id":         senderID,
+		"client_message_id": clientMessageID,
+	}).Decode(&message)
+	if err != nil {
+		return nil, err
+	}
+
+	return &message, nil
+}
+
 func (r *MessageRepository) UpdateStatus(ctx context.Context, id primitive.ObjectID, status models.MessageStatus) error {
 	update := bson.M{
 		"$set": bson.M{

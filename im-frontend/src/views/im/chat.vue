@@ -11,9 +11,9 @@
       <div class="chat-main">
     <div class="nav-bar">
       <div class="nav-bar-content">
-        <button class="nav-side-btn back-btn" type="button" @click="handleBack">
+        <!-- <button class="nav-side-btn back-btn" type="button" @click="handleBack">
           <i class="ri-arrow-left-s-line"></i>
-        </button>
+        </button> -->
         <div class="nav-bar-center">
           <div v-if="isConnected" class="user-info">
             <h1 class="title">{{ targetUser?.nickname || '未知用户' }}</h1>
@@ -84,7 +84,7 @@
         <button
           type="button"
           class="send-btn"
-          :disabled="!messageText.trim() || !isConnected"
+          :disabled="!messageText.trim()"
           @click="sendMessage"
         >
           发送
@@ -246,35 +246,61 @@ const sortMessages = (items: ChatMessage[]) =>
     return String(a.id ?? '').localeCompare(String(b.id ?? ''))
   })
 
+const createClientMessageId = () => {
+  const random =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  return `cmid_${currentUserId.value ?? 'unknown'}_${random}`
+}
+
 const mergeMessages = (incoming: ChatMessage[]) => {
   if (incoming.length === 0) return
 
-  const byId = new Map<string, ChatMessage>()
-  const withoutId: ChatMessage[] = []
-
-  for (const msg of messages.value) {
-    if (msg.id) {
-      byId.set(msg.id, msg)
-    } else {
-      withoutId.push(msg)
-    }
-  }
+  const next = [...messages.value]
 
   for (const msg of incoming) {
-    if (!msg.id) {
-      withoutId.push(msg)
-      continue
-    }
+    const existingIndex = next.findIndex((item) => {
+      if (msg.client_message_id && item.client_message_id === msg.client_message_id) return true
+      if (msg.id && item.id === msg.id) return true
+      return false
+    })
 
-    const existing = byId.get(msg.id)
-    byId.set(msg.id, {
+    const existing = existingIndex === -1 ? undefined : next[existingIndex]
+    const merged = {
       ...existing,
       ...msg,
       status: msg.from_id === currentUserId.value ? 'sent' : msg.status,
-    })
+    }
+
+    if (existingIndex === -1) {
+      next.push(merged)
+    } else {
+      next[existingIndex] = merged
+    }
   }
 
-  messages.value = sortMessages([...withoutId, ...byId.values()])
+  const seen = new Set<string>()
+  const deduped = next.filter((msg) => {
+    const key = msg.client_message_id
+      ? `client:${msg.client_message_id}`
+      : msg.id
+        ? `id:${msg.id}`
+        : ''
+    if (!key) return true
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+
+  messages.value = sortMessages(deduped)
+}
+
+const confirmPendingMessage = (pendingId: string, confirmed: ChatMessage) => {
+  if (!confirmed.client_message_id && !confirmed.id) {
+    messages.value = messages.value.filter((msg) => msg.id !== pendingId)
+  }
+  mergeMessages([{ ...confirmed, status: 'sent' }])
 }
 
 const handleNewMessage = async (message: ChatMessage) => {
@@ -290,17 +316,20 @@ const handleNewMessage = async (message: ChatMessage) => {
 }
 
 const sendMessage = async () => {
-  if (!messageText.value.trim() || !currentUserId.value || !isConnected.value) return
+  if (!messageText.value.trim() || !currentUserId.value) return
   if (!peerUserId.value) {
     showToast('无效的会话')
     return
   }
 
   const content = messageText.value.trim()
+  const clientMessageId = createClientMessageId()
   messageText.value = ''
 
   const tempMessage: ChatMessage = {
-    id: `temp-${Date.now()}`,
+    id: `temp-${clientMessageId}`,
+    client_message_id: clientMessageId,
+    conversation_id: conversationId.value,
     from_id: currentUserId.value,
     to_id: peerUserId.value,
     type: MessageType.Text,
@@ -314,11 +343,17 @@ const sendMessage = async () => {
   scrollToBottom(true, true)
 
   try {
-    const response = await imStore.imSDK?.sendMessage(conversationId.value, MessageType.Text, content)
-    const messageIndex = messages.value.findIndex((msg) => msg.id === tempMessage.id)
-    if (response && messageIndex !== -1) {
-      messages.value[messageIndex] = { ...response, status: 'sent' }
-      messages.value = [...messages.value]
+    const response = await imStore.imSDK?.sendMessage(
+      conversationId.value,
+      MessageType.Text,
+      content,
+      undefined,
+      undefined,
+      undefined,
+      clientMessageId,
+    )
+    if (response) {
+      confirmPendingMessage(tempMessage.id!, response)
     }
   } catch (error) {
     console.error('发送消息失败:', error)
@@ -526,7 +561,9 @@ const retryMessage = async (message: ChatMessage) => {
   const current = messages.value[messageIndex]
   if (!current) return
 
+  const clientMessageId = current.client_message_id ?? createClientMessageId()
   current.status = 'sending'
+  current.client_message_id = clientMessageId
   messages.value = [...messages.value]
 
   try {
@@ -537,10 +574,10 @@ const retryMessage = async (message: ChatMessage) => {
       message.media_info,
       message.card_info,
       message.link_info,
+      clientMessageId,
     )
     if (response) {
-      messages.value[messageIndex] = { ...response, status: 'sent' }
-      messages.value = [...messages.value]
+      confirmPendingMessage(message.id!, response)
     }
   } catch (error) {
     console.error('重新发送消息失败:', error)
@@ -563,8 +600,11 @@ const handleSelectFile = (_file: File, type: string, fileInfo: MediaInfo & { upl
   if (!currentUserId.value || !peerUserId.value) return
 
   const messageType = type as MessageType
+  const clientMessageId = createClientMessageId()
   const tempMessage: ChatMessage = {
-    id: `temp-${Date.now()}`,
+    id: `temp-${clientMessageId}`,
+    client_message_id: clientMessageId,
+    conversation_id: conversationId.value,
     from_id: currentUserId.value,
     to_id: peerUserId.value,
     type: messageType,
@@ -592,10 +632,17 @@ const handleUploadSuccess = async (_file: File, type: string, fileInfo: MediaInf
   const previewUrl = current.media_info?.url
 
   try {
-    const response = await imStore.imSDK?.sendMessage(conversationId.value, messageType, '', fileInfo)
+    const response = await imStore.imSDK?.sendMessage(
+      conversationId.value,
+      messageType,
+      '',
+      fileInfo,
+      undefined,
+      undefined,
+      current.client_message_id,
+    )
     if (response) {
-      messages.value[messageIndex] = { ...response, status: 'sent' }
-      messages.value = [...messages.value]
+      confirmPendingMessage(current.id!, response)
       if (previewUrl?.startsWith('blob:')) {
         URL.revokeObjectURL(previewUrl)
       }
@@ -817,7 +864,7 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   min-width: 0;
 }
 

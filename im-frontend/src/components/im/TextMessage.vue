@@ -55,7 +55,7 @@ const formattedContent = computed(() => {
   border-radius: 12px;
   background: var(--bg-color);
   word-break: break-all;
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.6;
   font-weight: 400;
   color: var(--text-color-dark);

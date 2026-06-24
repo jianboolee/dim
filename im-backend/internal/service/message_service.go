@@ -8,6 +8,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
 
 	"d-im/internal/models"
@@ -45,10 +46,13 @@ func NewMessageService(
 }
 
 // SendMessageToConversationHTTP 通过 HTTP 发送会话消息，并异步推送给接收方。
-func (s *MessageService) SendMessageToConversationHTTP(ctx context.Context, senderID string, conversationID primitive.ObjectID, content string, msgType *models.MessageType, payload *models.Payload) (*models.Message, error) {
-	message, err := s.SendMessageToConversation(ctx, senderID, conversationID, content, msgType, payload)
+func (s *MessageService) SendMessageToConversationHTTP(ctx context.Context, senderID string, conversationID primitive.ObjectID, clientMessageID string, content string, msgType *models.MessageType, payload *models.Payload) (*models.Message, error) {
+	message, created, err := s.SendMessageToConversation(ctx, senderID, conversationID, clientMessageID, content, msgType, payload)
 	if err != nil {
 		return nil, err
+	}
+	if !created {
+		return message, nil
 	}
 
 	// 异步推送不可使用 HTTP 请求 context（响应结束后会被 cancel）
@@ -71,21 +75,33 @@ func (s *MessageService) SendMessageToConversation(
 	ctx context.Context,
 	senderID string,
 	conversationID primitive.ObjectID,
+	clientMessageID string,
 	content string,
 	msgType *models.MessageType,
 	payload *models.Payload,
-) (*models.Message, error) {
+) (*models.Message, bool, error) {
 	conversation, err := s.conversationRepo.GetConversation(ctx, conversationID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get conversation: %w", err)
+		return nil, false, fmt.Errorf("failed to get conversation: %w", err)
 	}
 	if !conversation.HasParticipant(senderID) {
-		return nil, ErrConversationAccessDenied
+		return nil, false, ErrConversationAccessDenied
 	}
 
 	receiverID, err := resolvePrivateReceiverID(conversation, senderID)
 	if err != nil {
-		return nil, err
+		return nil, false, err
+	}
+
+	if clientMessageID != "" {
+		existing, err := s.repo.FindByClientMessageID(ctx, conversation.ID, senderID, clientMessageID)
+		if err == nil {
+			existing.DecodePayload()
+			return existing, false, nil
+		}
+		if err != mongo.ErrNoDocuments {
+			return nil, false, fmt.Errorf("failed to find message by client id: %w", err)
+		}
 	}
 
 	// 如果msgType为nil，则默认使用文本类型
@@ -96,16 +112,17 @@ func (s *MessageService) SendMessageToConversation(
 
 	now := time.Now()
 	message := &models.Message{
-		ID:             primitive.NewObjectID(),
-		ConversationID: conversation.ID,
-		SenderID:       senderID,
-		ReceiverID:     receiverID,
-		Content:        content,
-		Type:           msgTypeValue,
-		Payload:        payload, // 这里需要传递指针
-		Status:         models.MessageStatusSent,
-		CreatedAt:      now,
-		UpdatedAt:      now,
+		ID:              primitive.NewObjectID(),
+		ClientMessageID: clientMessageID,
+		ConversationID:  conversation.ID,
+		SenderID:        senderID,
+		ReceiverID:      receiverID,
+		Content:         content,
+		Type:            msgTypeValue,
+		Payload:         payload, // 这里需要传递指针
+		Status:          models.MessageStatusSent,
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}
 
 	logger.Debug(zap.NewDevelopmentEncoderConfig().MessageKey, zap.Any("message", message))
@@ -113,18 +130,25 @@ func (s *MessageService) SendMessageToConversation(
 	// 保存消息到数据库
 	result, err := s.repo.Save(ctx, message)
 	if err != nil {
+		if clientMessageID != "" && mongo.IsDuplicateKeyError(err) {
+			existing, findErr := s.repo.FindByClientMessageID(ctx, conversation.ID, senderID, clientMessageID)
+			if findErr == nil {
+				existing.DecodePayload()
+				return existing, false, nil
+			}
+		}
 		logger.Error("SendMessage Save", zap.Any("error", err))
-		return nil, fmt.Errorf("failed to save message: %w", err)
+		return nil, false, fmt.Errorf("failed to save message: %w", err)
 	}
 
 	if err := s.conversationService.UpdateLastMessage(ctx, conversation.ID, result); err != nil {
-		return nil, fmt.Errorf("failed to update conversation last message: %w", err)
+		return nil, false, fmt.Errorf("failed to update conversation last message: %w", err)
 	}
 	if err := s.conversationService.UpdateUnreadCount(ctx, conversation.ID, receiverID, 1); err != nil {
-		return nil, fmt.Errorf("failed to update conversation unread count: %w", err)
+		return nil, false, fmt.Errorf("failed to update conversation unread count: %w", err)
 	}
 
-	return result, nil
+	return result, true, nil
 }
 
 func resolvePrivateReceiverID(conversation *models.Conversation, senderID string) (string, error) {
@@ -253,10 +277,11 @@ func (s *MessageService) ProcessWebSocketMessage(
 	message []byte,
 ) (*models.Message, error) {
 	var raw struct {
-		ConversationID string             `json:"conversation_id"`
-		Content        string             `json:"content"`
-		Type           models.MessageType `json:"type"`
-		Payload        *models.Payload    `json:"payload"`
+		ConversationID  string             `json:"conversation_id"`
+		ClientMessageID string             `json:"client_message_id"`
+		Content         string             `json:"content"`
+		Type            models.MessageType `json:"type"`
+		Payload         *models.Payload    `json:"payload"`
 	}
 	if err := json.Unmarshal(message, &raw); err != nil {
 		return nil, err
@@ -272,7 +297,7 @@ func (s *MessageService) ProcessWebSocketMessage(
 		msgType = models.MessageTypeText
 	}
 
-	result, err := s.SendMessageToConversation(ctx, senderID, conversationID, raw.Content, &msgType, raw.Payload)
+	result, _, err := s.SendMessageToConversation(ctx, senderID, conversationID, raw.ClientMessageID, raw.Content, &msgType, raw.Payload)
 	if err != nil {
 		return nil, err
 	}

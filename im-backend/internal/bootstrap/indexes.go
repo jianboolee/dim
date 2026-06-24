@@ -85,6 +85,17 @@ func InitMessageIndexes(ctx context.Context, db *mongo.Database) error {
 			Keys:    bson.D{{Key: "sender_id", Value: 1}},
 			Options: options.Index().SetName("idx_sender"),
 		},
+		{
+			Keys: bson.D{
+				{Key: "conversation_id", Value: 1},
+				{Key: "sender_id", Value: 1},
+				{Key: "client_message_id", Value: 1},
+			},
+			Options: options.Index().
+				SetUnique(true).
+				SetPartialFilterExpression(bson.M{"client_message_id": bson.M{"$exists": true, "$ne": ""}}).
+				SetName("unique_message_client_id"),
+		},
 	})
 }
 
