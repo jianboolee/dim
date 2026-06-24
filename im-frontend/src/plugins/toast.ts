@@ -21,26 +21,28 @@ function ensureToastElement() {
       .app-toast {
         position: fixed;
         left: 50%;
-        bottom: max(28px, env(safe-area-inset-bottom));
+        top: 50%;
         z-index: 9999;
-        max-width: min(320px, calc(100vw - 48px));
-        padding: 9px 14px;
-        border-radius: 8px;
-        background: rgba(22, 24, 29, 0.9);
+        max-width: min(280px, calc(100vw - 72px));
+        min-width: 112px;
+        padding: 13px 16px;
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.72);
         color: #fff;
         font-size: 14px;
-        line-height: 1.45;
+        line-height: 1.5;
         text-align: center;
         pointer-events: none;
         opacity: 0;
-        transform: translate(-50%, 8px);
+        transform: translate(-50%, -50%) scale(0.96);
         transition: opacity 0.18s ease, transform 0.18s ease;
         word-break: break-word;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.16);
       }
 
       .app-toast.is-visible {
         opacity: 1;
-        transform: translate(-50%, 0);
+        transform: translate(-50%, -50%) scale(1);
       }
     `
     document.head.appendChild(style)
@@ -68,4 +70,3 @@ export function showToast(message: string, options: ToastOptions = {}) {
     element.classList.remove('is-visible')
   }, options.duration ?? 2000)
 }
-
