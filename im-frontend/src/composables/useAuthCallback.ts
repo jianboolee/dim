@@ -2,14 +2,6 @@ import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useIMStore } from '@/stores/im'
-import { request } from '@/utils/request'
-import type { ApiResponse } from '@/types/api'
-
-interface ConversationDetail {
-  id: string
-  participants: string[]
-}
-
 export function useAuthCallback() {
   const route = useRoute()
   const router = useRouter()
@@ -32,7 +24,7 @@ export function useAuthCallback() {
 
     try {
       userStore.setToken(token)
-      const me = await userStore.fetchUser()
+      await userStore.fetchUser()
 
       // 无 conversation_id：进入会话列表
       if (!conversationId) {
@@ -41,20 +33,7 @@ export function useAuthCallback() {
         return
       }
 
-      const response = await request<ApiResponse<ConversationDetail>>(
-        `/im/api/conversations/${conversationId}`,
-      )
-
-      if (response.code !== 200 || !response.data?.participants?.length) {
-        throw new Error('无法加载会话')
-      }
-
-      const peerId = response.data.participants.find((id) => id !== me.id)
-      if (!peerId) {
-        throw new Error('无法解析会话对方')
-      }
-
-      await router.replace({ name: 'im-chat', params: { userId: peerId } })
+      await router.replace({ name: 'im-chat', params: { conversationId } })
       imStore.initSDK()
     } catch (err) {
       console.error('SSO 登录失败:', err)

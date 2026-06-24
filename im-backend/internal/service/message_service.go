@@ -166,7 +166,15 @@ func (s *MessageService) GetMessages(ctx context.Context, senderID string, recei
 }
 
 // FindMessagesByConversationID 根据会话ID获取消息列表
-func (s *MessageService) FindMessagesByConversationID(ctx context.Context, conversationID primitive.ObjectID, beforeID *primitive.ObjectID, afterID *primitive.ObjectID, limit int64) ([]models.Message, error) {
+func (s *MessageService) FindMessagesByConversationID(ctx context.Context, conversationID primitive.ObjectID, currentUserID string, beforeID *primitive.ObjectID, afterID *primitive.ObjectID, limit int64) ([]models.Message, error) {
+	conversation, err := s.conversationRepo.GetConversation(ctx, conversationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get conversation: %w", err)
+	}
+	if !conversation.HasParticipant(currentUserID) {
+		return nil, ErrConversationAccessDenied
+	}
+
 	messages, err := s.repo.FindMessagesByConversationID(ctx, conversationID, beforeID, afterID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get messages: %w", err)

@@ -44,6 +44,15 @@ func (c *Conversation) GetUnreadCount(userID string) int64 {
 	return 0
 }
 
+func (c *Conversation) HasParticipant(userID string) bool {
+	for _, participantID := range c.Participants {
+		if participantID == userID {
+			return true
+		}
+	}
+	return false
+}
+
 // SetLastActivity 设置最后活动时间
 func (c *Conversation) GetLastActivity() {
 	if c.LastMessage != nil {

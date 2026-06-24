@@ -14,8 +14,8 @@
         v-for="item in conversationItems"
         :key="item.id"
         class="conversation-item"
-        :class="{ 'is-active': activePeerId === item.peerId }"
-        @click="selectConversation(item.peerId)"
+        :class="{ 'is-active': activeConversationId === item.id }"
+        @click="selectConversation(item)"
       >
         <div class="avatar">
           <img v-if="item.avatar" :src="item.avatar" alt="">
@@ -71,22 +71,22 @@ import PlaceholderImage from '@/components/common/PlaceholderImage.vue'
 
 const props = withDefaults(
   defineProps<{
-    /** 当前聊天对象，用于高亮 */
-    activePeerId?: string
+    /** 当前会话，用于高亮 */
+    activeConversationId?: string
     /** 嵌入聊天页侧栏时使用（仅影响样式） */
     embedded?: boolean
     /** 点击会话后的路由行为：home 用 push，侧栏用 replace */
     navigateMode?: 'push' | 'replace' | 'none'
   }>(),
   {
-    activePeerId: '',
+    activeConversationId: '',
     embedded: false,
     navigateMode: 'push',
   },
 )
 
 const emit = defineEmits<{
-  select: [peerId: string]
+  select: [conversationId: string]
 }>()
 
 const router = useRouter()
@@ -131,15 +131,15 @@ const conversationItems = computed(() => {
   })
 })
 
-const selectConversation = (peerId: string) => {
-  if (!peerId || peerId === props.activePeerId) return
+const selectConversation = (item: { id: string; peerId: string }) => {
+  if (!item.id || item.id === props.activeConversationId) return
 
-  clearUnreadForPeer(peerId)
-  emit('select', peerId)
+  clearUnreadForPeer(item.peerId)
+  emit('select', item.id)
 
   if (props.navigateMode === 'none') return
 
-  const location = { name: 'im-chat' as const, params: { userId: peerId } }
+  const location = { name: 'im-chat' as const, params: { conversationId: item.id } }
   if (props.navigateMode === 'replace') {
     router.replace(location)
     return
@@ -153,7 +153,7 @@ const onIncomingMessage = async (message: Parameters<typeof handleIncomingMessag
     (id): id is string => Boolean(id) && id !== currentUserId.value,
   )
   await fetchUsers(peerIds)
-  handleIncomingMessage(message, props.activePeerId || undefined)
+  handleIncomingMessage(message, props.activeConversationId || undefined)
 }
 
 const refresh = async () => {

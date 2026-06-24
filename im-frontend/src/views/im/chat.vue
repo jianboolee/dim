@@ -5,7 +5,7 @@
         <div class="sidebar-header">
           <span class="sidebar-title">消息</span>
         </div>
-        <ConversationList embedded navigate-mode="replace" :active-peer-id="peerUserId" />
+        <ConversationList embedded navigate-mode="replace" :active-conversation-id="conversationId" />
       </aside>
 
       <div class="chat-main">
@@ -114,7 +114,7 @@ import { useConversationList } from '@/composables/useConversationList'
 import { useUserProfiles } from '@/composables/useUserProfiles'
 import { MessageType } from '@/sdk/im'
 import type { MediaInfo } from '@/sdk/im'
-import type { ChatMessage } from '@/types/im'
+import type { ChatMessage, Conversation } from '@/types/im'
 import type { UserInfo } from '@/types/user'
 import { MessageComponents } from '@/components/im'
 import MessageMoreOptions from '@/components/im/MessageMoreOptions.vue'
@@ -123,7 +123,7 @@ import ConversationList from '@/components/im/ConversationList.vue'
 import { usePageTitleNotification } from '@/composables/usePageTitleNotification'
 
 const props = defineProps<{
-  userId: string
+  conversationId: string
 }>()
 
 const router = useRouter()
@@ -135,13 +135,20 @@ const { userMap, fetchUser, mergeUsers } = useUserProfiles()
 
 const messageText = ref('')
 const messages = ref<ChatMessage[]>([])
+const conversation = ref<Conversation | null>(null)
 const targetUser = ref<UserInfo | null>(null)
 const messageListRef = ref<HTMLElement | null>(null)
 const showMoreOptions = ref(false)
 
 const isConnected = computed(() => imStore.isConnected)
 const currentUserId = computed(() => userStore.userInfo?.id)
-const peerUserId = computed(() => props.userId)
+const conversationId = computed(() => props.conversationId)
+const peerUserId = computed(
+  () =>
+    conversation.value?.to_user_info?.id ||
+    conversation.value?.participants.find((id) => id !== currentUserId.value) ||
+    '',
+)
 
 const pageTitle = computed(() => targetUser.value?.nickname || '消息')
 const { setBaseTitle } = usePageTitleNotification('消息')
@@ -152,12 +159,15 @@ watch(pageTitle, (title) => {
 
 watch(
   () => conversations.value.find(
-    (conversation) => conversation.to_user_info?.id === peerUserId.value,
-  )?.to_user_info,
+    (item) => item.id === conversationId.value,
+  ),
   (user) => {
     if (!user) return
-    mergeUsers([user])
-    targetUser.value = user
+    conversation.value = user
+    if (user.to_user_info) {
+      mergeUsers([user.to_user_info])
+      targetUser.value = user.to_user_info
+    }
   },
 )
 
@@ -191,6 +201,12 @@ provide('chatImages', chatImages)
 const isCurrentChatMessage = (message: ChatMessage) => {
   const myId = userStore.userInfo?.id
   if (!myId) return false
+
+  if (message.conversation_id && message.conversation_id === conversationId.value) {
+    return true
+  }
+
+  if (!peerUserId.value) return false
 
   return (
     (message.from_id === peerUserId.value && message.to_id === myId) ||
@@ -275,6 +291,10 @@ const handleNewMessage = async (message: ChatMessage) => {
 
 const sendMessage = async () => {
   if (!messageText.value.trim() || !currentUserId.value || !isConnected.value) return
+  if (!peerUserId.value) {
+    showToast('无效的会话')
+    return
+  }
 
   const content = messageText.value.trim()
   messageText.value = ''
@@ -335,8 +355,7 @@ const fetchHistoryMessages = async (loadMore = false) => {
       ? oldestMessage.id
       : undefined
 
-    const response = await imStore.imSDK.getMessages({
-      receiver_id: peerUserId.value,
+    const response = await imStore.imSDK.getConversationMessages(conversationId.value, {
       limit: pageSize,
       before_id: beforeId,
     })
@@ -397,8 +416,7 @@ const syncLatestMessages = async () => {
     const incoming: ChatMessage[] = []
 
     while (true) {
-      const response = await imStore.imSDK.getMessages({
-        receiver_id: peerUserId.value,
+      const response = await imStore.imSDK.getConversationMessages(conversationId.value, {
         limit: pageSize,
         after_id: latestMessage?.id,
       })
@@ -437,7 +455,9 @@ const syncLatestMessages = async () => {
 }
 
 const syncUnreadState = async () => {
-  clearUnreadForPeer(peerUserId.value)
+  if (peerUserId.value) {
+    clearUnreadForPeer(peerUserId.value)
+  }
   unreadMessageStore.decrement()
 }
 
@@ -450,8 +470,19 @@ const markMessageAsRead = async (messageId: string) => {
 }
 
 const fetchTargetUser = async () => {
+  if (conversation.value?.to_user_info) {
+    mergeUsers([conversation.value.to_user_info])
+    targetUser.value = conversation.value.to_user_info
+    return
+  }
+
+  if (!peerUserId.value) {
+    targetUser.value = null
+    return
+  }
+
   const fromConversation = conversations.value.find(
-    (conversation) => conversation.to_user_info?.id === peerUserId.value,
+    (item) => item.id === conversationId.value,
   )?.to_user_info
   if (fromConversation) {
     mergeUsers([fromConversation])
@@ -466,6 +497,26 @@ const fetchTargetUser = async () => {
   }
 
   targetUser.value = await fetchUser(peerUserId.value)
+}
+
+const fetchConversation = async () => {
+  const existing = conversations.value.find((item) => item.id === conversationId.value)
+  if (existing) {
+    conversation.value = existing
+    if (existing.to_user_info) {
+      mergeUsers([existing.to_user_info])
+      targetUser.value = existing.to_user_info
+    }
+    return
+  }
+
+  if (!imStore.imSDK) return
+
+  conversation.value = await imStore.imSDK.getConversation(conversationId.value)
+  if (conversation.value.to_user_info) {
+    mergeUsers([conversation.value.to_user_info])
+    targetUser.value = conversation.value.to_user_info
+  }
 }
 
 const retryMessage = async (message: ChatMessage) => {
@@ -509,7 +560,7 @@ const handlePlusClick = () => {
 }
 
 const handleSelectFile = (_file: File, type: string, fileInfo: MediaInfo & { uploading?: boolean }) => {
-  if (!currentUserId.value) return
+  if (!currentUserId.value || !peerUserId.value) return
 
   const messageType = type as MessageType
   const tempMessage: ChatMessage = {
@@ -611,6 +662,7 @@ const resetChatState = () => {
   messageText.value = ''
   showMoreOptions.value = false
   targetUser.value = null
+  conversation.value = null
 }
 
 const initChat = async () => {
@@ -619,18 +671,22 @@ const initChat = async () => {
     return
   }
 
-  if (!peerUserId.value) {
+  if (!conversationId.value) {
     showToast('无效的会话')
     router.replace({ name: 'im-home' })
     return
   }
 
   resetChatState()
-  clearUnreadForPeer(peerUserId.value)
   imStore.initSDK()
   imStore.addMessageHandler(handleNewMessage)
 
   try {
+    await fetchConversation()
+    if (!peerUserId.value) {
+      throw new Error('invalid conversation participants')
+    }
+    clearUnreadForPeer(peerUserId.value)
     await Promise.all([fetchTargetUser(), waitForConnection()])
     await fetchHistoryMessages()
   } catch (error) {
@@ -644,9 +700,9 @@ onMounted(() => {
 })
 
 watch(
-  () => props.userId,
-  (userId, prevUserId) => {
-    if (userId && userId !== prevUserId) {
+  () => props.conversationId,
+  (nextConversationId, prevConversationId) => {
+    if (nextConversationId && nextConversationId !== prevConversationId) {
       imStore.removeMessageHandler(handleNewMessage)
       initChat()
     }

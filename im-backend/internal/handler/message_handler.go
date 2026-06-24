@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"log"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -77,10 +77,6 @@ func (h *MessageHandler) GetMessagesByConversationID(c *gin.Context) {
 	afterIDStr := c.Query("after_id")
 	limitStr := c.Query("limit")
 
-	log.Printf("conversationIDStr: %+v", conversationIDStr)
-	log.Printf("beforeIDStr: %+v", beforeIDStr)
-	log.Printf("limitStr: %+v", limitStr)
-
 	conversationID, err := primitive.ObjectIDFromHex(conversationIDStr)
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, http.StatusBadRequest, "Invalid conversation ID")
@@ -113,8 +109,13 @@ func (h *MessageHandler) GetMessagesByConversationID(c *gin.Context) {
 		}
 	}
 
-	messages, err := h.messageService.FindMessagesByConversationID(c.Request.Context(), conversationID, &beforeID, &afterID, limit)
+	currentUserID := contextx.MustGetUserID(c)
+	messages, err := h.messageService.FindMessagesByConversationID(c.Request.Context(), conversationID, currentUserID, &beforeID, &afterID, limit)
 	if err != nil {
+		if errors.Is(err, service.ErrConversationAccessDenied) {
+			response.Error(c, http.StatusForbidden, http.StatusForbidden, "Forbidden")
+			return
+		}
 		response.Error(c, http.StatusInternalServerError, http.StatusInternalServerError, "Failed to get messages")
 		return
 	}

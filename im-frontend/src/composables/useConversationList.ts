@@ -118,7 +118,7 @@ export function useConversationList() {
     return loadMorePromise
   }
 
-  function handleIncomingMessage(message: Message, activePeerId?: string) {
+  function handleIncomingMessage(message: Message, activeConversationId?: string) {
     const userId = currentUserId.value
     if (!userId) return
     if (message.from_id !== userId && message.to_id !== userId) return
@@ -127,7 +127,7 @@ export function useConversationList() {
       conversations.value,
       message,
       userId,
-      activePeerId,
+      activeConversationId,
     )
   }
 

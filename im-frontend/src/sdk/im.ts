@@ -59,6 +59,7 @@ export enum MessageType {
   // 消息接口
   export interface Message {
     id?: string;
+    conversation_id?: string;
     from_id?: string;
     to_id: string;
     type: MessageType;
@@ -138,6 +139,7 @@ export enum MessageType {
 
     return {
       id,
+      conversation_id: raw.conversation_id == null ? undefined : String(raw.conversation_id),
       from_id: String(raw.sender_id ?? raw.from_id ?? ''),
       to_id: String(raw.receiver_id ?? raw.to_id ?? ''),
       type: (raw.type as MessageType) ?? MessageType.Text,
@@ -550,6 +552,27 @@ export enum MessageType {
       const data = await apiRequest<Record<string, unknown>[]>(
         this.baseURL,
         `/im/api/messages?${queryParams}`,
+        this.token,
+      );
+
+      return (data ?? []).map((item) => normalizeMessage(item));
+    }
+
+    async getConversationMessages(
+      conversationId: string,
+      params: Omit<MessageQueryParams, 'receiver_id'> = {},
+    ): Promise<Message[]> {
+      const queryParams = new URLSearchParams();
+      if (params.before_id) queryParams.append('before_id', params.before_id);
+      if (params.after_id) queryParams.append('after_id', params.after_id);
+      if (params.start_time) queryParams.append('start_time', params.start_time);
+      if (params.end_time) queryParams.append('end_time', params.end_time);
+      if (params.limit) queryParams.append('limit', params.limit.toString());
+
+      const suffix = queryParams.toString() ? `?${queryParams}` : '';
+      const data = await apiRequest<Record<string, unknown>[]>(
+        this.baseURL,
+        `/im/api/conversations/${conversationId}/messages${suffix}`,
         this.token,
       );
 

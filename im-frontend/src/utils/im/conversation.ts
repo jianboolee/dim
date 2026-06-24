@@ -25,6 +25,8 @@ function previewImageFromMessage(message: Message): string {
 }
 
 function matchesMessage(conversation: Conversation, message: Message): boolean {
+  if (message.conversation_id && conversation.id === message.conversation_id) return true
+
   const fromId = message.from_id
   if (!fromId) return false
   return conversation.participants.includes(fromId) && conversation.participants.includes(message.to_id)
@@ -35,7 +37,7 @@ export function buildConversationFromMessage(message: Message, currentUserId: st
   const timestamp = message.created_at ?? new Date().toISOString()
 
   return {
-    id: [fromId, message.to_id].sort().join(':'),
+    id: message.conversation_id ?? [fromId, message.to_id].sort().join(':'),
     type: 'private',
     participants: [fromId, message.to_id],
     last_message: message,
@@ -52,13 +54,13 @@ export function applyIncomingMessage(
   conversations: Conversation[],
   message: Message,
   currentUserId: string,
-  activePeerId?: string,
+  activeConversationId?: string,
 ): Conversation[] {
   const index = conversations.findIndex((conversation) => matchesMessage(conversation, message))
 
   if (index === -1) {
     const created = buildConversationFromMessage(message, currentUserId)
-    if (activePeerId && message.from_id === activePeerId && message.to_id === currentUserId) {
+    if (activeConversationId && created.id === activeConversationId && message.to_id === currentUserId) {
       created.unread_counts = { [currentUserId]: 0 }
     }
     return sortConversationsByActivity([created, ...conversations])
@@ -67,7 +69,7 @@ export function applyIncomingMessage(
   const existing = conversations[index]!
   const previewImage = previewImageFromMessage(message)
   const shouldIncrementUnread =
-    message.to_id === currentUserId && message.from_id !== activePeerId
+    message.to_id === currentUserId && existing.id !== activeConversationId
 
   const updated: Conversation = {
     ...existing,

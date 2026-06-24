@@ -54,6 +54,10 @@ func (h *ConversationHandler) GetConversation(c *gin.Context) {
 	currentUserID := contextx.MustGetUserID(c)
 	conversation, err := h.conversationService.GetConversation(c.Request.Context(), objID, currentUserID)
 	if err != nil {
+		if errors.Is(err, service.ErrConversationAccessDenied) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get conversation"})
 		return
 	}

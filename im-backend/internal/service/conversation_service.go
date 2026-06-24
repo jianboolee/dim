@@ -30,6 +30,7 @@ const (
 )
 
 var ErrInvalidConversationCursor = errors.New("invalid conversation cursor")
+var ErrConversationAccessDenied = errors.New("conversation access denied")
 
 type conversationCursor struct {
 	UpdatedAt time.Time `json:"updated_at"`
@@ -58,6 +59,9 @@ func (s *ConversationService) GetConversation(ctx context.Context, id primitive.
 	conversation, err := s.repo.GetConversation(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversation: %w", err)
+	}
+	if !conversation.HasParticipant(currentUserID) {
+		return nil, ErrConversationAccessDenied
 	}
 
 	conversation.GetLastActivity()
