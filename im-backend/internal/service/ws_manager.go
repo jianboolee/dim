@@ -24,35 +24,37 @@ const (
 	WsMessageTypePong WsMessageType = "pong"
 )
 
+const (
+	writeWait  = 10 * time.Second
+	pongWait   = 60 * time.Second
+	pingPeriod = 50 * time.Second
+)
+
 type wsMessage struct {
 	Type WsMessageType `json:"type"`
 }
 
 type WSManager struct {
-	Clients           map[string]*Client
-	Broadcast         chan []byte
-	Register          chan *Client
-	Unregister        chan *Client
-	redisClient       *redis.Client
-	mutex             sync.RWMutex
-	stop              chan struct{}
-	messageService    *MessageService
-	sessionService    *SessionService
-	heartbeatInterval time.Duration // 新增: 心跳间隔
-	heartbeatTimeout  time.Duration // 新增: 超时检测
+	Clients        map[string]*Client
+	Broadcast      chan []byte
+	Register       chan *Client
+	Unregister     chan *Client
+	redisClient    *redis.Client
+	mutex          sync.RWMutex
+	stop           chan struct{}
+	messageService *MessageService
+	sessionService *SessionService
 }
 
 func NewWSManager(redisClient *redis.Client, sessionService *SessionService) *WSManager {
 	return &WSManager{
-		Clients:           make(map[string]*Client),
-		Broadcast:         make(chan []byte),
-		Register:          make(chan *Client),
-		Unregister:        make(chan *Client),
-		redisClient:       redisClient,
-		stop:              make(chan struct{}),
-		sessionService:    sessionService,
-		heartbeatInterval: 30 * time.Second,
-		heartbeatTimeout:  10 * time.Second,
+		Clients:        make(map[string]*Client),
+		Broadcast:      make(chan []byte),
+		Register:       make(chan *Client),
+		Unregister:     make(chan *Client),
+		redisClient:    redisClient,
+		stop:           make(chan struct{}),
+		sessionService: sessionService,
 	}
 }
 
@@ -64,14 +66,15 @@ func (m *WSManager) SetMessageService(messageService *MessageService) {
 func (m *WSManager) Run() {
 	m.startRedisSubscriber()
 
-	// 启动定时器，定期发送 ping 消息
-	ticker := time.NewTicker(m.heartbeatInterval)
-	defer ticker.Stop()
-
 	for {
 		select {
 		case client := <-m.Register:
 			m.mutex.Lock()
+			if oldClient, ok := m.Clients[client.UserID]; ok && oldClient != client {
+				delete(m.Clients, client.UserID)
+				close(oldClient.Send)
+				_ = oldClient.Conn.Close()
+			}
 			m.Clients[client.UserID] = client
 			m.mutex.Unlock()
 			log.Printf("Client connected: %s", client.UserID)
@@ -83,17 +86,18 @@ func (m *WSManager) Run() {
 
 		case client := <-m.Unregister:
 			m.mutex.Lock()
-			if _, ok := m.Clients[client.UserID]; ok {
+			currentClient, ok := m.Clients[client.UserID]
+			if ok && currentClient == client {
 				delete(m.Clients, client.UserID)
 				close(client.Send)
+				log.Printf("Client disconnected: %s", client.UserID)
+
+				// 更新用户离线状态
+				if err := m.sessionService.UpdateUserStatus(context.Background(), client.UserID, false); err != nil {
+					log.Printf("Failed to update user status: %v", err)
+				}
 			}
 			m.mutex.Unlock()
-			log.Printf("Client disconnected: %s", client.UserID)
-
-			// 更新用户离线状态
-			if err := m.sessionService.UpdateUserStatus(context.Background(), client.UserID, false); err != nil {
-				log.Printf("Failed to update user status: %v", err)
-			}
 
 		case message := <-m.Broadcast:
 			var msg struct {
@@ -112,18 +116,6 @@ func (m *WSManager) Run() {
 		case <-m.stop:
 			log.Println("WebSocket manager is shutting down...")
 			return
-
-		case <-ticker.C:
-			// 每个心跳间隔发送 ping 消息
-			m.mutex.RLock()
-			for _, client := range m.Clients {
-				if err := client.Conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
-					log.Printf("Failed to send ping to %s: %v", client.UserID, err)
-					client.Conn.Close()
-					delete(m.Clients, client.UserID)
-				}
-			}
-			m.mutex.RUnlock()
 		}
 	}
 }
@@ -214,24 +206,40 @@ func (m *WSManager) Shutdown() {
 
 // WritePump 处理向客户端写入消息
 func (c *Client) WritePump() {
+	ticker := time.NewTicker(pingPeriod)
 	defer func() {
+		ticker.Stop()
 		c.Conn.Close()
 	}()
 
-	for message := range c.Send {
-		w, err := c.Conn.NextWriter(websocket.TextMessage)
-		if err != nil {
-			return
-		}
-		w.Write(message)
+	for {
+		select {
+		case message, ok := <-c.Send:
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if !ok {
+				_ = c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
 
-		if err := w.Close(); err != nil {
-			return
+			w, err := c.Conn.NextWriter(websocket.TextMessage)
+			if err != nil {
+				return
+			}
+			if _, err := w.Write(message); err != nil {
+				_ = w.Close()
+				return
+			}
+
+			if err := w.Close(); err != nil {
+				return
+			}
+		case <-ticker.C:
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
 		}
 	}
-
-	// 通道已关闭，发送关闭消息
-	c.Conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 }
 
 // ReadPump 处理从客户端读取消息
@@ -242,11 +250,11 @@ func (c *Client) ReadPump(manager *WSManager) {
 	}()
 
 	// 设置读取超时，防止阻塞太久
-	c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	_ = c.Conn.SetReadDeadline(time.Now().Add(pongWait))
 
 	// 设置PongHandler，接收到Pong时重置读取超时
 	c.Conn.SetPongHandler(func(string) error {
-		c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		_ = c.Conn.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
 	})
 
@@ -278,12 +286,13 @@ func (c *Client) ReadPump(manager *WSManager) {
 				log.Printf("Failed to marshal pong response: %v", err)
 				continue
 			}
-			if err := c.Conn.WriteMessage(websocket.TextMessage, responseBytes); err != nil {
-				log.Printf("Failed to send pong: %v", err)
-				break // 发送失败时退出循环
+			select {
+			case c.Send <- responseBytes:
+			default:
+				log.Printf("Client send buffer full, dropping pong for %s", c.UserID)
 			}
 			// 重置读取超时并继续等待下一条消息
-			c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+			_ = c.Conn.SetReadDeadline(time.Now().Add(pongWait))
 			continue
 		}
 

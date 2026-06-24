@@ -106,7 +106,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, watch, provide, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import { showToast } from '@/plugins/toast'
 import { useUserStore } from '@/stores/user'
 import { useIMStore } from '@/stores/im'
 import { useUnreadMessageStore } from '@/stores/unreadMessage'
@@ -215,24 +215,49 @@ const handleMessageInputFocus = () => {
   showMoreOptions.value = false
 }
 
-const handleNewMessage = async (message: ChatMessage) => {
-  if (!isCurrentChatMessage(message)) return
+const sortMessages = (items: ChatMessage[]) =>
+  items.sort((a, b) => {
+    const timeDiff =
+      new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime()
+    if (timeDiff !== 0) return timeDiff
+    return String(a.id ?? '').localeCompare(String(b.id ?? ''))
+  })
 
-  const existingIndex = messages.value.findIndex((msg) => msg.id && msg.id === message.id)
+const mergeMessages = (incoming: ChatMessage[]) => {
+  if (incoming.length === 0) return
 
-  if (existingIndex === -1) {
-    messages.value.push({
-      ...message,
-      status: message.from_id === currentUserId.value ? 'sent' : message.status,
-    })
-  } else {
-    messages.value[existingIndex] = {
-      ...message,
-      status: message.from_id === currentUserId.value ? 'sent' : message.status,
+  const byId = new Map<string, ChatMessage>()
+  const withoutId: ChatMessage[] = []
+
+  for (const msg of messages.value) {
+    if (msg.id) {
+      byId.set(msg.id, msg)
+    } else {
+      withoutId.push(msg)
     }
   }
 
-  messages.value = [...messages.value]
+  for (const msg of incoming) {
+    if (!msg.id) {
+      withoutId.push(msg)
+      continue
+    }
+
+    const existing = byId.get(msg.id)
+    byId.set(msg.id, {
+      ...existing,
+      ...msg,
+      status: msg.from_id === currentUserId.value ? 'sent' : msg.status,
+    })
+  }
+
+  messages.value = sortMessages([...withoutId, ...byId.values()])
+}
+
+const handleNewMessage = async (message: ChatMessage) => {
+  if (!isCurrentChatMessage(message)) return
+
+  mergeMessages([message])
   scrollToBottom(true, message.from_id === currentUserId.value)
 
   if (message.from_id === peerUserId.value && message.id) {
@@ -315,14 +340,14 @@ const fetchHistoryMessages = async (loadMore = false) => {
     )
 
     if (loadMore) {
-      messages.value = [...newMessages, ...messages.value]
+      mergeMessages(newMessages)
       nextTick(() => {
         if (!messageListRef.value) return
         const scrollDiff = messageListRef.value.scrollHeight - oldScrollHeight
         messageListRef.value.scrollTop = oldScrollTop + scrollDiff
       })
     } else {
-      messages.value = newMessages
+      messages.value = sortMessages(newMessages)
       scrollToBottom(false)
     }
 
@@ -351,6 +376,57 @@ const fetchHistoryMessages = async (loadMore = false) => {
       firstLoad.value = false
       initialized.value = true
     }
+  }
+}
+
+const syncLatestMessages = async () => {
+  if (!initialized.value || !imStore.imSDK || loading.value) return
+
+  let latestMessage = [...messages.value]
+    .reverse()
+    .find((msg) => msg.id && !msg.id.startsWith('temp-'))
+  const wasNearBottom = isNearBottom()
+
+  try {
+    const incoming: ChatMessage[] = []
+
+    while (true) {
+      const response = await imStore.imSDK.getMessages({
+        receiver_id: peerUserId.value,
+        limit: pageSize,
+        after_id: latestMessage?.id,
+      })
+      const currentPage = response.filter(isCurrentChatMessage)
+      incoming.push(...currentPage)
+
+      latestMessage = [...currentPage]
+        .reverse()
+        .find((msg) => msg.id && !msg.id.startsWith('temp-'))
+
+      if (response.length < pageSize || !latestMessage?.id) {
+        break
+      }
+    }
+
+    if (incoming.length === 0) {
+      await syncUnreadState()
+      return
+    }
+
+    mergeMessages(incoming)
+
+    const unreadMessages = incoming.filter(
+      (msg) => msg.status !== 'read' && msg.from_id === peerUserId.value && msg.id,
+    )
+    for (const msg of unreadMessages) {
+      if (!msg.id) continue
+      await markMessageAsRead(msg.id)
+    }
+
+    await syncUnreadState()
+    scrollToBottom(true, wasNearBottom)
+  } catch (error) {
+    console.error('同步最新消息失败:', error)
   }
 }
 
@@ -560,6 +636,15 @@ watch(
     if (userId && userId !== prevUserId) {
       imStore.removeMessageHandler(handleNewMessage)
       initChat()
+    }
+  },
+)
+
+watch(
+  () => imStore.isConnected,
+  (connected, wasConnected) => {
+    if (connected && wasConnected === false) {
+      syncLatestMessages()
     }
   },
 )

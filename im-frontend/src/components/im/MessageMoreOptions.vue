@@ -21,7 +21,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { showToast } from 'vant'
+import { showToast } from '@/plugins/toast'
 import { MessageType, type MediaInfo } from '@/sdk/im'
 import { takeInputFile, readImageDimensions, getFileFormat } from '@/utils/file'
 import { uploadIMFile } from '@/utils/upload'

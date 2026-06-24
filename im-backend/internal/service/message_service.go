@@ -148,14 +148,14 @@ func (s *MessageService) pushToUser(ctx context.Context, receiverID string, mess
 }
 
 // GetMessages 获取消息列表
-func (s *MessageService) GetMessages(ctx context.Context, senderID string, receiverID string, beforeID *primitive.ObjectID, limit int64) ([]models.Message, error) {
+func (s *MessageService) GetMessages(ctx context.Context, senderID string, receiverID string, beforeID *primitive.ObjectID, afterID *primitive.ObjectID, limit int64) ([]models.Message, error) {
 
 	conversation, err := s.conversationService.GetConversationByParticipants(ctx, []string{senderID, receiverID})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversation: %w", err)
 	}
 
-	messages, err := s.repo.FindMessagesByConversationID(ctx, conversation.ID, beforeID, limit)
+	messages, err := s.repo.FindMessagesByConversationID(ctx, conversation.ID, beforeID, afterID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get messages: %w", err)
 	}
@@ -166,8 +166,8 @@ func (s *MessageService) GetMessages(ctx context.Context, senderID string, recei
 }
 
 // FindMessagesByConversationID 根据会话ID获取消息列表
-func (s *MessageService) FindMessagesByConversationID(ctx context.Context, conversationID primitive.ObjectID, beforeID *primitive.ObjectID, limit int64) ([]models.Message, error) {
-	messages, err := s.repo.FindMessagesByConversationID(ctx, conversationID, beforeID, limit)
+func (s *MessageService) FindMessagesByConversationID(ctx context.Context, conversationID primitive.ObjectID, beforeID *primitive.ObjectID, afterID *primitive.ObjectID, limit int64) ([]models.Message, error) {
+	messages, err := s.repo.FindMessagesByConversationID(ctx, conversationID, beforeID, afterID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get messages: %w", err)
 	}
@@ -233,11 +233,11 @@ func (s *MessageService) ProcessWebSocketMessage(
 	message []byte,
 ) (*models.Message, error) {
 	var raw struct {
-		ReceiverID string              `json:"receiver_id"`
-		ToID       string              `json:"to_id"`
-		Content    string              `json:"content"`
-		Type       models.MessageType  `json:"type"`
-		Payload    *models.Payload     `json:"payload"`
+		ReceiverID string             `json:"receiver_id"`
+		ToID       string             `json:"to_id"`
+		Content    string             `json:"content"`
+		Type       models.MessageType `json:"type"`
+		Payload    *models.Payload    `json:"payload"`
 	}
 	if err := json.Unmarshal(message, &raw); err != nil {
 		return nil, err

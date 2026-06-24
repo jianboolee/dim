@@ -12,9 +12,11 @@ export enum MessageType {
   
   // 消息状态枚举
   export enum MessageStatus {
+    Sending = 'sending',
     Sent = 'sent',
     Delivered = 'delivered',
-    Read = 'read'
+    Read = 'read',
+    Failed = 'failed'
   }
   
   // SDK 配置接口
@@ -32,6 +34,8 @@ export enum MessageType {
     width?: number;
     height?: number;
     format: string;
+    thumbnail?: string;
+    uploading?: boolean;
   }
   
   // 卡片信息接口
@@ -91,6 +95,7 @@ export enum MessageType {
   export interface MessageQueryParams {
     receiver_id?: string;
     before_id?: string;
+    after_id?: string;
     start_time?: string;
     end_time?: string;
     limit?: number;
@@ -103,6 +108,7 @@ export enum MessageType {
   }
 
   function normalizeMessage(raw: Record<string, unknown>): Message {
+    const payload = raw.payload as Record<string, unknown> | undefined
     let id: string | undefined
     if (raw.id != null) {
       if (typeof raw.id === 'string') {
@@ -121,12 +127,99 @@ export enum MessageType {
       type: (raw.type as MessageType) ?? MessageType.Text,
       content: String(raw.content ?? ''),
       status: raw.status as MessageStatus | undefined,
-      media_info: raw.media_info as MediaInfo | undefined,
-      card_info: raw.card_info as CardInfo | undefined,
-      link_info: raw.link_info as LinkInfo | undefined,
+      media_info: raw.media_info as MediaInfo | undefined ?? payloadToMediaInfo(payload),
+      card_info: raw.card_info as CardInfo | undefined ?? payloadToCardInfo(payload),
+      link_info: raw.link_info as LinkInfo | undefined ?? payloadToLinkInfo(payload),
       created_at: raw.created_at as string | undefined,
       updated_at: raw.updated_at as string | undefined,
     };
+  }
+
+  function payloadToMediaInfo(payload?: Record<string, unknown>): MediaInfo | undefined {
+    if (!payload?.url) return undefined
+
+    return {
+      url: String(payload.url),
+      size: Number(payload.size ?? 0),
+      duration: payload.duration == null ? undefined : Number(payload.duration),
+      width: payload.width == null ? undefined : Number(payload.width),
+      height: payload.height == null ? undefined : Number(payload.height),
+      format: String(payload.ext_string ?? ''),
+    }
+  }
+
+  function payloadToCardInfo(payload?: Record<string, unknown>): CardInfo | undefined {
+    if (!payload?.title && !payload?.url) return undefined
+
+    return {
+      title: String(payload.title ?? ''),
+      description: String(payload.description ?? ''),
+      path: String(payload.url ?? ''),
+      image_url: String(payload.image_url ?? ''),
+      price: Number(payload.price ?? 0),
+      currency: String(payload.currency ?? ''),
+    }
+  }
+
+  function payloadToLinkInfo(payload?: Record<string, unknown>): LinkInfo | undefined {
+    if (!payload?.url) return undefined
+
+    return {
+      title: String(payload.title ?? ''),
+      description: String(payload.description ?? ''),
+      url: String(payload.url),
+      image_url: String(payload.image_url ?? ''),
+    }
+  }
+
+  function mediaInfoToPayload(mediaInfo?: MediaInfo): Record<string, unknown> | undefined {
+    if (!mediaInfo) return undefined
+
+    return {
+      url: mediaInfo.url,
+      size: mediaInfo.size,
+      duration: mediaInfo.duration,
+      width: mediaInfo.width,
+      height: mediaInfo.height,
+      ext_string: mediaInfo.format,
+    }
+  }
+
+  function cardInfoToPayload(cardInfo?: CardInfo): Record<string, unknown> | undefined {
+    if (!cardInfo) return undefined
+
+    return {
+      title: cardInfo.title,
+      description: cardInfo.description,
+      url: cardInfo.path,
+      image_url: cardInfo.image_url,
+      price: cardInfo.price,
+      currency: cardInfo.currency,
+    }
+  }
+
+  function linkInfoToPayload(linkInfo?: LinkInfo): Record<string, unknown> | undefined {
+    if (!linkInfo) return undefined
+
+    return {
+      title: linkInfo.title,
+      description: linkInfo.description,
+      url: linkInfo.url,
+      image_url: linkInfo.image_url,
+    }
+  }
+
+  function buildPayload(type: MessageType, mediaInfo?: MediaInfo, cardInfo?: CardInfo, linkInfo?: LinkInfo) {
+    if ([MessageType.Image, MessageType.Video, MessageType.Audio].includes(type)) {
+      return mediaInfoToPayload(mediaInfo)
+    }
+    if (type === MessageType.Card) {
+      return cardInfoToPayload(cardInfo)
+    }
+    if (type === MessageType.Link) {
+      return linkInfoToPayload(linkInfo)
+    }
+    return undefined
   }
 
   function normalizeConversation(raw: Record<string, unknown>): Conversation {
@@ -213,18 +306,43 @@ export enum MessageType {
      * 连接 WebSocket
      */
     async connect(): Promise<void> {
-      try {
-        this.ws = new WebSocket(`${this.wsURL}?token=${encodeURIComponent(this.token)}`);
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        return;
+      }
+
+      this.ws?.close();
+
+      return new Promise((resolve, reject) => {
+        const ws = new WebSocket(`${this.wsURL}?token=${encodeURIComponent(this.token)}`);
+        this.ws = ws;
+        let settled = false;
+
+        const settleResolve = () => {
+          if (settled) return;
+          settled = true;
+          resolve();
+        };
+
+        const settleReject = (error: unknown) => {
+          if (settled) return;
+          settled = true;
+          reject(error);
+        };
         
-        this.ws.onopen = () => {
+        ws.onopen = () => {
           this._notifyConnectionHandlers({ status: 'connected' });
+          settleResolve();
         };
         
-        this.ws.onclose = () => {
+        ws.onclose = () => {
           this._notifyConnectionHandlers({ status: 'disconnected' });
+          if (this.ws === ws) {
+            this.ws = null;
+          }
+          settleReject(new Error('WebSocket closed before connection was established'));
         };
         
-        this.ws.onmessage = (event: MessageEvent) => {
+        ws.onmessage = (event: MessageEvent) => {
           const raw = JSON.parse(event.data);
           if (raw?.type === MessageType.Ping || raw?.type === MessageType.Pong) {
             return;
@@ -233,12 +351,11 @@ export enum MessageType {
           this._notifyMessageHandlers(message);
         };
         
-        this.ws.onerror = (error: Event) => {
+        ws.onerror = (error: Event) => {
           this._notifyConnectionHandlers({ status: 'error', error });
+          settleReject(error);
         };
-      } catch (error) {
-        throw new Error(`Failed to connect: ${error}`);
-      }
+      });
     }
   
     /**
@@ -368,6 +485,8 @@ export enum MessageType {
         }
         message.link_info = linkInfo;
       }
+
+      const payload = buildPayload(type, mediaInfo, cardInfo, linkInfo);
   
       const response = await fetch(`${this.baseURL}/im/api/messages`, {
         method: 'POST',
@@ -379,6 +498,7 @@ export enum MessageType {
           receiver_id: toID,
           type,
           content,
+          payload,
         })
       });
 
@@ -401,6 +521,7 @@ export enum MessageType {
       const queryParams = new URLSearchParams();
       if (params.receiver_id) queryParams.append('receiver_id', params.receiver_id);
       if (params.before_id) queryParams.append('before_id', params.before_id);
+      if (params.after_id) queryParams.append('after_id', params.after_id);
       if (params.start_time) queryParams.append('start_time', params.start_time);
       if (params.end_time) queryParams.append('end_time', params.end_time);
       if (params.limit) queryParams.append('limit', params.limit.toString());

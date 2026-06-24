@@ -117,7 +117,11 @@ export const useIMStore = defineStore('im', () => {
 
         // 添加全局消息处理器，用于更新未读消息计数
         imSDK.value.onMessage((message: Message) => {
-            if (message.type !== MessageType.Pong && message.type !== MessageType.Ping) {
+            if (
+                message.type !== MessageType.Pong &&
+                message.type !== MessageType.Ping &&
+                message.from_id !== userStore.userInfo?.id
+            ) {
                 unreadMessageStore.increment()
             }
         })

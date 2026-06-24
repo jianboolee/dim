@@ -32,6 +32,7 @@ func (h *MessageHandler) GetMessages(c *gin.Context) {
 	senderID := c.GetString("user_id")
 	receiverID := c.Query("receiver_id")
 	beforeIDStr := c.Query("before_id")
+	afterIDStr := c.Query("after_id")
 	limitStr := c.Query("limit")
 
 	var err error
@@ -40,6 +41,14 @@ func (h *MessageHandler) GetMessages(c *gin.Context) {
 		beforeID, err = primitive.ObjectIDFromHex(beforeIDStr)
 		if err != nil {
 			response.Error(c, http.StatusBadRequest, http.StatusBadRequest, "Invalid before ID")
+			return
+		}
+	}
+	afterID := primitive.NilObjectID
+	if afterIDStr != "" {
+		afterID, err = primitive.ObjectIDFromHex(afterIDStr)
+		if err != nil {
+			response.Error(c, http.StatusBadRequest, http.StatusBadRequest, "Invalid after ID")
 			return
 		}
 	}
@@ -53,7 +62,7 @@ func (h *MessageHandler) GetMessages(c *gin.Context) {
 		}
 	}
 
-	messages, err := h.messageService.GetMessages(c.Request.Context(), senderID, receiverID, &beforeID, limit)
+	messages, err := h.messageService.GetMessages(c.Request.Context(), senderID, receiverID, &beforeID, &afterID, limit)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, http.StatusInternalServerError, "Failed to get messages")
 		return
@@ -65,6 +74,7 @@ func (h *MessageHandler) GetMessages(c *gin.Context) {
 func (h *MessageHandler) GetMessagesByConversationID(c *gin.Context) {
 	conversationIDStr := c.Param("id")
 	beforeIDStr := c.Query("before_id")
+	afterIDStr := c.Query("after_id")
 	limitStr := c.Query("limit")
 
 	log.Printf("conversationIDStr: %+v", conversationIDStr)
@@ -85,6 +95,14 @@ func (h *MessageHandler) GetMessagesByConversationID(c *gin.Context) {
 			return
 		}
 	}
+	afterID := primitive.NilObjectID
+	if afterIDStr != "" {
+		afterID, err = primitive.ObjectIDFromHex(afterIDStr)
+		if err != nil {
+			response.Error(c, http.StatusBadRequest, http.StatusBadRequest, "Invalid after ID")
+			return
+		}
+	}
 
 	limit := int64(20)
 	if limitStr != "" {
@@ -95,7 +113,7 @@ func (h *MessageHandler) GetMessagesByConversationID(c *gin.Context) {
 		}
 	}
 
-	messages, err := h.messageService.FindMessagesByConversationID(c.Request.Context(), conversationID, &beforeID, limit)
+	messages, err := h.messageService.FindMessagesByConversationID(c.Request.Context(), conversationID, &beforeID, &afterID, limit)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, http.StatusInternalServerError, "Failed to get messages")
 		return

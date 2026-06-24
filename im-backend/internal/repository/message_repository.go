@@ -74,17 +74,23 @@ func (r *MessageRepository) UpdateStatus(ctx context.Context, id primitive.Objec
 }
 
 // FindMessagesByConversationID 根据会话ID查询消息
-func (r *MessageRepository) FindMessagesByConversationID(ctx context.Context, conversationID primitive.ObjectID, beforeID *primitive.ObjectID, limit int64) ([]models.Message, error) {
+func (r *MessageRepository) FindMessagesByConversationID(ctx context.Context, conversationID primitive.ObjectID, beforeID *primitive.ObjectID, afterID *primitive.ObjectID, limit int64) ([]models.Message, error) {
 	filter := bson.M{"conversation_id": conversationID}
 
 	log.Printf("conversationID: %+v", conversationID)
 	log.Printf("beforeID: %+v", beforeID)
+	log.Printf("afterID: %+v", afterID)
 	log.Printf("limit: %+v", limit)
 
+	sort := bson.M{"created_at": -1}
 	if beforeID != nil && !beforeID.IsZero() {
 		filter["_id"] = bson.M{"$lt": beforeID}
 	}
-	opts := options.Find().SetSort(bson.M{"created_at": -1}).SetLimit(limit)
+	if afterID != nil && !afterID.IsZero() {
+		filter["_id"] = bson.M{"$gt": afterID}
+		sort = bson.M{"created_at": 1}
+	}
+	opts := options.Find().SetSort(sort).SetLimit(limit)
 
 	cursor, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {

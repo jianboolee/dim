@@ -55,9 +55,9 @@ type Message struct {
 	Type           MessageType        `bson:"type" json:"type"`                       // 消息类型
 
 	// 内容与扩展字段
-	Content    string   `bson:"content,omitempty" json:"content,"` // 文本内容 / 摘要
-	RawPayload bson.Raw `bson:"raw_payload,omitempty" json:"-"`    // 原始结构体，用于多类型消息
-	Payload    *Payload `bson:"payload,omitempty" json:"payload"`  // 解码后的动态结构，前端使用
+	Content    string   `bson:"content,omitempty" json:"content,omitempty"` // 文本内容 / 摘要
+	RawPayload bson.Raw `bson:"raw_payload,omitempty" json:"-"`             // 原始结构体，用于多类型消息
+	Payload    *Payload `bson:"payload,omitempty" json:"payload"`           // 解码后的动态结构，前端使用
 
 	// 回复/引用关系
 	ParentMessageID *primitive.ObjectID `bson:"parent_message_id,omitempty" json:"parent_message_id,omitempty"` // 回复的消息（用于评论、子消息）

@@ -71,12 +71,16 @@ let touchEndY = 0
 
 // 处理触摸开始
 const handleTouchStart = (e: TouchEvent) => {
-  touchStartY = e.touches[0].clientY
+  const touch = e.touches[0]
+  if (!touch) return
+  touchStartY = touch.clientY
 }
 
 // 处理触摸结束
 const handleTouchEnd = (e: TouchEvent) => {
-  touchEndY = e.changedTouches[0].clientY
+  const touch = e.changedTouches[0]
+  if (!touch) return
+  touchEndY = touch.clientY
   const deltaY = touchEndY - touchStartY
   
   // 如果是向下滑动超过50px
@@ -121,7 +125,7 @@ const playVideo = () => {
 
 // 监听全屏变化
 const handleFullscreenChange = () => {
-  if (!document.fullscreenElement) {
+  if (!document.fullscreenElement && player.value) {
     // 退出全屏时暂停播放
     player.value?.pause()
     isPlaying.value = false

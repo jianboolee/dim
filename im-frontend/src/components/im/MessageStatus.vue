@@ -10,7 +10,7 @@
 
 <script setup lang="ts">
 defineProps<{
-  status: 'sending' | 'failed' | 'sent' | 'read'
+  status?: 'sending' | 'failed' | 'sent' | 'delivered' | 'read'
 }>()
 
 defineEmits<{

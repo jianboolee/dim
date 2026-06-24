@@ -8,7 +8,7 @@
     >
       <div class="image-wrapper">
         <ImageView
-          :src="message.media_info?.url"
+          :src="message.media_info?.url || ''"
           :alt="message.content"
           placeholderText="图片"
           :width="containerStyle.width"
@@ -32,7 +32,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, ref } from 'vue'
+import { computed, inject, ref, type Ref } from 'vue'
 import type { Message } from '@/sdk/im'
 import MessageStatus from './MessageStatus.vue'
 import ImageView from '@/components/common/ImageView.vue'
@@ -107,7 +107,7 @@ const containerStyle = computed(() => {
 const preview = () => {
   if (!props.message.media_info?.url) return
   // 找到当前图片在列表中的索引
-  const index = chatImages.value.findIndex(url => url === props.message.media_info?.url)
+  const index = chatImages.value.findIndex((url: string) => url === props.message.media_info?.url)
   if (index === -1) return
   
   imagePreview.preview({
