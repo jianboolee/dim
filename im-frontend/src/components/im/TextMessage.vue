@@ -1,6 +1,6 @@
 <!-- 文本消息组件 -->
 <template>
-  <div class="message-content message-text" :class="{ 'message-failed': message.status === 'failed' }">
+  <div class="message-content message-text">
     <div class="message-arrow"></div>
     <span v-html="formattedContent"></span>
     <MessageStatus 
@@ -51,7 +51,6 @@ const formattedContent = computed(() => {
   white-space: pre-line;
   position: relative;
   padding: 8px 12px;
-  padding-right: 24px;
   border-radius: 12px;
   background: var(--bg-color);
   word-break: break-all;
@@ -103,13 +102,4 @@ const formattedContent = computed(() => {
   color: #fff;
 }
 
-/* 发送失败的消息样式 */
-.message-failed {
-  background: var(--bg-color-light) !important;
-  color: var(--text-color-light) !important;
-}
-
-:deep(.message-mine) .message-failed {
-  background: var(--error-color-light) !important;
-}
 </style> 

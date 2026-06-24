@@ -1,6 +1,6 @@
 <!-- 卡片消息组件 -->
 <template>
-    <div class="message-content message-card" :class="{ 'message-failed': message.status === 'failed' }">
+    <div class="message-content message-card">
       <div class="message-arrow"></div>
       <a :href="message.link_info?.url" target="_blank" class="card-link">
         <div class="card-info">
@@ -162,11 +162,4 @@
     border-color: transparent transparent transparent var(--bg-color);
   }
   
-  .message-failed {
-    background: var(--bg-color-light);
-  }
-  
-  :deep(.message-mine) .message-failed {
-    background: var(--error-color-light);
-  }
   </style> 

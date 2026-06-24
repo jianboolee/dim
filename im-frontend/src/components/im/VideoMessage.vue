@@ -1,6 +1,6 @@
 <!-- 视频消息组件 -->
 <template>
-  <div class="message-content message-video" :class="{ 'message-failed': message.status === 'failed' }">
+  <div class="message-content message-video">
     <div class="message-arrow"></div>
     <div class="video-container" @click="playVideo">
       <video 
@@ -384,14 +384,6 @@ const getAspectRatio = computed(() => {
   right: -6px;
   border-width: 6px 0 6px 6px;
   border-color: transparent transparent transparent var(--bg-color);
-}
-
-.message-failed {
-  background: var(--bg-color-light);
-}
-
-:deep(.message-mine) .message-failed {
-  background: var(--error-color-light);
 }
 
 .error-overlay {

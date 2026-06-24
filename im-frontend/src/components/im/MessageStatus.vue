@@ -1,11 +1,14 @@
 <!-- 消息状态组件 -->
 <template>
-  <div class="message-status">
-    <i v-if="status === 'sending'" class="bi bi-clock"></i>
-    <i v-else-if="status === 'failed'" class="bi bi-exclamation-circle" @click="$emit('retry')"></i>
-    <i v-else-if="status === 'sent'" class="bi bi-check"></i>
-    <i v-else-if="status === 'read'" class="bi bi-check-all"></i>
-  </div>
+  <button
+    v-if="status === 'failed'"
+    class="message-retry-btn"
+    type="button"
+    aria-label="重发"
+    @click.stop="$emit('retry')"
+  >
+    <i class="ri-refresh-line"></i>
+  </button>
 </template>
 
 <script setup lang="ts">
@@ -19,19 +22,29 @@ defineEmits<{
 </script>
 
 <style scoped>
-.message-status {
+.message-retry-btn {
   position: absolute;
-  right: 6px;
-  bottom: 6px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.message-status i {
-  cursor: pointer;
-}
-
-.message-status i.bi-exclamation-circle {
+  left: -34px;
+  top: 2px;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: #fff1f0;
   color: var(--error-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+
+.message-retry-btn i {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.message-retry-btn:active {
+  opacity: 0.75;
 }
 </style> 

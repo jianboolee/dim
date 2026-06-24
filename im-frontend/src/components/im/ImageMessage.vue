@@ -1,6 +1,6 @@
 <!-- 图片消息组件 -->
 <template>
-  <div class="message-content message-image" :class="{ 'message-failed': message.status === 'failed' }">
+  <div class="message-content message-image">
     <div class="message-arrow"></div>
     <div 
       class="image-container" 
@@ -201,11 +201,4 @@ const preview = () => {
   border-color: transparent transparent transparent var(--bg-color);
 }
 
-.message-failed {
-  background: var(--bg-color-light);
-}
-
-:deep(.message-mine) .message-failed {
-  background: var(--error-color-light);
-}
 </style> 

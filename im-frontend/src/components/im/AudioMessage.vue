@@ -1,6 +1,6 @@
 <!-- 语音消息组件 -->
 <template>
-  <div class="message-content message-audio" :class="{ 'message-failed': message.status === 'failed' }">
+  <div class="message-content message-audio">
     <div class="message-arrow"></div>
     <div class="audio-container" @click="togglePlay">
       <i class="bi" :class="isPlaying ? 'bi-pause-fill' : 'bi-play-fill'"></i>
@@ -73,7 +73,6 @@ onUnmounted(() => {
 .message-content {
   position: relative;
   padding: 8px 12px;
-  padding-right: 24px;
   border-radius: 12px;
   background: var(--bg-color);
   min-width: 120px;
@@ -180,11 +179,4 @@ onUnmounted(() => {
   border-color: transparent transparent transparent var(--bg-color);
 }
 
-.message-failed {
-  background: var(--bg-color-light);
-}
-
-:deep(.message-mine) .message-failed {
-  background: var(--error-color-light);
-}
 </style> 

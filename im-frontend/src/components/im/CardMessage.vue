@@ -1,6 +1,6 @@
 <!-- 卡片消息组件 -->
 <template>
-  <div class="message-content message-card" :class="{ 'message-failed': message.status === 'failed' }">
+  <div class="message-content message-card">
     <div class="message-arrow"></div>
     <div @click="handleCardClick(message)" class="card-link">
       <div class="card-thumb">
@@ -194,14 +194,5 @@ const handleCardClick = (message: Message) => {
   border-width: 6px 0 6px 6px;
   border-color: transparent transparent transparent var(--primary-color);
 }
-
-.message-failed {
-  opacity: 0.7;
-}
-
-.message-mine .message-failed {
-  background: var(--error-color-light);
-}
-
 
 </style> 
