@@ -28,6 +28,7 @@ type IntegrationCreateConversationRequest struct {
 
 type IntegrationCreateConversationResponse struct {
 	Token          string `json:"token"`
+	ExpiresIn      int    `json:"expires_in"`
 	ConversationID string `json:"conversation_id"`
 	RedirectURL    string `json:"redirect_url"`
 }
@@ -38,5 +39,6 @@ type IntegrationLoginRequest struct {
 
 type IntegrationLoginResponse struct {
 	Token       string `json:"token"`
+	ExpiresIn   int    `json:"expires_in"`
 	RedirectURL string `json:"redirect_url"`
 }

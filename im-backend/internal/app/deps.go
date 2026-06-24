@@ -21,11 +21,13 @@ type Dependencies struct {
 	Config                 *config.Config
 	JWTService             *jwtpkg.Service
 	JWTAuthMiddleware      gin.HandlerFunc
+	JWTRefreshMiddleware   gin.HandlerFunc
 	IntegrationMiddleware  gin.HandlerFunc
 	MessageHandler         *handler.MessageHandler
 	ConversationHandler    *handler.ConversationHandler
 	SessionHandler         *handler.SessionHandler
 	UserHandler            *handler.UserHandler
+	AuthHandler            *handler.AuthHandler
 	IntegrationHandler     *handler.IntegrationHandler
 	WSHandler              *handler.WSHandler
 	WSManager              *service.WSManager
@@ -38,7 +40,7 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 		}
 	}
 
-	jwtService, err := jwtpkg.InitService(cfg.JWT.Secret, cfg.JWT.Expire, cfg.JWT.Issuer)
+	jwtService, err := jwtpkg.InitService(cfg.JWT.Secret, cfg.JWT.Expire, cfg.JWT.MaxSession, cfg.JWT.Issuer)
 	if err != nil {
 		log.Fatal("Failed to initialize JWT service:", err)
 	}
@@ -73,11 +75,13 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 		Config:                cfg,
 		JWTService:            jwtService,
 		JWTAuthMiddleware:     middleware.JWTAuth(jwtService),
+		JWTRefreshMiddleware:  middleware.JWTRefreshAuth(jwtService),
 		IntegrationMiddleware: middleware.IntegrationAPIKey(cfg),
 		MessageHandler:        handler.NewMessageHandler(messageService, conversationService),
 		ConversationHandler:   handler.NewConversationHandler(conversationService),
 		SessionHandler:        handler.NewSessionHandler(sessionService),
 		UserHandler:           handler.NewUserHandler(userService),
+		AuthHandler:           handler.NewAuthHandler(jwtService),
 		IntegrationHandler:    handler.NewIntegrationHandler(integrationService),
 		WSManager:             wsManager,
 	}
@@ -96,8 +100,10 @@ func (d *Dependencies) SetupAPIRouter() *gin.Engine {
 		d.ConversationHandler,
 		d.SessionHandler,
 		d.UserHandler,
+		d.AuthHandler,
 		d.IntegrationHandler,
 		d.JWTAuthMiddleware,
+		d.JWTRefreshMiddleware,
 		d.IntegrationMiddleware,
 	)
 }

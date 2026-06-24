@@ -37,7 +37,8 @@ sequenceDiagram
 | 变量 | 说明 |
 |------|------|
 | `JWT_SECRET` | HS256 签名密钥（足够长的随机字符串） |
-| `JWT_EXPIRE` | Token 有效期（秒），建议 900～3600 |
+| `JWT_EXPIRE` | Access Token 有效期（秒），建议 1800～3600 |
+| `JWT_MAX_SESSION` | 绝对会话上限（秒），默认 86400（24h）；超过后须重新从业务系统进入 |
 | `JWT_ISSUER` | JWT issuer，默认 `d-im` |
 | `INTEGRATION_API_KEY` | 业务服务端调用创建会话接口的密钥 |
 | `IM_FRONTEND_BASE_URL` | 前端基址，用于拼接 `redirect_url` |
@@ -147,6 +148,7 @@ curl -X POST http://localhost:8901/im/api/integration/conversations \
   "message": "success",
   "data": {
     "token": "eyJhbGciOiJIUzI1NiIs...",
+    "expires_in": 3600,
     "redirect_url": "http://localhost:5173/im/enter?token=eyJ..."
   }
 }
@@ -173,7 +175,33 @@ curl -X POST http://localhost:8901/im/api/integration/login \
 | 密钥 | `JWT_SECRET`（仅 im-backend 持有） |
 | 用户标识 | 标准 claim `sub` = 用户 ID |
 | 签发方 | im-backend（创建会话时） |
-| 校验 | 所有 `/im/api/*`（integration 除外）及 `/im/ws` |
+| 校验 | 所有 `/im/api/*`（integration 与 auth/refresh 除外）及 `/im/ws` |
+
+## 会话续期（滑动 Access Token）
+
+用户从业务系统进入 IM 后，**前端在页面保持打开期间自动续期**，无需业务系统重复签发 JWT。
+
+| 项 | 说明 |
+|----|------|
+| Access Token TTL | `JWT_EXPIRE`（默认 3600s） |
+| 绝对会话上限 | `JWT_MAX_SESSION`（默认 86400s），自首次登录 `iat` 起算 |
+| 续期接口 | `POST /im/api/auth/refresh`（Bearer 当前 token，允许已过期但未超绝对上限） |
+| 前端策略 | 到期前 5 分钟 + 标签页重新可见时静默刷新；401 时尝试续期并重试一次 |
+
+续期后返回：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "token": "eyJ...",
+    "expires_in": 3600
+  }
+}
+```
+
+超过 `JWT_MAX_SESSION` 时续期返回 401，用户需从业务系统重新进入。
 
 ## 前端 SSO 流程
 
@@ -205,12 +233,12 @@ curl -X POST http://localhost:8901/im/api/integration/login \
 2. **进入指定单聊**：调用 `POST /im/api/integration/conversations`，传入 `from_user` / `to_user`
 3. 两类接口均需携带 `X-Integration-Key`（仅服务端持有）
 4. 收到响应后，将当前登录用户浏览器 **302 到 `redirect_url`**
-5. Token 过期时重新调用对应接口获取新链接（IM 不提供业务侧登录页）
+5. Token 超过绝对会话上限（`JWT_MAX_SESSION`）时，需重新调用对应 integration 接口获取新链接
 
 ## 安全注意事项
 
 - `INTEGRATION_API_KEY` 仅业务服务端持有
-- `redirect_url` 中的 token 为短期 JWT；enter 页落地后应从地址栏清除
+- `redirect_url` 中的 token 为短期 access JWT；enter 页落地后应从地址栏清除；页面打开期间由 IM 前端自动续期
 - 生产环境使用 HTTPS；WebSocket `CheckOrigin` 应限制为 `IM_FRONTEND_BASE_URL` 域名
 - 可选：限制 integration 接口来源 IP 或 mTLS
 

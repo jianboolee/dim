@@ -1,7 +1,6 @@
 import { useUserStore } from '@/stores/user'
 import { config } from '@/config'
 import axios from '@/plugins/axios'
-import router from '@/router'
 
 interface ApiError {
   response?: {
@@ -9,12 +8,20 @@ interface ApiError {
   }
 }
 
-export const request = async <T>(url: string, options: any = {}): Promise<T> => {
+interface RequestOptions {
+  method?: string
+  body?: unknown
+  headers?: Record<string, string>
+  params?: Record<string, string>
+  skipAuthRefresh?: boolean
+}
+
+export const request = async <T>(url: string, options: RequestOptions = {}): Promise<T> => {
   const userStore = useUserStore()
-  
-  const headers = {
+
+  const headers: Record<string, string> = {
     ...(!(options.body instanceof FormData) && { 'Content-Type': 'application/json' }),
-    ...options.headers
+    ...options.headers,
   }
 
   if (userStore.token) {
@@ -28,13 +35,17 @@ export const request = async <T>(url: string, options: any = {}): Promise<T> => 
       method: options.method || 'GET',
       headers,
       data: options.body,
-      params: options.params
+      params: options.params,
     })
     return response.data
   } catch (error) {
-    if ((error as ApiError).response?.status === 401) {
+    const status = (error as ApiError).response?.status
+    if (status === 401 && !options.skipAuthRefresh) {
+      const newToken = await userStore.refreshToken()
+      if (newToken) {
+        return request<T>(url, { ...options, skipAuthRefresh: true })
+      }
       userStore.logout()
-      // router.push('/login')
     }
     throw error
   }

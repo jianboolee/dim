@@ -74,6 +74,7 @@ func (s *IntegrationService) CreateLoginSession(
 
 	return &dto.IntegrationLoginResponse{
 		Token:       token,
+		ExpiresIn:   s.jwtService.ExpiresInSeconds(),
 		RedirectURL: s.buildEnterRedirectURL(token, ""),
 	}, nil
 }
@@ -114,6 +115,7 @@ func (s *IntegrationService) CreateConversationSession(
 
 	return &dto.IntegrationCreateConversationResponse{
 		Token:          token,
+		ExpiresIn:      s.jwtService.ExpiresInSeconds(),
 		ConversationID: conversation.ID.Hex(),
 		RedirectURL:    s.buildEnterRedirectURL(token, conversation.ID.Hex()),
 	}, nil

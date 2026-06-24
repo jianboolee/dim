@@ -24,9 +24,10 @@ type Config struct {
 		DB       int
 	}
 	JWT struct {
-		Secret string
-		Expire int
-		Issuer string
+		Secret      string
+		Expire      int
+		MaxSession  int
+		Issuer      string
 	}
 	Integration struct {
 		APIKey string
@@ -49,6 +50,7 @@ func LoadConfig() (*Config, error) {
 
 	viper.SetDefault("JWT_SECRET", "")
 	viper.SetDefault("JWT_EXPIRE", 3600)
+	viper.SetDefault("JWT_MAX_SESSION", 86400)
 	viper.SetDefault("JWT_ISSUER", "d-im")
 
 	viper.SetDefault("INTEGRATION_API_KEY", "")
@@ -77,6 +79,7 @@ func LoadConfig() (*Config, error) {
 
 	cfg.JWT.Secret = viper.GetString("JWT_SECRET")
 	cfg.JWT.Expire = viper.GetInt("JWT_EXPIRE")
+	cfg.JWT.MaxSession = viper.GetInt("JWT_MAX_SESSION")
 	cfg.JWT.Issuer = viper.GetString("JWT_ISSUER")
 
 	cfg.Integration.APIKey = viper.GetString("INTEGRATION_API_KEY")

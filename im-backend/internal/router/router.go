@@ -17,8 +17,10 @@ func SetupAPI(
 	conversationHandler *handler.ConversationHandler,
 	sessionHandler *handler.SessionHandler,
 	userHandler *handler.UserHandler,
+	authHandler *handler.AuthHandler,
 	integrationHandler *handler.IntegrationHandler,
 	jwtAuthMiddleware gin.HandlerFunc,
+	jwtRefreshMiddleware gin.HandlerFunc,
 	integrationAPIKeyMiddleware gin.HandlerFunc,
 ) *gin.Engine {
 	r := gin.Default()
@@ -41,6 +43,7 @@ func SetupAPI(
 	}
 
 	api := im.Group("/api")
+	api.POST("/auth/refresh", jwtRefreshMiddleware, authHandler.Refresh)
 	api.Use(jwtAuthMiddleware)
 	{
 		api.GET("/users/me", userHandler.GetMe)

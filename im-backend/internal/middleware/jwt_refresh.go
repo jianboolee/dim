@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"log"
 
 	"github.com/gin-gonic/gin"
@@ -9,7 +10,8 @@ import (
 	jwtpkg "d-im/pkg/jwt"
 )
 
-func JWTAuth(jwtService *jwtpkg.Service) gin.HandlerFunc {
+// JWTRefreshAuth 允许已过期的 access token（签名有效且未超过绝对会话上限）用于续期
+func JWTRefreshAuth(jwtService *jwtpkg.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -27,9 +29,13 @@ func JWTAuth(jwtService *jwtpkg.Service) gin.HandlerFunc {
 
 		tokenString := authHeader[len(prefix):]
 		claims := &jwtpkg.AuthTokenClaims{}
-		if err := jwtService.Parse(tokenString, claims); err != nil {
-			log.Printf("Token validation error: %v", err)
-			c.JSON(401, gin.H{"error": err.Error()})
+		if err := jwtService.ParseForRefresh(tokenString, claims); err != nil {
+			log.Printf("Refresh token validation error: %v", err)
+			message := err.Error()
+			if errors.Is(err, jwtpkg.ErrSessionExpired) {
+				message = "session expired"
+			}
+			c.JSON(401, gin.H{"error": message})
 			c.Abort()
 			return
 		}

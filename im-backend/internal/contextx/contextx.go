@@ -4,17 +4,40 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	jwtpkg "d-im/pkg/jwt"
 )
 
 type ContextKey string
 
 const (
-	ContextKeyUserID ContextKey = "user_id"
+	ContextKeyUserID      ContextKey = "user_id"
+	ContextKeyTokenClaims ContextKey = "token_claims"
 )
 
 // SetUserID 设置用户ID
 func SetUserID(c *gin.Context, userId string) {
 	c.Set(string(ContextKeyUserID), userId)
+}
+
+// SetTokenClaims 设置 JWT claims（续期等场景使用）
+func SetTokenClaims(c *gin.Context, claims *jwtpkg.AuthTokenClaims) {
+	c.Set(string(ContextKeyTokenClaims), claims)
+}
+
+// GetTokenClaims 获取 JWT claims
+func GetTokenClaims(c *gin.Context) *jwtpkg.AuthTokenClaims {
+	value, exists := c.Get(string(ContextKeyTokenClaims))
+	if !exists {
+		return nil
+	}
+
+	claims, ok := value.(*jwtpkg.AuthTokenClaims)
+	if !ok {
+		return nil
+	}
+
+	return claims
 }
 
 // GetUserId 获取用户ID
