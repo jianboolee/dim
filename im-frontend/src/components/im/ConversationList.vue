@@ -186,7 +186,7 @@ defineExpose({ refresh })
 }
 
 .conversation-list-root.is-embedded {
-  background: #f6f7f9;
+  background: var(--bg-color);
 }
 
 .state-block {
@@ -235,11 +235,11 @@ defineExpose({ refresh })
 }
 
 .is-embedded .conversation-item:hover {
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--bg-color-gray);
 }
 
 .is-embedded .conversation-item.is-active {
-  background: #eceef2;
+  background: var(--bg-color-gray);
 }
 
 .conversation-list-root:not(.is-embedded) .conversation-item {

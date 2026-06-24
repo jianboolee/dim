@@ -577,7 +577,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: #f6f7f9;
+  background: var(--bg-color);
   border-right: 1px solid var(--border-color-light);
   min-height: 0;
 }
