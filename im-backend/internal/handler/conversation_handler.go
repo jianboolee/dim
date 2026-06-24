@@ -50,7 +50,8 @@ func (h *ConversationHandler) GetConversation(c *gin.Context) {
 		return
 	}
 
-	conversation, err := h.conversationService.GetConversation(c.Request.Context(), objID)
+	currentUserID := contextx.MustGetUserID(c)
+	conversation, err := h.conversationService.GetConversation(c.Request.Context(), objID, currentUserID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get conversation"})
 		return

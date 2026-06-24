@@ -12,6 +12,7 @@ import {
 const conversations = ref<Conversation[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
+let loadPromise: Promise<void> | null = null
 
 export function useConversationList() {
   const imStore = useIMStore()
@@ -30,24 +31,33 @@ export function useConversationList() {
   }
 
   async function loadConversations() {
+    if (loadPromise) {
+      return loadPromise
+    }
+
     loading.value = true
     error.value = null
 
-    try {
-      const sdk = ensureImSDK()
-      if (!sdk) {
-        error.value = '未登录'
-        return
-      }
+    loadPromise = (async () => {
+      try {
+        const sdk = ensureImSDK()
+        if (!sdk) {
+          error.value = '未登录'
+          return
+        }
 
-      const list = await sdk.getConversations()
-      conversations.value = sortConversationsByActivity(list ?? [])
-    } catch (err) {
-      console.error('获取会话列表失败:', err)
-      error.value = '获取会话列表失败'
-    } finally {
-      loading.value = false
-    }
+        const list = await sdk.getConversations()
+        conversations.value = sortConversationsByActivity(list ?? [])
+      } catch (err) {
+        console.error('获取会话列表失败:', err)
+        error.value = '获取会话列表失败'
+      } finally {
+        loading.value = false
+        loadPromise = null
+      }
+    })()
+
+    return loadPromise
   }
 
   function handleIncomingMessage(message: Message, activePeerId?: string) {

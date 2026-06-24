@@ -18,19 +18,19 @@ import (
 )
 
 type Dependencies struct {
-	Config                 *config.Config
-	JWTService             *jwtpkg.Service
-	JWTAuthMiddleware      gin.HandlerFunc
-	JWTRefreshMiddleware   gin.HandlerFunc
-	IntegrationMiddleware  gin.HandlerFunc
-	MessageHandler         *handler.MessageHandler
-	ConversationHandler    *handler.ConversationHandler
-	SessionHandler         *handler.SessionHandler
-	UserHandler            *handler.UserHandler
-	AuthHandler            *handler.AuthHandler
-	IntegrationHandler     *handler.IntegrationHandler
-	WSHandler              *handler.WSHandler
-	WSManager              *service.WSManager
+	Config                *config.Config
+	JWTService            *jwtpkg.Service
+	JWTAuthMiddleware     gin.HandlerFunc
+	JWTRefreshMiddleware  gin.HandlerFunc
+	IntegrationMiddleware gin.HandlerFunc
+	MessageHandler        *handler.MessageHandler
+	ConversationHandler   *handler.ConversationHandler
+	SessionHandler        *handler.SessionHandler
+	UserHandler           *handler.UserHandler
+	AuthHandler           *handler.AuthHandler
+	IntegrationHandler    *handler.IntegrationHandler
+	WSHandler             *handler.WSHandler
+	WSManager             *service.WSManager
 }
 
 func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.Client, withWS bool) *Dependencies {
@@ -51,7 +51,7 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 	userRepo := repository.NewUserRepository(db)
 
 	sessionService := service.NewSessionService(sessionRepo)
-	conversationService := service.NewConversationService(conversationRepo)
+	conversationService := service.NewConversationService(conversationRepo, userRepo)
 	userService := service.NewUserService(userRepo)
 	integrationService := service.NewIntegrationService(
 		userService,

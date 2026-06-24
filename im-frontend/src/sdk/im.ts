@@ -77,6 +77,11 @@ export enum MessageType {
     type: string;
     participants: string[];
     last_message: Message;
+    to_user_info?: {
+      id: string;
+      nickname?: string;
+      avatar?: string;
+    };
     image_url: string;
     unread_counts: { [key: string]: number };
     created_at: string;

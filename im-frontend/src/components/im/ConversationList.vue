@@ -96,17 +96,16 @@ const {
   loadConversations,
   handleIncomingMessage,
   clearUnreadForPeer,
-  getPeerUserIds,
 } = useConversationList()
 
-const { userMap, fetchUsers } = useUserProfiles()
+const { userMap, fetchUsers, mergeUsers } = useUserProfiles()
 
 const conversationItems = computed(() => {
   const uid = currentUserId.value
 
   return conversations.value.map((conversation) => {
     const peerId = getPeerUserId(conversation, uid)
-    const profile = userMap.value[peerId]
+    const profile = conversation.to_user_info ?? userMap.value[peerId]
     const unreadCount = getUnreadCount(conversation, uid)
 
     return {
@@ -152,7 +151,7 @@ const onIncomingMessage = async (message: Parameters<typeof handleIncomingMessag
 
 const refresh = async () => {
   await loadConversations()
-  await fetchUsers(getPeerUserIds())
+  mergeUsers(conversations.value.map((conversation) => conversation.to_user_info))
 }
 
 onMounted(async () => {

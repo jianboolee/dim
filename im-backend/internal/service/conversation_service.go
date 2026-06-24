@@ -10,18 +10,21 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
 
+	"d-im/internal/dto"
 	"d-im/internal/models"
 	"d-im/internal/repository"
 	"d-im/pkg/logger"
 )
 
 type ConversationService struct {
-	repo *repository.ConversationRepository
+	repo     *repository.ConversationRepository
+	userRepo *repository.UserRepository
 }
 
-func NewConversationService(repo *repository.ConversationRepository) *ConversationService {
+func NewConversationService(repo *repository.ConversationRepository, userRepo *repository.UserRepository) *ConversationService {
 	return &ConversationService{
-		repo: repo,
+		repo:     repo,
+		userRepo: userRepo,
 	}
 }
 
@@ -36,18 +39,18 @@ func (s *ConversationService) GetOrCreatePrivateConversation(ctx context.Context
 }
 
 // GetConversation 获取会话详情
-func (s *ConversationService) GetConversation(ctx context.Context, id primitive.ObjectID) (*models.Conversation, error) {
+func (s *ConversationService) GetConversation(ctx context.Context, id primitive.ObjectID, currentUserID string) (*dto.ConversationDTO, error) {
 	conversation, err := s.repo.GetConversation(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversation: %w", err)
 	}
 
 	conversation.GetLastActivity()
-	return conversation, nil
+	return s.toConversationDTO(ctx, conversation, currentUserID), nil
 }
 
 // GetUserConversations 获取用户的所有会话
-func (s *ConversationService) GetUserConversations(ctx context.Context, senderID string, limit int64, beforeID *primitive.ObjectID) ([]*models.Conversation, error) {
+func (s *ConversationService) GetUserConversations(ctx context.Context, senderID string, limit int64, beforeID *primitive.ObjectID) ([]*dto.ConversationDTO, error) {
 
 	filter := bson.M{"participants": senderID}
 
@@ -62,13 +65,12 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, senderID
 		return nil, fmt.Errorf("failed to get conversations: %w", err)
 	}
 
-	// TODO: 为每个会话添加对方的用户信息
 	for i := range conversations {
 		// 设置最后活动时间
 		conversations[i].GetLastActivity()
 	}
 
-	return conversations, nil
+	return s.toConversationDTOs(ctx, conversations, senderID), nil
 }
 
 // UpdateLastMessage 更新会话的最后一条消息
@@ -94,7 +96,7 @@ func (s *ConversationService) UpdateUnreadCount(ctx context.Context, conversatio
 }
 
 // GetConversations 获取会话列表
-func (s *ConversationService) GetConversations(ctx context.Context, userID string) ([]*models.Conversation, error) {
+func (s *ConversationService) GetConversations(ctx context.Context, userID string) ([]*dto.ConversationDTO, error) {
 	conversations, err := s.repo.ListConversations(ctx, bson.M{"participants": userID}, 100, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversations: %w", err)
@@ -105,7 +107,72 @@ func (s *ConversationService) GetConversations(ctx context.Context, userID strin
 		conversations[i].GetLastActivity()
 	}
 
-	return conversations, nil
+	return s.toConversationDTOs(ctx, conversations, userID), nil
+}
+
+func (s *ConversationService) toConversationDTO(ctx context.Context, conversation *models.Conversation, currentUserID string) *dto.ConversationDTO {
+	dtos := s.toConversationDTOs(ctx, []*models.Conversation{conversation}, currentUserID)
+	if len(dtos) == 0 {
+		return nil
+	}
+	return dtos[0]
+}
+
+func (s *ConversationService) toConversationDTOs(ctx context.Context, conversations []*models.Conversation, currentUserID string) []*dto.ConversationDTO {
+	peerIDs := make([]string, 0, len(conversations))
+	seen := map[string]struct{}{}
+
+	for _, conversation := range conversations {
+		for _, participantID := range conversation.Participants {
+			if participantID == currentUserID {
+				continue
+			}
+			if _, ok := seen[participantID]; ok {
+				continue
+			}
+			seen[participantID] = struct{}{}
+			peerIDs = append(peerIDs, participantID)
+		}
+	}
+
+	usersByID := map[string]*models.User{}
+	if s.userRepo != nil && len(peerIDs) > 0 {
+		users, err := s.userRepo.FindByIDs(ctx, peerIDs)
+		if err != nil {
+			logger.Error("Find conversation users", zap.Error(err))
+		} else {
+			usersByID = users
+		}
+	}
+
+	results := make([]*dto.ConversationDTO, 0, len(conversations))
+	for _, conversation := range conversations {
+		item := &dto.ConversationDTO{
+			ID:           conversation.ID,
+			Type:         conversation.Type,
+			Participants: conversation.Participants,
+			LastMessage:  conversation.LastMessage,
+			ImageURL:     conversation.ImageURL,
+			UnreadCounts: conversation.UnreadCounts,
+			LastActivity: conversation.LastActivity,
+			CreatedAt:    conversation.CreatedAt,
+			UpdatedAt:    conversation.UpdatedAt,
+		}
+
+		for _, participantID := range conversation.Participants {
+			if participantID == currentUserID {
+				continue
+			}
+			if user := usersByID[participantID]; user != nil {
+				item.ToUserInfo = dto.ConvertToUserInfoDto(user)
+			}
+			break
+		}
+
+		results = append(results, item)
+	}
+
+	return results
 }
 
 // GetUnreadCount 获取未读消息数

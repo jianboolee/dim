@@ -73,3 +73,30 @@ func (r *UserRepository) GetByID(ctx context.Context, id string) (*models.User, 
 	}
 	return &user, nil
 }
+
+func (r *UserRepository) FindByIDs(ctx context.Context, ids []string) (map[string]*models.User, error) {
+	if len(ids) == 0 {
+		return map[string]*models.User{}, nil
+	}
+
+	cursor, err := r.collection.Find(ctx, bson.M{"id": bson.M{"$in": ids}})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	users := map[string]*models.User{}
+	for cursor.Next(ctx) {
+		var user models.User
+		if err := cursor.Decode(&user); err != nil {
+			return nil, err
+		}
+		users[user.ID] = &user
+	}
+
+	if err := cursor.Err(); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}

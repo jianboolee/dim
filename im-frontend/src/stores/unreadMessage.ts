@@ -7,19 +7,37 @@ import { useUserStore } from './user'
 export const useUnreadMessageStore = defineStore('unreadMessage', () => {
     const unreadCount = ref(0)
     const heartbeatTimer = ref<ReturnType<typeof setInterval> | null>(null)
+    const fetchPromise = ref<Promise<void> | null>(null)
+    const lastFetchAt = ref(0)
+    const FETCH_DEDUP_MS = 2000
 
     const userStore = useUserStore()
 
     // 获取未读消息数
-    const fetchUnreadCount = async () => {
-        try {
-            const response = await request('/im/api/messages/unread/count') as { unread_count: number }
-            if (response) {
-                unreadCount.value = normalizeUnreadCount(response.unread_count)
-            }
-        } catch (error) {
-            console.error('获取未读消息数失败:', error)
+    const fetchUnreadCount = async (options: { force?: boolean } = {}) => {
+        if (fetchPromise.value) {
+            return fetchPromise.value
         }
+
+        if (!options.force && Date.now() - lastFetchAt.value < FETCH_DEDUP_MS) {
+            return
+        }
+
+        fetchPromise.value = (async () => {
+            try {
+                const response = await request('/im/api/messages/unread/count') as { unread_count: number }
+                if (response) {
+                    unreadCount.value = normalizeUnreadCount(response.unread_count)
+                    lastFetchAt.value = Date.now()
+                }
+            } catch (error) {
+                console.error('获取未读消息数失败:', error)
+            } finally {
+                fetchPromise.value = null
+            }
+        })()
+
+        return fetchPromise.value
     }
 
     // 设置未读消息数
@@ -35,6 +53,7 @@ export const useUnreadMessageStore = defineStore('unreadMessage', () => {
     // 重置未读消息数
     const reset = () => {
         unreadCount.value = 0
+        lastFetchAt.value = 0
     }
 
     // 启动心跳
@@ -42,9 +61,9 @@ export const useUnreadMessageStore = defineStore('unreadMessage', () => {
         stopHeartbeat()
         if (!userStore.token) return
 
-        fetchUnreadCount()
+        fetchUnreadCount({ force: true })
         heartbeatTimer.value = setInterval(() => {
-            fetchUnreadCount()
+            fetchUnreadCount({ force: true })
         }, interval)
     }
 

@@ -111,7 +111,7 @@ import { useUserStore } from '@/stores/user'
 import { useIMStore } from '@/stores/im'
 import { useUnreadMessageStore } from '@/stores/unreadMessage'
 import { useConversationList } from '@/composables/useConversationList'
-import { request } from '@/utils/request'
+import { useUserProfiles } from '@/composables/useUserProfiles'
 import { MessageType } from '@/sdk/im'
 import type { MediaInfo } from '@/sdk/im'
 import type { ChatMessage } from '@/types/im'
@@ -122,11 +122,6 @@ import MultilineInput from '@/components/im/MultilineInput.vue'
 import ConversationList from '@/components/im/ConversationList.vue'
 import { usePageTitleNotification } from '@/composables/usePageTitleNotification'
 
-interface ApiResponse<T> {
-  code: number
-  data: T
-}
-
 const props = defineProps<{
   userId: string
 }>()
@@ -135,7 +130,8 @@ const router = useRouter()
 const userStore = useUserStore()
 const imStore = useIMStore()
 const unreadMessageStore = useUnreadMessageStore()
-const { clearUnreadForPeer } = useConversationList()
+const { conversations, clearUnreadForPeer } = useConversationList()
+const { userMap, fetchUser, mergeUsers } = useUserProfiles()
 
 const messageText = ref('')
 const messages = ref<ChatMessage[]>([])
@@ -153,6 +149,17 @@ const { notifyNewMessage, setBaseTitle } = usePageTitleNotification('消息')
 watch(pageTitle, (title) => {
   setBaseTitle(title)
 }, { immediate: true })
+
+watch(
+  () => conversations.value.find(
+    (conversation) => conversation.to_user_info?.id === peerUserId.value,
+  )?.to_user_info,
+  (user) => {
+    if (!user) return
+    mergeUsers([user])
+    targetUser.value = user
+  },
+)
 
 const handleBack = () => {
   const back = window.history.state?.back
@@ -432,7 +439,7 @@ const syncLatestMessages = async () => {
 
 const syncUnreadState = async () => {
   clearUnreadForPeer(peerUserId.value)
-  await unreadMessageStore.fetchUnreadCount()
+  await unreadMessageStore.fetchUnreadCount({ force: true })
 }
 
 const markMessageAsRead = async (messageId: string) => {
@@ -444,14 +451,22 @@ const markMessageAsRead = async (messageId: string) => {
 }
 
 const fetchTargetUser = async () => {
-  try {
-    const response = await request<ApiResponse<UserInfo>>(`/im/api/users/${peerUserId.value}`)
-    if (response.code === 200) {
-      targetUser.value = response.data
-    }
-  } catch (error) {
-    console.error('获取用户信息失败:', error)
+  const fromConversation = conversations.value.find(
+    (conversation) => conversation.to_user_info?.id === peerUserId.value,
+  )?.to_user_info
+  if (fromConversation) {
+    mergeUsers([fromConversation])
+    targetUser.value = fromConversation
+    return
   }
+
+  const cached = userMap.value[peerUserId.value]
+  if (cached) {
+    targetUser.value = cached
+    return
+  }
+
+  targetUser.value = await fetchUser(peerUserId.value)
 }
 
 const retryMessage = async (message: ChatMessage) => {
