@@ -4,7 +4,9 @@
       ref="textareaRef"
       :value="modelValue"
       @input="handleInput"
-      @keydown.enter.prevent="handleEnter"
+      @compositionstart="handleCompositionStart"
+      @compositionend="handleCompositionEnd"
+      @keydown.enter="handleEnter"
       @focus="handleFocus"
       :placeholder="placeholder"
       :style="{ height: textareaHeight + 'px' }"
@@ -29,9 +31,23 @@ const emit = defineEmits<{
 }>()
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
-const textareaHeight = ref(40) // 修改初始高度为40px，与容器最小高度一致
-const lineHeight = 24 // 每行的高度
-const maxRows = props.maxRows || 4 // 最大行数
+const textareaHeight = ref(40)
+const lineHeight = 24
+const maxRows = props.maxRows || 4
+/** IME 组合输入中（如中文拼音选词），回车用于上屏而非发送 */
+const isComposing = ref(false)
+
+const handleCompositionStart = () => {
+  isComposing.value = true
+}
+
+const handleCompositionEnd = () => {
+  isComposing.value = false
+}
+
+const isImeEnter = (e: KeyboardEvent) => {
+  return isComposing.value || e.isComposing || e.keyCode === 229
+}
 
 // 调整文本框高度
 const adjustHeight = () => {
@@ -65,24 +81,26 @@ const handleFocus = () => {
   emit('focus')
 }
 
-// 处理回车键
+// 处理回车键：IME 组合中不发送；Shift+Enter 换行；Enter 发送
 const handleEnter = (e: KeyboardEvent) => {
+  if (isImeEnter(e)) {
+    return
+  }
+
   if (e.shiftKey) {
-    // Shift + Enter 允许换行，但要检查是否超过最大行数
     const lines = (textareaRef.value?.value || '').split('\n')
     if (lines.length >= maxRows) {
       e.preventDefault()
-      return
     }
-  } else {
-    // 普通回车发送消息
-    emit('enter')
+    return
   }
+
+  e.preventDefault()
+  emit('enter')
 }
 
 // 监听值变化
 watch(() => props.modelValue, () => {
-  console.log('watch modelValue')
   adjustHeight()
 })
 
