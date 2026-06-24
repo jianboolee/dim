@@ -120,6 +120,7 @@ import { MessageComponents } from '@/components/im'
 import MessageMoreOptions from '@/components/im/MessageMoreOptions.vue'
 import MultilineInput from '@/components/im/MultilineInput.vue'
 import ConversationList from '@/components/im/ConversationList.vue'
+import { usePageTitleNotification } from '@/composables/usePageTitleNotification'
 
 interface ApiResponse<T> {
   code: number
@@ -145,6 +146,13 @@ const showMoreOptions = ref(false)
 const isConnected = computed(() => imStore.isConnected)
 const currentUserId = computed(() => userStore.userInfo?.id)
 const peerUserId = computed(() => props.userId)
+
+const pageTitle = computed(() => targetUser.value?.nickname || '消息')
+const { notifyNewMessage, setBaseTitle } = usePageTitleNotification('消息')
+
+watch(pageTitle, (title) => {
+  setBaseTitle(title)
+}, { immediate: true })
 
 const handleBack = () => {
   const back = window.history.state?.back
@@ -228,6 +236,7 @@ const handleNewMessage = async (message: ChatMessage) => {
   scrollToBottom(true, message.from_id === currentUserId.value)
 
   if (message.from_id === peerUserId.value && message.id) {
+    notifyNewMessage(pageTitle.value)
     await markMessageAsRead(message.id)
     await syncUnreadState()
   }
