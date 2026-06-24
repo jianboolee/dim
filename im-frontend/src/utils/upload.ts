@@ -1,46 +1,59 @@
+import { config } from '@/config'
+import type { ApiResponse } from '@/types/api'
 import { request } from './request'
 
-interface UploadResponse {
-  code: number
-  message: string
-  data: {
-    url: string
-    filename: string
-    size: number
-  }[]
+export interface UploadedFile {
+  url: string
+  filename: string
+  size: number
+  width?: number
+  height?: number
+  format?: string
+}
+
+function normalizeUploadPayload(data: unknown): UploadedFile[] {
+  if (Array.isArray(data)) {
+    return data as UploadedFile[]
+  }
+
+  if (data && typeof data === 'object' && 'code' in data) {
+    const wrapped = data as ApiResponse<UploadedFile[] | UploadedFile>
+    if (wrapped.code !== 200 || wrapped.data == null) {
+      throw new Error(wrapped.message || '上传失败')
+    }
+    return Array.isArray(wrapped.data) ? wrapped.data : [wrapped.data]
+  }
+
+  throw new Error('上传响应格式无效')
 }
 
 /**
- * 上传文件
- * @param files 单个文件或文件数组
- * @returns 上传结果，包含文件URL等信息
+ * 上传文件到 IM 服务
  */
-export const uploadFiles = async (files: File | File[]) => {
+export async function uploadIMFiles(files: File | File[]): Promise<UploadedFile[]> {
   const formData = new FormData()
-  
-  if (Array.isArray(files)) {
-    files.forEach(file => {
-      formData.append('files', file)
-    })
-  } else {
-    formData.append('files', files)
+  const list = Array.isArray(files) ? files : [files]
+  list.forEach((file) => formData.append('files', file))
+
+  const response = await request<unknown>(config.api.uploads, {
+    method: 'POST',
+    body: formData,
+    headers: {},
+  })
+
+  const uploaded = normalizeUploadPayload(response)
+  if (!uploaded.length) {
+    throw new Error('上传失败')
   }
-  
-  try {
-    const response = await request('/api/used/upload', {
-      method: 'POST',
-      body: formData,
-      headers: {
-        // 不设置 Content-Type，让浏览器自动设置包含 boundary 的值
-      }
-    }) as UploadResponse
-    
-    if (response.code === 200) {
-      return response.data
-    }
-    throw new Error(response.message || '上传失败')
-  } catch (error) {
-    console.error('文件上传失败:', error)
-    throw error
+
+  return uploaded
+}
+
+/** 上传单个文件，无有效结果时抛错 */
+export async function uploadIMFile(file: File): Promise<UploadedFile> {
+  const [uploaded] = await uploadIMFiles(file)
+  if (!uploaded) {
+    throw new Error('上传失败')
   }
-} 
+  return uploaded
+}
