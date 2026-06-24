@@ -2,7 +2,7 @@
   <div class="enter-page">
     <div v-if="loading" class="state">
       <div class="spinner"></div>
-      <p>正在进入聊天…</p>
+      <p>正在进入…</p>
     </div>
     <div v-else-if="error" class="state state-error">
       <p>{{ error }}</p>

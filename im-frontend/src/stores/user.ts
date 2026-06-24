@@ -35,7 +35,11 @@ export const useUserStore = defineStore('user', () => {
     const stored = localStorage.getItem(TOKEN_KEY)
     if (stored) {
       token.value = stored
-      await fetchUser()
+      try {
+        await fetchUser()
+      } catch {
+        logout()
+      }
     }
   }
 
@@ -54,15 +58,13 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem(TOKEN_KEY)
   }
 
-  const fetchUser = async () => {
-    try {
-      const response = await request<ApiResponse<UserInfo>>('/im/api/users/me')
-      if (response.code === 200) {
-        setUserInfo(response.data)
-      }
-    } catch (error) {
-      console.error('Failed to fetch user info:', error)
+  const fetchUser = async (): Promise<UserInfo> => {
+    const response = await request<ApiResponse<UserInfo>>('/im/api/users/me')
+    if (response.code === 200 && response.data?.id) {
+      setUserInfo(response.data)
+      return response.data
     }
+    throw new Error('无法获取用户信息')
   }
 
   return {

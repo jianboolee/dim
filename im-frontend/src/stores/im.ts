@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import IMSDK, { type Message, type ConnectionStatus, type MessageHandler, type ConnectionHandler, MessageType } from '@/sdk/im'
+import { getImSdkOptions } from '@/config'
 import { useUserStore } from './user'
 import { useUnreadMessageStore } from './unreadMessage'
 
@@ -70,17 +71,35 @@ export const useIMStore = defineStore('im', () => {
     // 初始化SDK
     const initSDK = () => {
         manualDisconnect.value = false
-        if (imSDK.value) return imSDK.value
 
         const userStore = useUserStore()
         if (!userStore.token) return null
 
-        const baseURL = window.location.origin
-        console.log('初始化IM SDK, baseURL:', baseURL)
+        if (imSDK.value) {
+            if (!isConnected.value) {
+                imSDK.value.connect()
+                    .then(() => {
+                        isConnected.value = true
+                        reconnectCount.value = 0
+                        imSDK.value?.startHeartbeat()
+                    })
+                    .catch((error: Error) => {
+                        console.error('WebSocket 重连失败:', error)
+                        if (!manualDisconnect.value) {
+                            handleReconnectError()
+                        }
+                    })
+            }
+            return imSDK.value
+        }
+
+        const { baseURL, wsURL } = getImSdkOptions()
+        console.log('初始化 IM SDK', { baseURL, wsURL })
 
         imSDK.value = new IMSDK({
             baseURL,
-            token: userStore.token
+            wsURL,
+            token: userStore.token,
         })
 
         // 添加全局连接状态处理器

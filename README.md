@@ -28,5 +28,5 @@ npm install
 npm run dev
 ```
 
-开发环境下 Vite 将 `/im/api`、`/im/ws` 代理到 `localhost:8080`。
+开发环境下 Vite 将 `/im/api`、`/im/ws` 分别代理到 `localhost:8901`、`localhost:8902`（API 与 WS 分进程部署时）。
 

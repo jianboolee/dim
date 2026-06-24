@@ -1,9 +1,24 @@
 package dto
 
+import "strings"
+
 type IntegrationUserInput struct {
-	ID       string `json:"id" binding:"required"`
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
+	ID        string `json:"id" binding:"required"`
+	Nickname  string `json:"nickname"`
+	Avatar    string `json:"avatar"`
+	AvatarURL string `json:"avatar_url"`
+}
+
+// ResolveAvatar 兼容 avatar / avatar_url 两种字段名
+func (u IntegrationUserInput) ResolveAvatar() string {
+	if v := strings.TrimSpace(u.Avatar); v != "" {
+		return v
+	}
+	return strings.TrimSpace(u.AvatarURL)
+}
+
+func (u IntegrationUserInput) ResolveNickname() string {
+	return strings.TrimSpace(u.Nickname)
 }
 
 type IntegrationCreateConversationRequest struct {
@@ -15,4 +30,13 @@ type IntegrationCreateConversationResponse struct {
 	Token          string `json:"token"`
 	ConversationID string `json:"conversation_id"`
 	RedirectURL    string `json:"redirect_url"`
+}
+
+type IntegrationLoginRequest struct {
+	User IntegrationUserInput `json:"user" binding:"required"`
+}
+
+type IntegrationLoginResponse struct {
+	Token       string `json:"token"`
+	RedirectURL string `json:"redirect_url"`
 }

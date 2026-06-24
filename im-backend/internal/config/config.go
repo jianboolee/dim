@@ -84,6 +84,9 @@ func LoadConfig() (*Config, error) {
 
 	cfg.App.Name = viper.GetString("APP_NAME")
 	cfg.App.DefaultAvatar = viper.GetString("APP_DEFAULT_AVATAR")
+	if cfg.App.DefaultAvatar == "" {
+		cfg.App.DefaultAvatar = viper.GetString("DEFAULT_AVATAR")
+	}
 
 	return cfg, nil
 }

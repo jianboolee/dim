@@ -3,6 +3,9 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
+const API_TARGET = process.env.VITE_IM_API_PROXY_TARGET ?? 'http://localhost:8901'
+const WS_TARGET = process.env.VITE_IM_WS_PROXY_TARGET ?? 'ws://localhost:8902'
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue()],
@@ -14,11 +17,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/im/api': {
-        target: 'http://localhost:8080',
+        target: API_TARGET,
         changeOrigin: true,
       },
       '/im/ws': {
-        target: 'ws://localhost:8080',
+        target: WS_TARGET,
         ws: true,
         changeOrigin: true,
       },

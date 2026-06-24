@@ -24,30 +24,32 @@ export function useAuthCallback() {
     const conversationId =
       typeof route.query.conversation_id === 'string' ? route.query.conversation_id : ''
 
-    if (!token || !conversationId) {
-      error.value = '缺少 token 或 conversation_id 参数'
+    if (!token) {
+      error.value = '缺少 token 参数'
       loading.value = false
       return
     }
 
     try {
       userStore.setToken(token)
-      await userStore.fetchUser()
+      const me = await userStore.fetchUser()
+
+      // 无 conversation_id：进入会话列表
+      if (!conversationId) {
+        await router.replace({ name: 'im-home' })
+        imStore.initSDK()
+        return
+      }
 
       const response = await request<ApiResponse<ConversationDetail>>(
         `/im/api/conversations/${conversationId}`,
       )
 
-      if (response.code !== 200 || !response.data) {
+      if (response.code !== 200 || !response.data?.participants?.length) {
         throw new Error('无法加载会话')
       }
 
-      const myId = userStore.userInfo?.id
-      if (!myId) {
-        throw new Error('无法获取当前用户')
-      }
-
-      const peerId = response.data.participants.find((id) => id !== myId)
+      const peerId = response.data.participants.find((id) => id !== me.id)
       if (!peerId) {
         throw new Error('无法解析会话对方')
       }

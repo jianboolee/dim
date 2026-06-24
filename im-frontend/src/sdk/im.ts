@@ -20,6 +20,7 @@ export enum MessageType {
   // SDK 配置接口
   export interface IMSDKOptions {
     baseURL: string;
+    wsURL?: string;
     token: string;
   }
   
@@ -175,6 +176,7 @@ export enum MessageType {
    */
   class IMSDK {
     private baseURL: string;
+    private wsURL: string;
     private token: string;
     private ws: WebSocket | null;
     private messageHandlers: MessageHandler[];
@@ -186,7 +188,8 @@ export enum MessageType {
      * 构造函数
      */
     constructor(options: IMSDKOptions) {
-      this.baseURL = options.baseURL || 'http://localhost:8080';
+      this.baseURL = options.baseURL || (typeof window !== 'undefined' ? window.location.origin : '');
+      this.wsURL = options.wsURL || `${this.baseURL.replace(/^http/, 'ws')}/im/ws`;
       this.token = options.token;
       this.ws = null;
       this.messageHandlers = [];
@@ -200,7 +203,7 @@ export enum MessageType {
      */
     async connect(): Promise<void> {
       try {
-        this.ws = new WebSocket(`${this.baseURL.replace('http', 'ws')}/im/ws?token=${this.token}`);
+        this.ws = new WebSocket(`${this.wsURL}?token=${encodeURIComponent(this.token)}`);
         
         this.ws.onopen = () => {
           this._notifyConnectionHandlers({ status: 'connected' });

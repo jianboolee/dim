@@ -24,17 +24,32 @@ func NewUserRepository(db *mongo.Database) *UserRepository {
 func (r *UserRepository) Upsert(ctx context.Context, user *models.User) error {
 	now := time.Now()
 	filter := bson.M{"id": user.ID}
+
+	setFields := bson.M{
+		"updated_at": now,
+	}
+	if user.Nickname != "" {
+		setFields["nickname"] = user.Nickname
+	}
+	if user.Avatar != "" {
+		setFields["avatar"] = user.Avatar
+	}
+
 	update := bson.M{
-		"$set": bson.M{
-			"nickname":   user.Nickname,
-			"avatar":     user.Avatar,
-			"updated_at": now,
-		},
+		"$set": setFields,
 		"$setOnInsert": bson.M{
 			"id":         user.ID,
 			"bio":        user.Bio,
 			"created_at": now,
 		},
+	}
+
+	// 首次插入时若未传 nickname/avatar，写入空字符串占位，避免字段缺失
+	if user.Nickname == "" {
+		update["$setOnInsert"].(bson.M)["nickname"] = ""
+	}
+	if user.Avatar == "" {
+		update["$setOnInsert"].(bson.M)["avatar"] = ""
 	}
 
 	_, err := r.collection.UpdateOne(ctx, filter, update, options.Update().SetUpsert(true))

@@ -1,6 +1,13 @@
 # IM 业务系统集成指南
 
-d-im 作为嵌入式 IM 模块：**不提供独立登录注册**。业务系统在服务端调用「创建会话」接口，获得临时 JWT 与跳转链接，再将用户浏览器重定向到 IM 前端 SSO 回调页。
+d-im 作为嵌入式 IM 模块：**不提供独立登录注册**。业务系统在服务端调用 integration 接口，获得临时 JWT 与跳转链接，再将用户浏览器重定向到 IM 前端 SSO 回调页。
+
+支持两种入口：
+
+| 场景 | 接口 | 落地页 |
+|------|------|--------|
+| 进入会话列表 | `POST /im/api/integration/login` | `/im/home` |
+| 进入指定单聊 | `POST /im/api/integration/conversations` | `/im/chat/:peerId` |
 
 ## 架构概览
 
@@ -48,8 +55,8 @@ sequenceDiagram
 
 Vite 开发代理（见 [im-frontend/vite.config.ts](../im-frontend/vite.config.ts)）：
 
-- `/im/api` → `http://localhost:8080`
-- `/im/ws` → `ws://localhost:8080`
+- `/im/api` → `http://localhost:8901`
+- `/im/ws` → `ws://localhost:8902`
 
 ## 创建会话接口
 
@@ -76,6 +83,7 @@ Vite 开发代理（见 [im-frontend/vite.config.ts](../im-frontend/vite.config.
 
 - `from_user`：即将进入 IM 的当前用户（JWT `sub` 为其 `id`）
 - `to_user`：会话对方
+- 双方均需传入 `id`、`nickname`；头像使用 `avatar`（也兼容 `avatar_url`）
 - `from_user.id` 必须等于业务系统当前登录用户 ID
 - `from_user.id` 与 `to_user.id` 不能相同
 
@@ -102,7 +110,7 @@ Vite 开发代理（见 [im-frontend/vite.config.ts](../im-frontend/vite.config.
 **curl 示例：**
 
 ```bash
-curl -X POST http://localhost:8080/im/api/integration/conversations \
+curl -X POST http://localhost:8901/im/api/integration/conversations \
   -H "Content-Type: application/json" \
   -H "X-Integration-Key: change-me-integration-key" \
   -d '{
@@ -110,6 +118,52 @@ curl -X POST http://localhost:8080/im/api/integration/conversations \
     "to_user": {"id": "user_b", "nickname": "卖家", "avatar": ""}
   }'
 ```
+
+## SSO 登录（会话列表）
+
+业务用户从「消息中心」等入口进入 IM 会话列表时使用此接口，**无需**传入对方用户。
+
+**路径：** `POST /im/api/integration/login`
+
+**鉴权：** 同创建会话，`X-Integration-Key`
+
+**请求体：**
+
+```json
+{
+  "user": {
+    "id": "user_a",
+    "nickname": "买家张三",
+    "avatar": "https://cdn.example.com/a.jpg"
+  }
+}
+```
+
+**成功响应（200）：**
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "redirect_url": "http://localhost:5173/im/enter?token=eyJ..."
+  }
+}
+```
+
+`redirect_url` 不含 `conversation_id`；前端 `/im/enter` 落库 token 后跳转 `/im/home`。
+
+**curl 示例：**
+
+```bash
+curl -X POST http://localhost:8901/im/api/integration/login \
+  -H "Content-Type: application/json" \
+  -H "X-Integration-Key: change-me-integration-key" \
+  -d '{"user":{"id":"user_a","nickname":"买家","avatar":"https://cdn.example.com/a.jpg"}}'
+```
+
+本地脚本：`temp/login_im_home.sh`
 
 ## JWT 规范
 
@@ -124,11 +178,11 @@ curl -X POST http://localhost:8080/im/api/integration/conversations \
 ## 前端 SSO 流程
 
 1. 用户打开 `redirect_url`（路由 `/im/enter`）
-2. 前端读取 query `token`、`conversation_id`
+2. 前端读取 query `token`（及可选的 `conversation_id`）
 3. 写入本地 token，调用 `GET /im/api/users/me`
-4. 调用 `GET /im/api/conversations/:conversation_id` 解析对方用户 ID
-5. `router.replace` 到 `/im/chat/:peerId`，**从 URL 移除 token**
-6. 初始化 WebSocket（`/im/ws?token=...`）
+4. **无 `conversation_id`**：`router.replace` 到 `/im/home`（会话列表）
+5. **有 `conversation_id`**：拉取会话、解析对方 ID，跳转 `/im/chat/:peerId`
+6. 从 URL 移除 token，初始化 WebSocket
 
 无 token 时访问 IM 会展示「请从业务系统进入」提示页（`/im/login`）。
 
@@ -147,10 +201,11 @@ curl -X POST http://localhost:8080/im/api/integration/conversations \
 
 ## 业务系统需实现
 
-1. 服务端调用 `POST /im/api/integration/conversations`，携带 `X-Integration-Key`
-2. 请求体传入准确的 `from_user` / `to_user`（id 与业务库一致）
-3. 收到响应后，将当前登录用户浏览器 **302 到 `redirect_url`**
-4. Token 过期时重新调用创建会话接口获取新链接（IM 不提供业务侧登录页）
+1. **进入会话列表**：调用 `POST /im/api/integration/login`，传入当前登录用户 `user`
+2. **进入指定单聊**：调用 `POST /im/api/integration/conversations`，传入 `from_user` / `to_user`
+3. 两类接口均需携带 `X-Integration-Key`（仅服务端持有）
+4. 收到响应后，将当前登录用户浏览器 **302 到 `redirect_url`**
+5. Token 过期时重新调用对应接口获取新链接（IM 不提供业务侧登录页）
 
 ## 安全注意事项
 
@@ -165,12 +220,14 @@ curl -X POST http://localhost:8080/im/api/integration/conversations \
 # 1. 启动 MongoDB，执行 migrate 建索引
 cd im-backend && go run ./cmd/migrate
 
-# 2. 配置 .env（复制 .env.example）
-# 3. 启动 API + WS
-go run ./cmd/server
+# 2. 配置 .env（复制 .env.example，API_SERVER_PORT=8901、WS_SERVER_PORT=8902）
+# 3. 分别启动 API 与 WS（或开发时用 cmd/server 单进程）
+go run ./cmd/api-server   # :8901
+go run ./cmd/ws-server    # :8902
 
 # 4. 启动前端
 cd ../im-frontend && npm run dev
 
-# 5. 调用 integration 接口，浏览器打开返回的 redirect_url
+# 5. 一键创建会话并打开 enter 页
+cd .. && bash scripts/example.sh
 ```

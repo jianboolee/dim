@@ -31,3 +31,19 @@ func (h *IntegrationHandler) CreateConversation(c *gin.Context) {
 
 	response.Success(c, "success", result)
 }
+
+func (h *IntegrationHandler) Login(c *gin.Context) {
+	var req dto.IntegrationLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	result, err := h.integrationService.CreateLoginSession(c.Request.Context(), &req)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	response.Success(c, "success", result)
+}

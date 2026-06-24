@@ -3,7 +3,7 @@ import {config} from '../config'
 
 const instance = axios.create({
   baseURL: config.baseURL,
-  timeout: 1000,
+  timeout: 15000,
   headers: { 'X-Custom-Header': 'x-rv' }
 })
 

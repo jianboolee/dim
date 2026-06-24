@@ -37,6 +37,7 @@ func SetupAPI(
 	integration.Use(integrationAPIKeyMiddleware)
 	{
 		integration.POST("/conversations", integrationHandler.CreateConversation)
+		integration.POST("/login", integrationHandler.Login)
 	}
 
 	api := im.Group("/api")
