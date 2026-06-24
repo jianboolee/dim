@@ -314,7 +314,7 @@ const sendMessage = async () => {
   scrollToBottom(true, true)
 
   try {
-    const response = await imStore.imSDK?.sendMessage(peerUserId.value, MessageType.Text, content)
+    const response = await imStore.imSDK?.sendMessage(conversationId.value, MessageType.Text, content)
     const messageIndex = messages.value.findIndex((msg) => msg.id === tempMessage.id)
     if (response && messageIndex !== -1) {
       messages.value[messageIndex] = { ...response, status: 'sent' }
@@ -531,7 +531,7 @@ const retryMessage = async (message: ChatMessage) => {
 
   try {
     const response = await imStore.imSDK?.sendMessage(
-      peerUserId.value,
+      conversationId.value,
       message.type ?? MessageType.Text,
       message.content,
       message.media_info,
@@ -592,7 +592,7 @@ const handleUploadSuccess = async (_file: File, type: string, fileInfo: MediaInf
   const previewUrl = current.media_info?.url
 
   try {
-    const response = await imStore.imSDK?.sendMessage(peerUserId.value, messageType, '', fileInfo)
+    const response = await imStore.imSDK?.sendMessage(conversationId.value, messageType, '', fileInfo)
     if (response) {
       messages.value[messageIndex] = { ...response, status: 'sent' }
       messages.value = [...messages.value]

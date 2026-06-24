@@ -110,7 +110,6 @@ export enum MessageType {
   
   // 消息查询参数接口
   export interface MessageQueryParams {
-    receiver_id?: string;
     before_id?: string;
     after_id?: string;
     start_time?: string;
@@ -409,7 +408,7 @@ export enum MessageType {
      * 通过 WebSocket 发送消息
      */
     async sendMessageWS(
-      toID: string,
+      conversationId: string,
       type: MessageType = MessageType.Text,
       content: string = '',
       mediaInfo?: MediaInfo,
@@ -424,7 +423,8 @@ export enum MessageType {
   
         try {
           const message: Message = {
-            to_id: toID,
+            conversation_id: conversationId,
+            to_id: '',
             type,
             content
           };
@@ -471,7 +471,7 @@ export enum MessageType {
      * 发送消息
      */
     async sendMessage(
-      toID: string,
+      conversationId: string,
       type: MessageType = MessageType.Text,
       content: string = '',
       mediaInfo?: MediaInfo,
@@ -479,7 +479,8 @@ export enum MessageType {
       linkInfo?: LinkInfo
     ): Promise<Message> {
       const message: Message = {
-        to_id: toID,
+        conversation_id: conversationId,
+        to_id: '',
         type,
         content
       };
@@ -511,14 +512,13 @@ export enum MessageType {
 
       const payload = buildPayload(type, mediaInfo, cardInfo, linkInfo);
   
-      const response = await fetch(`${this.baseURL}/im/api/messages`, {
+      const response = await fetch(`${this.baseURL}/im/api/conversations/${conversationId}/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.token}`
         },
         body: JSON.stringify({
-          receiver_id: toID,
           type,
           content,
           payload,
@@ -537,31 +537,7 @@ export enum MessageType {
       return normalizeMessage(json);
     }
   
-    /**
-     * 获取消息列表
-     */
-    async getMessages(params: MessageQueryParams = {}): Promise<Message[]> {
-      const queryParams = new URLSearchParams();
-      if (params.receiver_id) queryParams.append('receiver_id', params.receiver_id);
-      if (params.before_id) queryParams.append('before_id', params.before_id);
-      if (params.after_id) queryParams.append('after_id', params.after_id);
-      if (params.start_time) queryParams.append('start_time', params.start_time);
-      if (params.end_time) queryParams.append('end_time', params.end_time);
-      if (params.limit) queryParams.append('limit', params.limit.toString());
-
-      const data = await apiRequest<Record<string, unknown>[]>(
-        this.baseURL,
-        `/im/api/messages?${queryParams}`,
-        this.token,
-      );
-
-      return (data ?? []).map((item) => normalizeMessage(item));
-    }
-
-    async getConversationMessages(
-      conversationId: string,
-      params: Omit<MessageQueryParams, 'receiver_id'> = {},
-    ): Promise<Message[]> {
+    async getConversationMessages(conversationId: string, params: MessageQueryParams = {}): Promise<Message[]> {
       const queryParams = new URLSearchParams();
       if (params.before_id) queryParams.append('before_id', params.before_id);
       if (params.after_id) queryParams.append('after_id', params.after_id);
@@ -760,15 +736,15 @@ export enum MessageType {
     /**
      * 发送文本消息的快捷方法
      */
-    async sendTextMessage(toID: string, content: string): Promise<Message> {
-      return this.sendMessage(toID, MessageType.Text, content);
+    async sendTextMessage(conversationId: string, content: string): Promise<Message> {
+      return this.sendMessage(conversationId, MessageType.Text, content);
     }
   
     /**
      * 发送图片消息的快捷方法
      */
     async sendImageMessage(
-      toID: string,
+      conversationId: string,
       content: string,
       url: string,
       width: number,
@@ -783,14 +759,14 @@ export enum MessageType {
         size,
         format
       };
-      return this.sendMessage(toID, MessageType.Image, content, mediaInfo);
+      return this.sendMessage(conversationId, MessageType.Image, content, mediaInfo);
     }
   
     /**
      * 发送视频消息的快捷方法
      */
     async sendVideoMessage(
-      toID: string,
+      conversationId: string,
       content: string,
       url: string,
       duration: number,
@@ -807,14 +783,14 @@ export enum MessageType {
         size,
         format
       };
-      return this.sendMessage(toID, MessageType.Video, content, mediaInfo);
+      return this.sendMessage(conversationId, MessageType.Video, content, mediaInfo);
     }
   
     /**
      * 发送音频消息的快捷方法
      */
     async sendAudioMessage(
-      toID: string,
+      conversationId: string,
       content: string,
       url: string,
       duration: number,
@@ -827,14 +803,14 @@ export enum MessageType {
         size,
         format
       };
-      return this.sendMessage(toID, MessageType.Audio, content, mediaInfo);
+      return this.sendMessage(conversationId, MessageType.Audio, content, mediaInfo);
     }
   
     /**
      * 发送卡片消息的快捷方法
      */
     async sendCardMessage(
-      toID: string,
+      conversationId: string,
       content: string,
       title: string,
       description: string,
@@ -852,14 +828,14 @@ export enum MessageType {
         currency
       };
       
-      return this.sendMessage(toID, MessageType.Card, content, undefined, cardInfo);
+      return this.sendMessage(conversationId, MessageType.Card, content, undefined, cardInfo);
     }
   
     /**
      * 发送链接消息的快捷方法
      */
     async sendLinkMessage(
-      toID: string,
+      conversationId: string,
       content: string,
       title: string,
       description: string,
@@ -873,7 +849,7 @@ export enum MessageType {
         image_url: imageUrl
       };
       
-      return this.sendMessage(toID, MessageType.Link, content, undefined, undefined, linkInfo);
+      return this.sendMessage(conversationId, MessageType.Link, content, undefined, undefined, linkInfo);
     }
   }
   

@@ -101,9 +101,8 @@ func (m *WSManager) Run() {
 
 		case message := <-m.Broadcast:
 			var msg struct {
-				ToID    string `json:"to_id"`
-				FromID  string `json:"from_id"`
-				Content string `json:"content"`
+				ConversationID string `json:"conversation_id"`
+				Content        string `json:"content"`
 			}
 			if err := json.Unmarshal(message, &msg); err != nil {
 				log.Printf("Failed to unmarshal message: %v", err)

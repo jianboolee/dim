@@ -44,32 +44,49 @@ func NewMessageService(
 	}
 }
 
-// SendMessageHTTP 通过 HTTP 发送消息
-func (s *MessageService) SendMessageHTTP(ctx context.Context, senderID string, receiverID string, content string, msgType *models.MessageType, payload *models.Payload) (*models.Message, error) {
-	message, err := s.SendMessage(ctx, senderID, receiverID, content, msgType, payload)
+// SendMessageToConversationHTTP 通过 HTTP 发送会话消息，并异步推送给接收方。
+func (s *MessageService) SendMessageToConversationHTTP(ctx context.Context, senderID string, conversationID primitive.ObjectID, content string, msgType *models.MessageType, payload *models.Payload) (*models.Message, error) {
+	message, err := s.SendMessageToConversation(ctx, senderID, conversationID, content, msgType, payload)
 	if err != nil {
 		return nil, err
 	}
 
 	// 异步推送不可使用 HTTP 请求 context（响应结束后会被 cancel）
-	go func(msg *models.Message, toUserID string) {
-		if err := s.SendMessageWithWs(context.Background(), toUserID, msg); err != nil {
-			logger.Error("failed to push message via ws", zap.String("receiver_id", toUserID), zap.Error(err))
+	go func(msg *models.Message) {
+		if err := s.SendMessageWithWs(context.Background(), msg.ReceiverID, msg); err != nil {
+			logger.Error("failed to push message via ws", zap.String("receiver_id", msg.ReceiverID), zap.Error(err))
 		}
-	}(message, receiverID)
+		if msg.SenderID != msg.ReceiverID {
+			if err := s.SendMessageWithWs(context.Background(), msg.SenderID, msg); err != nil {
+				logger.Error("failed to echo message via ws", zap.String("sender_id", msg.SenderID), zap.Error(err))
+			}
+		}
+	}(message)
 
 	return message, nil
 }
 
-// SendMessage 发送消息
-func (s *MessageService) SendMessage(
+// SendMessageToConversation 发送会话消息。当前项目只支持单聊，因此接收方由会话参与者推导。
+func (s *MessageService) SendMessageToConversation(
 	ctx context.Context,
 	senderID string,
-	receiverID string,
+	conversationID primitive.ObjectID,
 	content string,
 	msgType *models.MessageType,
 	payload *models.Payload,
 ) (*models.Message, error) {
+	conversation, err := s.conversationRepo.GetConversation(ctx, conversationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get conversation: %w", err)
+	}
+	if !conversation.HasParticipant(senderID) {
+		return nil, ErrConversationAccessDenied
+	}
+
+	receiverID, err := resolvePrivateReceiverID(conversation, senderID)
+	if err != nil {
+		return nil, err
+	}
 
 	// 如果msgType为nil，则默认使用文本类型
 	msgTypeValue := models.MessageTypeText
@@ -79,25 +96,17 @@ func (s *MessageService) SendMessage(
 
 	now := time.Now()
 	message := &models.Message{
-		ID:         primitive.NewObjectID(),
-		SenderID:   senderID,
-		ReceiverID: receiverID,
-		Content:    content,
-		Type:       msgTypeValue,
-		Payload:    payload, // 这里需要传递指针
-		Status:     models.MessageStatusSent,
-		CreatedAt:  now,
-		UpdatedAt:  now,
+		ID:             primitive.NewObjectID(),
+		ConversationID: conversation.ID,
+		SenderID:       senderID,
+		ReceiverID:     receiverID,
+		Content:        content,
+		Type:           msgTypeValue,
+		Payload:        payload, // 这里需要传递指针
+		Status:         models.MessageStatusSent,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
-
-	// 创建或更新会话
-	conversation, err := s.conversationService.CreateOrUpdateConversationByMessage(ctx, message)
-	if err != nil {
-		logger.Error("SendMessage CreateOrUpdateConversationByMessage", zap.Any("error", err))
-		return nil, fmt.Errorf("failed to create/update conversation: %w", err)
-	}
-
-	message.ConversationID = conversation.ID
 
 	logger.Debug(zap.NewDevelopmentEncoderConfig().MessageKey, zap.Any("message", message))
 
@@ -108,7 +117,28 @@ func (s *MessageService) SendMessage(
 		return nil, fmt.Errorf("failed to save message: %w", err)
 	}
 
+	if err := s.conversationService.UpdateLastMessage(ctx, conversation.ID, result); err != nil {
+		return nil, fmt.Errorf("failed to update conversation last message: %w", err)
+	}
+	if err := s.conversationService.UpdateUnreadCount(ctx, conversation.ID, receiverID, 1); err != nil {
+		return nil, fmt.Errorf("failed to update conversation unread count: %w", err)
+	}
+
 	return result, nil
+}
+
+func resolvePrivateReceiverID(conversation *models.Conversation, senderID string) (string, error) {
+	if conversation.Type != models.ConversationTypePrivate || len(conversation.Participants) != 2 {
+		return "", fmt.Errorf("unsupported conversation type")
+	}
+
+	for _, participantID := range conversation.Participants {
+		if participantID != senderID {
+			return participantID, nil
+		}
+	}
+
+	return "", ErrConversationAccessDenied
 }
 
 // SendMessageWithWs 将消息推送给在线用户（本进程 WS 或经 Redis 转发到 WS 进程）
@@ -145,24 +175,6 @@ func (s *MessageService) pushToUser(ctx context.Context, receiverID string, mess
 	}
 
 	return s.redisClient.Publish(context.Background(), wsPushChannel, payload).Err()
-}
-
-// GetMessages 获取消息列表
-func (s *MessageService) GetMessages(ctx context.Context, senderID string, receiverID string, beforeID *primitive.ObjectID, afterID *primitive.ObjectID, limit int64) ([]models.Message, error) {
-
-	conversation, err := s.conversationService.GetConversationByParticipants(ctx, []string{senderID, receiverID})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get conversation: %w", err)
-	}
-
-	messages, err := s.repo.FindMessagesByConversationID(ctx, conversation.ID, beforeID, afterID, limit)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get messages: %w", err)
-	}
-	for i := range messages {
-		messages[i].DecodePayload()
-	}
-	return messages, nil
 }
 
 // FindMessagesByConversationID 根据会话ID获取消息列表
@@ -241,22 +253,18 @@ func (s *MessageService) ProcessWebSocketMessage(
 	message []byte,
 ) (*models.Message, error) {
 	var raw struct {
-		ReceiverID string             `json:"receiver_id"`
-		ToID       string             `json:"to_id"`
-		Content    string             `json:"content"`
-		Type       models.MessageType `json:"type"`
-		Payload    *models.Payload    `json:"payload"`
+		ConversationID string             `json:"conversation_id"`
+		Content        string             `json:"content"`
+		Type           models.MessageType `json:"type"`
+		Payload        *models.Payload    `json:"payload"`
 	}
 	if err := json.Unmarshal(message, &raw); err != nil {
 		return nil, err
 	}
 
-	receiverID := raw.ReceiverID
-	if receiverID == "" {
-		receiverID = raw.ToID
-	}
-	if receiverID == "" {
-		return nil, fmt.Errorf("receiver_id is required")
+	conversationID, err := primitive.ObjectIDFromHex(raw.ConversationID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid conversation_id")
 	}
 
 	msgType := raw.Type
@@ -264,7 +272,7 @@ func (s *MessageService) ProcessWebSocketMessage(
 		msgType = models.MessageTypeText
 	}
 
-	result, err := s.SendMessage(ctx, senderID, receiverID, raw.Content, &msgType, raw.Payload)
+	result, err := s.SendMessageToConversation(ctx, senderID, conversationID, raw.Content, &msgType, raw.Payload)
 	if err != nil {
 		return nil, err
 	}

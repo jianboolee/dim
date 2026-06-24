@@ -49,13 +49,12 @@ func SetupAPI(
 		api.GET("/users/me", userHandler.GetMe)
 		api.GET("/users/:id", userHandler.GetUser)
 
-		api.GET("/messages", messageHandler.GetMessages)
-		api.POST("/messages", messageHandler.SendMessageHTTP)
 		api.GET("/messages/unread/count", messageHandler.GetUnreadCount)
 		api.PUT("/messages/:id/read", messageHandler.MarkMessageAsRead)
 
 		api.GET("/conversations", conversationHandler.GetUserConversations)
 		api.GET("/conversations/:id/messages", messageHandler.GetMessagesByConversationID)
+		api.POST("/conversations/:id/messages", messageHandler.SendMessageToConversation)
 		api.POST("/conversations", conversationHandler.CreateConversation)
 		api.GET("/conversations/:id", conversationHandler.GetConversation)
 
