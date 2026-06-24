@@ -8,19 +8,20 @@
       @compositionend="handleCompositionEnd"
       @keydown.enter="handleEnter"
       @focus="handleFocus"
+      @blur="handleBlur"
       :placeholder="placeholder"
-      :style="{ height: textareaHeight + 'px' }"
-      rows="1"
+      :rows="minRows"
     ></textarea>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { computed, nextTick, ref, onMounted, watch } from 'vue'
 
 const props = defineProps<{
   modelValue: string
   placeholder?: string
+  minRows?: number
   maxRows?: number
 }>()
 
@@ -28,12 +29,18 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'enter'): void
   (e: 'focus'): void
+  (e: 'blur'): void
 }>()
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
-const textareaHeight = ref(40)
 const lineHeight = 24
-const maxRows = props.maxRows || 4
+const verticalPadding = 16
+const minRows = computed(() => props.minRows || 1)
+const maxRows = computed(() => props.maxRows || 4)
+const minHeight = computed(() => lineHeight * minRows.value + verticalPadding)
+const maxHeight = computed(() => lineHeight * maxRows.value + verticalPadding)
+const minHeightCss = computed(() => `${minHeight.value}px`)
+const maxHeightCss = computed(() => `${maxHeight.value}px`)
 /** IME 组合输入中（如中文拼音选词），回车用于上屏而非发送 */
 const isComposing = ref(false)
 
@@ -50,48 +57,75 @@ const isImeEnter = (e: KeyboardEvent) => {
 }
 
 // 调整文本框高度
-const adjustHeight = () => {
-  if (!textareaRef.value) return
+const adjustHeight = (value = textareaRef.value?.value ?? props.modelValue) => {
+  const textarea = textareaRef.value
+  if (!textarea) return
 
   // 如果内容为空，重置为初始高度
-  if (!props.modelValue.trim()) {
-    textareaHeight.value = 40
+  if (value.length === 0) {
+    textarea.style.height = `${minHeight.value}px`
+    textarea.style.overflowY = 'hidden'
     return
   }
   
   // 重置高度以获取实际滚动高度
-  textareaRef.value.style.height = 'auto'
+  textarea.style.height = 'auto'
   
   // 计算新高度
-  const scrollHeight = textareaRef.value.scrollHeight
-  const maxHeight = lineHeight * maxRows
-  
+  const scrollHeight = textarea.scrollHeight
   // 设置新高度，不超过最大高度
-  textareaHeight.value = Math.min(Math.max(scrollHeight, 40), maxHeight)
+  const nextHeight = Math.min(Math.max(scrollHeight, minHeight.value), maxHeight.value)
+  textarea.style.height = `${nextHeight}px`
+  textarea.style.overflowY = scrollHeight > maxHeight.value ? 'auto' : 'hidden'
+  if (scrollHeight > maxHeight.value) {
+    textarea.scrollTop = textarea.scrollHeight
+  }
 }
 
 // 处理输入
 const handleInput = (e: Event) => {
   const target = e.target as HTMLTextAreaElement
   emit('update:modelValue', target.value)
-  adjustHeight()
+  adjustHeight(target.value)
 }
 
 const handleFocus = () => {
   emit('focus')
 }
 
-// 处理回车键：IME 组合中不发送；Shift+Enter 换行；Enter 发送
+const handleBlur = () => {
+  if (!props.modelValue.trim()) {
+    adjustHeight('')
+  }
+  emit('blur')
+}
+
+const insertNewline = () => {
+  const textarea = textareaRef.value
+  if (!textarea) return
+
+  const start = textarea.selectionStart
+  const end = textarea.selectionEnd
+  const currentValue = textarea.value
+  const nextValue = `${currentValue.slice(0, start)}\n${currentValue.slice(end)}`
+
+  emit('update:modelValue', nextValue)
+  requestAnimationFrame(() => {
+    textarea.selectionStart = start + 1
+    textarea.selectionEnd = start + 1
+    adjustHeight()
+  })
+}
+
+// 处理回车键：IME 组合中不发送；Shift/Ctrl/Command+Enter 换行；Enter 发送
 const handleEnter = (e: KeyboardEvent) => {
   if (isImeEnter(e)) {
     return
   }
 
-  if (e.shiftKey) {
-    const lines = (textareaRef.value?.value || '').split('\n')
-    if (lines.length >= maxRows) {
-      e.preventDefault()
-    }
+  if (e.shiftKey || e.ctrlKey || e.metaKey) {
+    e.preventDefault()
+    insertNewline()
     return
   }
 
@@ -100,7 +134,13 @@ const handleEnter = (e: KeyboardEvent) => {
 }
 
 // 监听值变化
-watch(() => props.modelValue, () => {
+watch(() => props.modelValue, async () => {
+  await nextTick()
+  adjustHeight()
+})
+
+watch([minRows, maxRows], async () => {
+  await nextTick()
   adjustHeight()
 })
 
@@ -112,7 +152,9 @@ onMounted(() => {
 <style scoped>
 .multiline-input {
   width: 100%;
+  min-width: 0;
   position: relative;
+  max-height: v-bind(maxHeightCss);
 }
 
 .multiline-input textarea {
@@ -123,11 +165,11 @@ onMounted(() => {
   background: transparent;
   font-size: 15px;
   line-height: 24px;
-  padding: 8px 12px;
+  padding: 8px 0;
   box-sizing: border-box;
-  overflow-y: auto;
+  overflow-y: hidden;
   display: block;
-  min-height: 40px;
+  min-height: v-bind(minHeightCss);
 }
 
 /* 自定义滚动条样式 */

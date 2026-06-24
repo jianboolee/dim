@@ -45,7 +45,7 @@ onMounted(() => {
   height: 32px;
   margin: 0 auto 12px;
   border: 3px solid #e0e0e0;
-  border-top-color: #1989fa;
+  border-top-color: #4b86f8;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -53,7 +53,7 @@ onMounted(() => {
 .link {
   display: inline-block;
   margin-top: 12px;
-  color: #1989fa;
+  color: #4b86f8;
 }
 
 @keyframes spin {

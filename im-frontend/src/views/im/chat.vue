@@ -67,28 +67,31 @@
           <MultilineInput
             v-model="messageText"
             placeholder="发消息..."
-            :maxRows="4"
+            :minRows="inputMinRows"
+            :maxRows="inputMaxRows"
             @enter="sendMessage"
             @focus="handleMessageInputFocus"
           />
+          <div class="message-input-actions">
+            <button
+              type="button"
+              class="addon-btn"
+              :class="{ 'is-active': showMoreOptions }"
+              aria-label="更多"
+              @click="handlePlusClick"
+            >
+              <i :class="showMoreOptions ? 'ri-close-line' : 'ri-add-line'"></i>
+            </button>
+            <button
+              type="button"
+              class="send-btn"
+              :disabled="!messageText.trim()"
+              @click="sendMessage"
+            >
+              <i class="ri-arrow-up-line"></i>
+            </button>
+          </div>
         </div>
-        <button
-          type="button"
-          class="addon-btn"
-          :class="{ 'is-active': showMoreOptions }"
-          aria-label="更多"
-          @click="handlePlusClick"
-        >
-          <i :class="showMoreOptions ? 'ri-close-line' : 'ri-add-line'"></i>
-        </button>
-        <button
-          type="button"
-          class="send-btn"
-          :disabled="!messageText.trim()"
-          @click="sendMessage"
-        >
-          发送
-        </button>
       </div>
 
       <MessageMoreOptions
@@ -144,11 +147,15 @@ const conversation = ref<Conversation | null>(null)
 const targetUser = ref<UserInfo | null>(null)
 const messageListRef = ref<HTMLElement | null>(null)
 const showMoreOptions = ref(false)
+const isMobileViewport = ref(false)
+let cleanupViewportListener: (() => void) | null = null
 
 const isConnected = computed(() => imStore.isConnected)
 const currentUserId = computed(() => userStore.userInfo?.id)
 const conversationId = computed(() => props.conversationId)
 const hasSelectedConversation = computed(() => Boolean(conversationId.value))
+const inputMinRows = computed(() => (isMobileViewport.value ? 1 : 2))
+const inputMaxRows = computed(() => (isMobileViewport.value ? 4 : 6))
 const peerUserId = computed(
   () =>
     conversation.value?.to_user_info?.id ||
@@ -750,6 +757,16 @@ const initChat = async () => {
 }
 
 onMounted(() => {
+  const mediaQuery = window.matchMedia('(max-width: 767px)')
+  const handleViewportChange = (event: MediaQueryListEvent) => {
+    isMobileViewport.value = event.matches
+  }
+  isMobileViewport.value = mediaQuery.matches
+  mediaQuery.addEventListener('change', handleViewportChange)
+  cleanupViewportListener = () => {
+    mediaQuery.removeEventListener('change', handleViewportChange)
+  }
+
   initChat()
 })
 
@@ -773,6 +790,7 @@ watch(
 )
 
 onUnmounted(() => {
+  cleanupViewportListener?.()
   imStore.removeMessageHandler(handleNewMessage)
 })
 </script>
@@ -982,39 +1000,58 @@ onUnmounted(() => {
   right: 0;
   background: white;
   border-top: 1px solid var(--border-color-light);
-  padding-bottom: calc(var(--spacing-base) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
   z-index: 10;
 }
 
 .message-input {
-  padding: var(--spacing-base);
+  padding: 10px var(--spacing-base);
   display: flex;
-  gap: var(--spacing-small);
-  align-items: flex-end;
 }
 
 .message-input-content {
   display: flex;
   align-items: flex-end;
+  gap: 8px;
   flex: 1;
   min-width: 0;
   border: 1px solid var(--border-color-light);
   background: #f6f8fc;
-  border-radius: 20px;
-  min-height: 40px;
-  max-height: calc(24px * 4 + 16px);
-  overflow: hidden;
+  border-radius: 18px;
+  min-height: 64px;
+  overflow: visible;
+  padding: 0 8px 0 16px;
+}
+
+@media (max-width: 767px) {
+  .message-input {
+    padding: 8px 10px;
+  }
+
+  .message-input-content {
+    min-height: 42px;
+    border-radius: 21px;
+    padding-left: 14px;
+  }
+}
+
+.message-input-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
 }
 
 .addon-btn {
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  border: none;
+  border: 2px solid #333;
   border-radius: 50%;
-  background: #f6f8fc;
-  color: #666;
+  background: transparent;
+  color: #333;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1023,13 +1060,13 @@ onUnmounted(() => {
 }
 
 .addon-btn i {
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1;
 }
 
 .addon-btn.is-active {
-  color: #1989fa;
-  background: #e8f3ff;
+  background: #ededed;
+
 }
 
 .addon-btn:active {
@@ -1038,24 +1075,25 @@ onUnmounted(() => {
 
 .message-input .send-btn {
   flex-shrink: 0;
-  padding: 8px 16px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border: none;
-  border-radius: 20px;
-  background: #1989fa;
+  border-radius: 50%;
+  background: #4b86f8;
   color: white;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: opacity 0.2s ease;
-  font-size: 15px;
+  font-size: 18px;
   line-height: 1.4;
   font-weight: 500;
-  min-height: 40px;
 }
 
 .message-input .send-btn:disabled {
-  opacity: 0.45;
+  opacity: 0.38;
   cursor: not-allowed;
 }
 

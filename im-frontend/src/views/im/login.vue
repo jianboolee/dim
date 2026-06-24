@@ -36,7 +36,7 @@ const redirect = computed(() =>
 
 .icon {
   font-size: 48px;
-  color: #1989fa;
+  color: #4b86f8;
   margin-bottom: 16px;
 }
 
