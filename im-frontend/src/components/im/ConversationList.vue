@@ -4,12 +4,15 @@
       <div class="spinner"></div>
     </div>
 
-    <div v-else-if="error" class="state-block state-error">
-      <p>{{ error }}</p>
-      <button type="button" class="btn btn-default" @click="refresh">重试</button>
-    </div>
-
     <div v-else class="conversation-list" @scroll="handleScroll">
+      <div v-if="error" class="inline-error">
+        <div class="inline-error-main">
+          <i class="ri-error-warning-line"></i>
+          <span>{{ errorText }}</span>
+        </div>
+        <button type="button" @click.stop="refresh">重试</button>
+      </div>
+
       <div
         v-for="item in conversationItems"
         :key="item.id"
@@ -43,7 +46,7 @@
         </div>
       </div>
 
-      <div v-if="conversationItems.length === 0" class="empty-state">
+      <div v-if="conversationItems.length === 0 && !error" class="empty-state">
         <i class="ri-chat-3-line"></i>
         <p>暂无消息</p>
       </div>
@@ -106,6 +109,12 @@ const {
 } = useConversationList()
 
 const { userMap, fetchUsers, mergeUsers } = useUserProfiles()
+
+const errorText = computed(() => {
+  if (error.value === '未登录') return '登录状态已失效'
+  if (error.value === '加载更多会话失败') return '加载更多失败'
+  return '会话列表加载失败'
+})
 
 const conversationItems = computed(() => {
   const uid = currentUserId.value
@@ -233,11 +242,6 @@ defineExpose({ refresh })
   color: var(--text-color-light);
 }
 
-.state-error p {
-  margin: 0;
-  color: var(--error-color);
-}
-
 .spinner {
   width: 24px;
   height: 24px;
@@ -257,6 +261,55 @@ defineExpose({ refresh })
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+.inline-error {
+  margin: 10px var(--spacing-base);
+  padding: 9px 10px;
+  border: 1px solid #ffe1df;
+  border-radius: 8px;
+  background: #fff7f6;
+  color: #b94a44;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.inline-error-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.inline-error-main i {
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.inline-error-main span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inline-error button {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #4b86f8;
+  padding: 4px 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.inline-error button:hover {
+  background: rgba(75, 134, 248, 0.08);
 }
 
 .conversation-item {

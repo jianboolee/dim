@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { useIMStore } from '@/stores/im'
+import { useIMTabStore } from '@/stores/imTab'
 import { useUserStore } from '@/stores/user'
 import type { Conversation, Message } from '@/sdk/im'
 import {
@@ -22,6 +23,7 @@ const PAGE_SIZE = 20
 
 export function useConversationList() {
   const imStore = useIMStore()
+  const imTabStore = useIMTabStore()
   const userStore = useUserStore()
 
   const currentUserId = computed(() => userStore.userInfo?.id ?? '')
@@ -53,7 +55,9 @@ export function useConversationList() {
       try {
         const sdk = ensureImSDK()
         if (!sdk) {
-          error.value = '未登录'
+          if (!imTabStore.isSuspended) {
+            error.value = '未登录'
+          }
           return
         }
 
@@ -91,7 +95,9 @@ export function useConversationList() {
       try {
         const sdk = ensureImSDK()
         if (!sdk) {
-          error.value = '未登录'
+          if (!imTabStore.isSuspended) {
+            error.value = '未登录'
+          }
           return
         }
 

@@ -27,7 +27,14 @@
         </div>
       </aside>
 
-      <div v-if="hasSelectedConversation" class="chat-main">
+      <div v-if="imTabStore.isSuspended" class="chat-main chat-suspended-main">
+        <div class="chat-suspended-state">
+          <i class="ri-computer-line"></i>
+          <p>已在其他标签页打开</p>
+          <button type="button" @click="handleTakeoverTab">在此标签页使用</button>
+        </div>
+      </div>
+      <div v-else-if="hasSelectedConversation" class="chat-main">
     <div class="nav-bar">
       <div class="nav-bar-content">
         <!-- <button class="nav-side-btn back-btn" type="button" @click="handleBack">
@@ -136,6 +143,7 @@ import { useRouter } from 'vue-router'
 import { showToast } from '@/plugins/toast'
 import { useUserStore } from '@/stores/user'
 import { useIMStore } from '@/stores/im'
+import { useIMTabStore } from '@/stores/imTab'
 import { useUnreadMessageStore } from '@/stores/unreadMessage'
 import { useConversationList } from '@/composables/useConversationList'
 import { useUserProfiles } from '@/composables/useUserProfiles'
@@ -156,6 +164,7 @@ const props = defineProps<{
 const router = useRouter()
 const userStore = useUserStore()
 const imStore = useIMStore()
+const imTabStore = useIMTabStore()
 const unreadMessageStore = useUnreadMessageStore()
 const { conversations, clearUnreadForPeer } = useConversationList()
 const { userMap, fetchUser, mergeUsers } = useUserProfiles()
@@ -220,8 +229,14 @@ const handleBack = () => {
 
 const handleLogout = () => {
   showSidebarMenu.value = false
+  imTabStore.reset()
   userStore.logout()
   router.replace({ name: 'im-login' })
+}
+
+const handleTakeoverTab = () => {
+  imTabStore.claimActive()
+  initChat()
 }
 
 const handleDocumentPointerDown = (event: PointerEvent) => {
@@ -767,6 +782,12 @@ const initChat = async () => {
     return
   }
 
+  if (imTabStore.isSuspended) {
+    resetChatState()
+    imStore.closeConnection()
+    return
+  }
+
   if (!conversationId.value) {
     resetChatState()
     imStore.initSDK()
@@ -807,6 +828,21 @@ onMounted(() => {
 
   initChat()
 })
+
+watch(
+  () => imTabStore.isPrimaryTab,
+  (isPrimary, wasPrimary) => {
+    if (!imTabStore.initialized || isPrimary === wasPrimary) return
+
+    if (!isPrimary) {
+      resetChatState()
+      imStore.closeConnection()
+      return
+    }
+
+    initChat()
+  },
+)
 
 watch(
   () => props.conversationId,
@@ -963,6 +999,48 @@ onUnmounted(() => {
 .chat-empty-state i {
   font-size: 38px;
   line-height: 1;
+}
+
+.chat-suspended-main {
+  align-items: center;
+  justify-content: center;
+  background: #fafbfe;
+}
+
+.chat-suspended-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: #687386;
+}
+
+.chat-suspended-state i {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #eef3fb;
+  color: #8a96aa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  line-height: 1;
+}
+
+.chat-suspended-state p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.chat-suspended-state button {
+  border: none;
+  border-radius: 8px;
+  background: #4b86f8;
+  color: white;
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
 }
 
 @media (max-width: 767px) {

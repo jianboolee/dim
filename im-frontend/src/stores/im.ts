@@ -5,6 +5,7 @@ import { getImSdkOptions } from '@/config'
 import { useUserStore } from './user'
 import { useUnreadMessageStore } from './unreadMessage'
 import { usePageNotificationStore } from './pageNotification'
+import { useIMTabStore } from './imTab'
 
 export const useIMStore = defineStore('im', () => {
     const imSDK = ref<IMSDK | null>(null)
@@ -22,6 +23,9 @@ export const useIMStore = defineStore('im', () => {
     const unreadMessageStore = useUnreadMessageStore()
     const pageNotificationStore = usePageNotificationStore()
     const manualDisconnect = ref(false)
+    const imTabStore = useIMTabStore()
+
+    const canUseConnection = () => !imTabStore.initialized || imTabStore.isPrimaryTab
 
     const clearReconnectTimer = () => {
         if (reconnectTimer.value) {
@@ -35,6 +39,7 @@ export const useIMStore = defineStore('im', () => {
 
     // 重连方法
     const reconnect = async () => {
+        if (!canUseConnection()) return
         if (manualDisconnect.value) return
         if (isConnected.value) return
 
@@ -48,6 +53,7 @@ export const useIMStore = defineStore('im', () => {
 
     // 处理重连错误
     const handleReconnectError = () => {
+        if (!canUseConnection()) return
         if (manualDisconnect.value) return
         
         reconnectCount.value++
@@ -106,13 +112,14 @@ export const useIMStore = defineStore('im', () => {
     }
 
     const connectWithCurrentToken = async () => {
+        if (!canUseConnection()) return
         if (manualDisconnect.value) return
         if (isConnected.value) return
         if (connectingPromise.value) return connectingPromise.value
 
         connectingPromise.value = (async () => {
             const token = await getFreshToken()
-            if (!token || manualDisconnect.value) return
+            if (!token || manualDisconnect.value || !canUseConnection()) return
 
             if (!imSDK.value) {
                 createSDK(token)
@@ -124,7 +131,7 @@ export const useIMStore = defineStore('im', () => {
             clearReconnectTimer()
             await imSDK.value?.connect()
 
-            if (!manualDisconnect.value) {
+            if (!manualDisconnect.value && canUseConnection()) {
                 console.log('WebSocket连接成功')
                 isConnected.value = true
                 reconnectCount.value = 0
@@ -147,6 +154,7 @@ export const useIMStore = defineStore('im', () => {
 
     // 初始化SDK
     const initSDK = () => {
+        if (!canUseConnection()) return imSDK.value
         manualDisconnect.value = false
 
         if (!userStore.token) return null
@@ -161,6 +169,7 @@ export const useIMStore = defineStore('im', () => {
     }
 
     const reconnectWithLatestToken = async () => {
+        if (!canUseConnection()) return
         manualDisconnect.value = false
         clearReconnectTimer()
 
