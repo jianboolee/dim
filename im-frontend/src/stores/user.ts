@@ -21,9 +21,8 @@ export const useUserStore = defineStore('user', () => {
   watch(token, (newToken, oldToken) => {
     const imStore = useIMStore()
 
-    if (newToken && newToken !== oldToken && imStore.isConnected) {
-      imStore.closeConnection()
-      imStore.initSDK()
+    if (newToken && newToken !== oldToken && oldToken) {
+      void imStore.reconnectWithLatestToken()
     } else if (!newToken) {
       imStore.closeConnection()
     }

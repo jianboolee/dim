@@ -335,9 +335,9 @@ export enum MessageType {
         };
         
         ws.onclose = () => {
-          this._notifyConnectionHandlers({ status: 'disconnected' });
           if (this.ws === ws) {
             this.ws = null;
+            this._notifyConnectionHandlers({ status: 'disconnected' });
           }
           settleReject(new Error('WebSocket closed before connection was established'));
         };
@@ -352,6 +352,7 @@ export enum MessageType {
         };
         
         ws.onerror = (error: Event) => {
+          if (this.ws !== ws) return;
           this._notifyConnectionHandlers({ status: 'error', error });
           settleReject(error);
         };
@@ -370,6 +371,10 @@ export enum MessageType {
 
     isSocketOpen(): boolean {
       return this.ws?.readyState === WebSocket.OPEN;
+    }
+
+    updateToken(token: string): void {
+      this.token = token;
     }
   
     /**

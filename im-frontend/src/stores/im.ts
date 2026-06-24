@@ -4,6 +4,7 @@ import IMSDK, { type Message, type ConnectionStatus, type MessageHandler, type C
 import { getImSdkOptions } from '@/config'
 import { useUserStore } from './user'
 import { useUnreadMessageStore } from './unreadMessage'
+import { isTokenExpiringSoon } from '@/utils/token'
 
 export const useIMStore = defineStore('im', () => {
     const imSDK = ref<IMSDK | null>(null)
@@ -13,11 +14,20 @@ export const useIMStore = defineStore('im', () => {
     const reconnectTimer = ref<ReturnType<typeof setTimeout> | null>(null)
     const heartbeatTimer = ref<ReturnType<typeof setInterval> | null>(null)
     const reconnectCount = ref(0)
+    const connectingPromise = ref<Promise<void> | null>(null)
+    const sdkToken = ref<string | null>(null)
     const maxReconnectAttempts = 5
     const baseReconnectDelay = 3000
     const userStore = useUserStore()
     const unreadMessageStore = useUnreadMessageStore()
     const manualDisconnect = ref(false)
+
+    const clearReconnectTimer = () => {
+        if (reconnectTimer.value) {
+            clearTimeout(reconnectTimer.value)
+            reconnectTimer.value = null
+        }
+    }
 
     // 获取未读消息总数
     const fetchUnreadCount = async () => {
@@ -35,12 +45,10 @@ export const useIMStore = defineStore('im', () => {
     // 重连方法
     const reconnect = async () => {
         if (manualDisconnect.value) return
-        if (!imSDK.value || isConnected.value) return
+        if (isConnected.value) return
 
         try {
-            await imSDK.value.connect()
-            isConnected.value = true
-            reconnectCount.value = 0
+            await connectWithCurrentToken()
         } catch (error) {
             console.error('重连失败:', error)
             handleReconnectError()
@@ -61,46 +69,20 @@ export const useIMStore = defineStore('im', () => {
         const delay = baseReconnectDelay * Math.min(Math.pow(2, reconnectCount.value - 1), 10)
         console.log(`将在 ${delay/1000} 秒后进行第 ${reconnectCount.value} 次重连`)
 
-        if (reconnectTimer.value) {
-            clearTimeout(reconnectTimer.value)
-        }
-
+        clearReconnectTimer()
         reconnectTimer.value = setTimeout(reconnect, delay)
     }
 
-    // 初始化SDK
-    const initSDK = () => {
-        manualDisconnect.value = false
-
-        const userStore = useUserStore()
-        if (!userStore.token) return null
-
-        if (imSDK.value) {
-            if (!isConnected.value) {
-                imSDK.value.connect()
-                    .then(() => {
-                        isConnected.value = true
-                        reconnectCount.value = 0
-                        imSDK.value?.startHeartbeat()
-                    })
-                    .catch((error: Error) => {
-                        console.error('WebSocket 重连失败:', error)
-                        if (!manualDisconnect.value) {
-                            handleReconnectError()
-                        }
-                    })
-            }
-            return imSDK.value
-        }
-
+    const createSDK = (token: string) => {
         const { baseURL, wsURL } = getImSdkOptions()
         console.log('初始化 IM SDK', { baseURL, wsURL })
 
         imSDK.value = new IMSDK({
             baseURL,
             wsURL,
-            token: userStore.token,
+            token,
         })
+        sdkToken.value = token
 
         // 添加全局连接状态处理器
         imSDK.value.onConnection((status: ConnectionStatus) => {
@@ -109,7 +91,7 @@ export const useIMStore = defineStore('im', () => {
 
             if (status.status === 'connected') {
                 imSDK.value?.startHeartbeat()
-            } else if (status.status === 'disconnected' && !manualDisconnect.value) {
+            } else if (status.status === 'disconnected' && !manualDisconnect.value && !connectingPromise.value) {
                 imSDK.value?.stopHeartbeat()
                 handleReconnectError()
             }
@@ -125,24 +107,85 @@ export const useIMStore = defineStore('im', () => {
                 unreadMessageStore.increment()
             }
         })
+    }
 
-        // 连接WebSocket
-        imSDK.value.connect()
-            .then(() => {
+    const getFreshToken = async () => {
+        const token = userStore.token
+        if (!token) return null
+
+        if (!isTokenExpiringSoon(token)) {
+            return token
+        }
+
+        return await userStore.refreshToken()
+    }
+
+    const connectWithCurrentToken = async () => {
+        if (manualDisconnect.value) return
+        if (isConnected.value) return
+        if (connectingPromise.value) return connectingPromise.value
+
+        connectingPromise.value = (async () => {
+            const token = await getFreshToken()
+            if (!token || manualDisconnect.value) return
+
+            if (!imSDK.value) {
+                createSDK(token)
+            } else if (sdkToken.value !== token) {
+                imSDK.value.updateToken(token)
+                sdkToken.value = token
+            }
+
+            clearReconnectTimer()
+            await imSDK.value?.connect()
+
+            if (!manualDisconnect.value) {
                 console.log('WebSocket连接成功')
                 isConnected.value = true
                 reconnectCount.value = 0
                 imSDK.value?.startHeartbeat()
-            })
-            .catch((error: Error) => {
+            }
+        })()
+
+        try {
+            await connectingPromise.value
+        } catch (error) {
+            if (!manualDisconnect.value) {
                 console.error('WebSocket连接失败:', error)
                 isConnected.value = false
-                if (!manualDisconnect.value) {
-                    handleReconnectError()
-                }
-            })
+                handleReconnectError()
+            }
+        } finally {
+            connectingPromise.value = null
+        }
+    }
+
+    // 初始化SDK
+    const initSDK = () => {
+        manualDisconnect.value = false
+
+        if (!userStore.token) return null
+
+        if (!imSDK.value) {
+            createSDK(userStore.token)
+        }
+
+        void connectWithCurrentToken()
 
         return imSDK.value
+    }
+
+    const reconnectWithLatestToken = async () => {
+        manualDisconnect.value = false
+        clearReconnectTimer()
+
+        if (imSDK.value) {
+            imSDK.value.stopHeartbeat()
+            imSDK.value.disconnect()
+        }
+
+        isConnected.value = false
+        await connectWithCurrentToken()
     }
 
     // 添加消息处理器
@@ -193,10 +236,8 @@ export const useIMStore = defineStore('im', () => {
         console.log('手动关闭连接')
         manualDisconnect.value = true
         
-        if (reconnectTimer.value) {
-            clearTimeout(reconnectTimer.value)
-            reconnectTimer.value = null
-        }
+        clearReconnectTimer()
+        connectingPromise.value = null
 
         if (imSDK.value) {
             imSDK.value.stopHeartbeat()
@@ -207,6 +248,7 @@ export const useIMStore = defineStore('im', () => {
         
         isConnected.value = false
         reconnectCount.value = 0
+        sdkToken.value = null
     }
 
     return {
@@ -220,6 +262,7 @@ export const useIMStore = defineStore('im', () => {
         closeConnection,
         clearHandlers,
         reconnect,
-        fetchUnreadCount
+        fetchUnreadCount,
+        reconnectWithLatestToken
     }
 }) 
