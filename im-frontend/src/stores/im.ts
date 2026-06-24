@@ -4,7 +4,6 @@ import IMSDK, { type Message, type ConnectionStatus, type MessageHandler, type C
 import { getImSdkOptions } from '@/config'
 import { useUserStore } from './user'
 import { useUnreadMessageStore } from './unreadMessage'
-import { isTokenExpiringSoon } from '@/utils/token'
 
 export const useIMStore = defineStore('im', () => {
     const imSDK = ref<IMSDK | null>(null)
@@ -110,14 +109,7 @@ export const useIMStore = defineStore('im', () => {
     }
 
     const getFreshToken = async () => {
-        const token = userStore.token
-        if (!token) return null
-
-        if (!isTokenExpiringSoon(token)) {
-            return token
-        }
-
-        return await userStore.refreshToken()
+        return await userStore.ensureValidToken({ logoutOnAuthError: true })
     }
 
     const connectWithCurrentToken = async () => {

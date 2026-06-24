@@ -18,14 +18,17 @@ interface RequestOptions {
 
 export const request = async <T>(url: string, options: RequestOptions = {}): Promise<T> => {
   const userStore = useUserStore()
+  const token = options.skipAuthRefresh
+    ? userStore.token
+    : await userStore.ensureValidToken({ logoutOnAuthError: true })
 
   const headers: Record<string, string> = {
     ...(!(options.body instanceof FormData) && { 'Content-Type': 'application/json' }),
     ...options.headers,
   }
 
-  if (userStore.token) {
-    headers.Authorization = `Bearer ${userStore.token}`
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
   }
 
   try {
@@ -41,11 +44,13 @@ export const request = async <T>(url: string, options: RequestOptions = {}): Pro
   } catch (error) {
     const status = (error as ApiError).response?.status
     if (status === 401 && !options.skipAuthRefresh) {
-      const newToken = await userStore.refreshToken()
+      const newToken = await userStore.ensureValidToken({
+        force: true,
+        logoutOnAuthError: true,
+      })
       if (newToken) {
         return request<T>(url, { ...options, skipAuthRefresh: true })
       }
-      userStore.logout()
     }
     throw error
   }

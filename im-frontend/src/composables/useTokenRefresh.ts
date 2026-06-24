@@ -1,5 +1,4 @@
 import { useUserStore } from '@/stores/user'
-import { isTokenExpiringSoon } from '@/utils/token'
 
 const CHECK_INTERVAL_MS = 60_000
 
@@ -12,14 +11,7 @@ async function checkAndRefresh() {
   }
 
   const userStore = useUserStore()
-  const token = userStore.token
-  if (!token) {
-    return
-  }
-
-  if (isTokenExpiringSoon(token)) {
-    await userStore.refreshToken()
-  }
+  await userStore.ensureValidToken({ logoutOnAuthError: true })
 }
 
 function onVisibilityChange() {
