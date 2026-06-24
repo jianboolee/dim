@@ -4,7 +4,7 @@
     <div class="options-grid">
       <div class="option-item" @click="handleImageClick">
         <div class="option-icon">
-          <i class="bi bi-image"></i>
+          <i class="ri-image-line"></i>
         </div>
         <div class="option-label">图片</div>
         <input 
@@ -18,7 +18,7 @@
       
       <div class="option-item" @click="handleVideoClick" v-if="false">
         <div class="option-icon">
-          <i class="bi bi-camera-video"></i>
+          <i class="ri-video-line"></i>
         </div>
         <div class="option-label">视频</div>
         <input 
@@ -226,28 +226,24 @@ const handleVideoChange = async (event: Event) => {
 
 <style scoped>
 .message-more-options {
-  position: relative;
-  background: white;
-  padding: 0 var(--spacing-base);
-  transform: translateY(100%);
+  overflow: hidden;
+  max-height: 0;
   opacity: 0;
-  height: 0;
-  visibility: hidden;
-  transition: all 0.3s ease;
+  border-top: 1px solid transparent;
+  transition: max-height 0.25s ease, opacity 0.2s ease, border-color 0.2s ease;
 }
 
 .message-more-options.is-active {
-  transform: translateY(0);
+  max-height: 140px;
   opacity: 1;
-  visibility: visible;
-  height: auto;
+  border-top-color: var(--border-color-light);
 }
 
 .options-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: var(--spacing-base);
-  padding: var(--spacing-base) 0;
+  padding: var(--spacing-base);
 }
 
 .option-item {

@@ -2,34 +2,19 @@
   <div class="chat-page">
     <div class="nav-bar">
       <div class="nav-bar-content">
-        <button class="back-btn" type="button" @click="router.back()">
-          <i class="bi bi-chevron-left"></i>
+        <button class="nav-side-btn back-btn" type="button" @click="handleBack">
+          <i class="ri-arrow-left-s-line"></i>
         </button>
-        <div class="user-info">
-          <div class="user-avatar">
-            <img
-              v-if="targetUser?.avatar"
-              :src="targetUser.avatar"
-              alt=""
-              @error="handleAvatarError"
-            >
-            <PlaceholderImage
-              v-else
-              bgColor="#EFF1F8"
-              text=""
-              aspect="1:1"
-            />
+        <div class="nav-bar-center">
+          <div v-if="isConnected" class="user-info">
+            <h1 class="title">{{ targetUser?.nickname || '未知用户' }}</h1>
           </div>
-          <h1 class="title">{{ targetUser?.nickname || '未知用户' }}</h1>
+          <i v-else class="ri-loader-4-line nav-reconnect-icon" aria-label="连接中"></i>
         </div>
-        <button class="btn" type="button">
-          <i class="bi bi-three-dots"></i>
+        <button class="nav-side-btn" type="button">
+          <i class="ri-more-line"></i>
         </button>
       </div>
-    </div>
-
-    <div v-if="!isConnected" class="connection-status-bar">
-      连接中，消息发送暂不可用…
     </div>
 
     <div class="message-container" @click="showMoreOptions = false">
@@ -77,23 +62,23 @@
             @enter="sendMessage"
             @focus="handleMessageInputFocus"
           />
-          <button
-            type="button"
-            class="message-input-button plus-btn"
-            :disabled="messageText.trim().length > 0"
-            @click="handlePlusClick"
-          >
-            <i v-if="!showMoreOptions" class="bi bi-plus-circle"></i>
-            <i v-else class="bi bi-x-circle"></i>
-          </button>
         </div>
+        <button
+          type="button"
+          class="addon-btn"
+          :class="{ 'is-active': showMoreOptions }"
+          aria-label="更多"
+          @click="handlePlusClick"
+        >
+          <i :class="showMoreOptions ? 'ri-close-line' : 'ri-add-line'"></i>
+        </button>
         <button
           type="button"
           class="send-btn"
           :disabled="!messageText.trim() || !isConnected"
           @click="sendMessage"
         >
-          <i class="bi bi-send-fill"></i>
+          发送
         </button>
       </div>
 
@@ -121,7 +106,6 @@ import type { UserInfo } from '@/types/user'
 import { MessageComponents } from '@/components/im'
 import MessageMoreOptions from '@/components/im/MessageMoreOptions.vue'
 import MultilineInput from '@/components/im/MultilineInput.vue'
-import PlaceholderImage from '@/components/common/PlaceholderImage.vue'
 
 interface ApiResponse<T> {
   code: number
@@ -145,6 +129,15 @@ const showMoreOptions = ref(false)
 const isConnected = computed(() => imStore.isConnected)
 const currentUserId = computed(() => userStore.userInfo?.id)
 const peerUserId = computed(() => props.userId)
+
+const handleBack = () => {
+  const back = window.history.state?.back
+  if (back != null) {
+    router.back()
+    return
+  }
+  router.replace({ name: 'im-home' })
+}
 
 const pageSize = 20
 const loading = ref(false)
@@ -375,14 +368,11 @@ const retryMessage = async (message: ChatMessage) => {
   }
 }
 
-const handleAvatarError = () => {
-  if (targetUser.value) {
-    targetUser.value.avatar = undefined
-  }
-}
-
 const handlePlusClick = () => {
   showMoreOptions.value = !showMoreOptions.value
+  if (showMoreOptions.value) {
+    nextTick(() => scrollToBottom(true, true))
+  }
 }
 
 const handleSelectFile = (_file: File, type: string, fileInfo: MediaInfo & { uploading?: boolean }) => {
@@ -559,33 +549,57 @@ onUnmounted(() => {
   padding: 0 var(--spacing-base);
 }
 
-.back-btn {
+.nav-side-btn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
   border: none;
   background: none;
-  padding: 8px 16px 8px 0;
+  padding: 0;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-color-dark);
 }
 
-.user-info {
+.nav-side-btn i {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.back-btn {
+  justify-content: flex-start;
+  width: auto;
+  padding-right: 4px;
+}
+
+.nav-bar-center {
   flex: 1;
   display: flex;
   align-items: center;
+  justify-content: center;
   min-width: 0;
 }
 
-.user-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  overflow: hidden;
-  flex-shrink: 0;
-  margin-right: var(--spacing-small);
+.nav-reconnect-icon {
+  font-size: 20px;
+  color: #1989fa;
+  animation: nav-reconnect-spin 0.8s linear infinite;
 }
 
-.user-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+@keyframes nav-reconnect-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .title {
@@ -596,14 +610,6 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.connection-status-bar {
-  padding: 8px var(--spacing-base);
-  text-align: center;
-  font-size: 13px;
-  background-color: var(--bg-color-light);
-  color: var(--warning-color);
 }
 
 .message-container {
@@ -676,8 +682,8 @@ onUnmounted(() => {
 .message-input-content {
   display: flex;
   align-items: flex-end;
-  gap: var(--spacing-small);
   flex: 1;
+  min-width: 0;
   border: 1px solid var(--border-color-light);
   background: #f6f8fc;
   border-radius: 20px;
@@ -686,48 +692,61 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-.message-input-button {
+.addon-btn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   border: none;
-  background: transparent;
+  border-radius: 50%;
+  background: #f6f8fc;
+  color: #666;
   cursor: pointer;
-  font-size: 20px;
-  margin-right: var(--spacing-small);
-  padding: 8px;
-  line-height: 1;
   display: flex;
   align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease, background 0.2s ease;
 }
 
-.message-input-button:disabled {
-  display: none;
+.addon-btn i {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.addon-btn.is-active {
+  color: #1989fa;
+  background: #e8f3ff;
+}
+
+.addon-btn:active {
+  opacity: 0.75;
 }
 
 .message-input .send-btn {
-  padding: 6px 18px;
+  flex-shrink: 0;
+  padding: 8px 16px;
   border: none;
-  border-radius: 28px;
-  background: var(--primary-color);
+  border-radius: 20px;
+  background: #1989fa;
   color: white;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
-  font-size: 14px;
-  line-height: 1.6;
-  font-weight: 600;
+  transition: opacity 0.2s ease;
+  font-size: 15px;
+  line-height: 1.4;
+  font-weight: 500;
+  min-height: 40px;
 }
 
 .message-input .send-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
-  width: 0;
-  padding: 0;
-  overflow: hidden;
 }
 
-.message-input .send-btn i {
-  font-size: 16px;
+.message-input .send-btn:not(:disabled):active {
+  opacity: 0.85;
 }
 
 .loading-spinner {

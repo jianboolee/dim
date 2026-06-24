@@ -47,7 +47,7 @@ const formattedContent = computed(() => {
 
 <style scoped>
 .message-content.message-text {
-  max-width: 80%;
+  max-width: min(80%, 768px);
   white-space: pre-line;
   position: relative;
   padding: 8px 12px;
