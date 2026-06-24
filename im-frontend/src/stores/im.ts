@@ -4,6 +4,7 @@ import IMSDK, { type Message, type ConnectionStatus, type MessageHandler, type C
 import { getImSdkOptions } from '@/config'
 import { useUserStore } from './user'
 import { useUnreadMessageStore } from './unreadMessage'
+import { usePageNotificationStore } from './pageNotification'
 
 export const useIMStore = defineStore('im', () => {
     const imSDK = ref<IMSDK | null>(null)
@@ -19,6 +20,7 @@ export const useIMStore = defineStore('im', () => {
     const baseReconnectDelay = 3000
     const userStore = useUserStore()
     const unreadMessageStore = useUnreadMessageStore()
+    const pageNotificationStore = usePageNotificationStore()
     const manualDisconnect = ref(false)
 
     const clearReconnectTimer = () => {
@@ -104,6 +106,7 @@ export const useIMStore = defineStore('im', () => {
                 message.from_id !== userStore.userInfo?.id
             ) {
                 unreadMessageStore.increment()
+                pageNotificationStore.notifyNewMessage()
             }
         })
     }

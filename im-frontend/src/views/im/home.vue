@@ -18,27 +18,15 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useIMStore } from '@/stores/im'
-import { MessageType, type Message } from '@/sdk/im'
-import { usePageTitleNotification } from '@/composables/usePageTitleNotification'
 import ConversationList from '@/components/im/ConversationList.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
 const imStore = useIMStore()
-const { notifyNewMessage } = usePageTitleNotification('消息')
-
-const onNewMessageForTitle = (message: Message) => {
-  const myId = userStore.userInfo?.id
-  if (!myId) return
-  if (message.type === MessageType.Ping || message.type === MessageType.Pong) return
-  if (message.to_id === myId && message.from_id && message.from_id !== myId) {
-    notifyNewMessage('消息')
-  }
-}
 
 onMounted(() => {
   if (!userStore.token) {
@@ -47,11 +35,6 @@ onMounted(() => {
   }
 
   imStore.initSDK()
-  imStore.addMessageHandler(onNewMessageForTitle)
-})
-
-onUnmounted(() => {
-  imStore.removeMessageHandler(onNewMessageForTitle)
 })
 </script>
 
