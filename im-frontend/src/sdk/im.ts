@@ -605,23 +605,6 @@ export enum MessageType {
     }
   
     /**
-     * 获取未读消息数
-     */
-    async getUnreadCount(): Promise<{ unread_count: number }> {
-      const response = await fetch(`${this.baseURL}/im/api/messages/unread/count`, {
-        headers: {
-          'Authorization': `Bearer ${this.token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to get unread count: ${response.statusText}`);
-      }
-
-      return response.json();
-    }
-  
-    /**
      * 标记消息为已读
      */
     async markMessageAsRead(messageID: string): Promise<boolean> {

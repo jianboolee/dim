@@ -438,7 +438,7 @@ const syncLatestMessages = async () => {
 
 const syncUnreadState = async () => {
   clearUnreadForPeer(peerUserId.value)
-  await unreadMessageStore.fetchUnreadCount({ force: true })
+  unreadMessageStore.decrement()
 }
 
 const markMessageAsRead = async (messageId: string) => {
@@ -633,7 +633,6 @@ const initChat = async () => {
   try {
     await Promise.all([fetchTargetUser(), waitForConnection()])
     await fetchHistoryMessages()
-    await unreadMessageStore.fetchUnreadCount()
   } catch (error) {
     console.error('初始化聊天失败:', error)
     showToast('连接失败，请稍后重试')

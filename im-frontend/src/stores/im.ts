@@ -31,17 +31,7 @@ export const useIMStore = defineStore('im', () => {
     }
 
     // 获取未读消息总数
-    const fetchUnreadCount = async () => {
-        try {
-            if (!imSDK.value) return
-            const response = await imSDK.value.getUnreadCount()
-            if (response) {
-                unreadMessageStore.setUnreadCount(response.unread_count)
-            }
-        } catch (error) {
-            console.error('Failed to get unread count:', error)
-        }
-    }
+    const fetchUnreadCount = async () => {}
 
     // 重连方法
     const reconnect = async () => {

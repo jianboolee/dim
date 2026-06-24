@@ -25,24 +25,13 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, computed } from 'vue'
+import { computed } from 'vue'
 import { useUnreadMessageStore } from '@/stores/unreadMessage'
-import { useUserStore } from '@/stores/user'
 const unreadMessageStore = useUnreadMessageStore()
-
-const userStore = useUserStore()
 
 // 修改模板中的未读消息数显示
 const unreadCount = computed(() => {
   return unreadMessageStore.unreadCount > 99 ? '99+' : unreadMessageStore.unreadCount
-})
-
-onMounted(() => {
-  unreadMessageStore.reset()
-
-  if (userStore.token) {
-    unreadMessageStore.fetchUnreadCount()
-  }
 })
 </script>
 
