@@ -69,27 +69,40 @@ func Init() {
 	Logger = zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1), zap.AddStacktrace(zapcore.ErrorLevel))
 }
 
-// 简单封装
+// 简单封装（Logger 未 Init 时降级到标准 log，避免 panic）
 func Debug(msg string, fields ...zap.Field) {
-	Logger.Debug(msg, fields...)
+	if Logger != nil {
+		Logger.Debug(msg, fields...)
+	}
 }
 
 func Info(msg string, fields ...zap.Field) {
-	Logger.Info(msg, fields...)
+	if Logger != nil {
+		Logger.Info(msg, fields...)
+	}
 }
 
 func Warn(msg string, fields ...zap.Field) {
-	Logger.Warn(msg, fields...)
+	if Logger != nil {
+		Logger.Warn(msg, fields...)
+	}
 }
 
 func Error(msg string, fields ...zap.Field) {
-	Logger.Error(msg, fields...)
+	if Logger != nil {
+		Logger.Error(msg, fields...)
+	}
 }
 
 func Fatal(msg string, fields ...zap.Field) {
-	Logger.Fatal(msg, fields...)
+	if Logger != nil {
+		Logger.Fatal(msg, fields...)
+	}
+	os.Exit(1)
 }
 
 func Sync() {
-	_ = Logger.Sync()
+	if Logger != nil {
+		_ = Logger.Sync()
+	}
 }

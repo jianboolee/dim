@@ -62,6 +62,8 @@ func (m *WSManager) SetMessageService(messageService *MessageService) {
 }
 
 func (m *WSManager) Run() {
+	m.startRedisSubscriber()
+
 	// 启动定时器，定期发送 ping 消息
 	ticker := time.NewTicker(m.heartbeatInterval)
 	defer ticker.Stop()
@@ -124,6 +126,49 @@ func (m *WSManager) Run() {
 			m.mutex.RUnlock()
 		}
 	}
+}
+
+// TryDeliver 尝试向本进程已连接的客户端投递消息
+func (m *WSManager) TryDeliver(userID string, message []byte) bool {
+	m.mutex.RLock()
+	client, ok := m.Clients[userID]
+	m.mutex.RUnlock()
+
+	if !ok {
+		return false
+	}
+
+	select {
+	case client.Send <- message:
+		return true
+	default:
+		log.Printf("Client send buffer full, dropping direct delivery for %s", userID)
+		return false
+	}
+}
+
+func (m *WSManager) startRedisSubscriber() {
+	if m.redisClient == nil {
+		return
+	}
+
+	pubsub := m.redisClient.Subscribe(context.Background(), wsPushChannel)
+	log.Printf("Redis subscriber listening on channel: %s", wsPushChannel)
+	go func() {
+		ch := pubsub.Channel()
+		for msg := range ch {
+			var event WSPushEvent
+			if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
+				log.Printf("Failed to unmarshal ws push event: %v", err)
+				continue
+			}
+			if m.TryDeliver(event.ReceiverID, []byte(event.Message)) {
+				log.Printf("Delivered message to %s via redis push", event.ReceiverID)
+			} else {
+				log.Printf("No connected client for %s (redis push)", event.ReceiverID)
+			}
+		}
+	}()
 }
 
 // SendMessage 发送消息给指定用户
@@ -258,16 +303,16 @@ func (c *Client) ReadPump(manager *WSManager) {
 			continue
 		}
 
-		// 发送消息到目标用户
-		manager.mutex.RLock()
-		if client, ok := manager.Clients[dbMessage.ReceiverID]; ok {
-			select {
-			case client.Send <- outMessage:
-			default:
-				close(client.Send)
-				delete(manager.Clients, dbMessage.ReceiverID)
+		// 推送给接收方（本进程或经 Redis 由 WS 进程投递）
+		if err := manager.messageService.pushToUser(context.Background(), dbMessage.ReceiverID, outMessage); err != nil {
+			log.Printf("Failed to push message to receiver: %v", err)
+		}
+
+		// 回显给发送方，便于多端同步
+		if dbMessage.SenderID != dbMessage.ReceiverID {
+			if err := manager.messageService.pushToUser(context.Background(), dbMessage.SenderID, outMessage); err != nil {
+				log.Printf("Failed to push message to sender: %v", err)
 			}
 		}
-		manager.mutex.RUnlock()
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.uber.org/zap"
 
@@ -21,6 +22,7 @@ type MessageService struct {
 	conversationService *ConversationService
 	sessionService      *SessionService
 	wsManager           *WSManager
+	redisClient         *redis.Client
 }
 
 // NewMessageService 创建消息服务
@@ -30,6 +32,7 @@ func NewMessageService(
 	conversationService *ConversationService,
 	sessionService *SessionService,
 	wsManager *WSManager,
+	redisClient *redis.Client,
 ) *MessageService {
 	return &MessageService{
 		repo:                repo,
@@ -37,6 +40,7 @@ func NewMessageService(
 		conversationService: conversationService,
 		sessionService:      sessionService,
 		wsManager:           wsManager,
+		redisClient:         redisClient,
 	}
 }
 
@@ -47,7 +51,13 @@ func (s *MessageService) SendMessageHTTP(ctx context.Context, senderID string, r
 		return nil, err
 	}
 
-	go s.SendMessageWithWs(ctx, receiverID, message)
+	// 异步推送不可使用 HTTP 请求 context（响应结束后会被 cancel）
+	go func(msg *models.Message, toUserID string) {
+		if err := s.SendMessageWithWs(context.Background(), toUserID, msg); err != nil {
+			logger.Error("failed to push message via ws", zap.String("receiver_id", toUserID), zap.Error(err))
+		}
+	}(message, receiverID)
+
 	return message, nil
 }
 
@@ -101,28 +111,40 @@ func (s *MessageService) SendMessage(
 	return result, nil
 }
 
-// SendMessageWithWs 通过 WebSocket 发送消息
+// SendMessageWithWs 将消息推送给在线用户（本进程 WS 或经 Redis 转发到 WS 进程）
 func (s *MessageService) SendMessageWithWs(ctx context.Context, receiverID string, message *models.Message) error {
-	if s.wsManager == nil {
-		return fmt.Errorf("wsManager is not initialized")
-	}
-
-	// 检查在线状态
-	online, err := s.sessionService.IsOnline(receiverID)
-	if err != nil {
-		return fmt.Errorf("failed to check online status: %w", err)
-	}
-
-	if !online {
-		return nil
-	}
-
-	// 发送消息
 	messageBytes, err := json.Marshal(message)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
-	return s.wsManager.SendMessage(receiverID, messageBytes)
+	return s.pushToUser(ctx, receiverID, messageBytes)
+}
+
+func (s *MessageService) pushToUser(ctx context.Context, receiverID string, messageBytes []byte) error {
+	if receiverID == "" {
+		return nil
+	}
+
+	// 同进程直连（cmd/server 单进程模式）
+	if s.wsManager != nil && s.wsManager.TryDeliver(receiverID, messageBytes) {
+		return nil
+	}
+
+	// 跨进程：API server → Redis → WS server
+	if s.redisClient == nil {
+		return nil
+	}
+
+	event := WSPushEvent{
+		ReceiverID: receiverID,
+		Message:    json.RawMessage(messageBytes),
+	}
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("failed to marshal ws push event: %w", err)
+	}
+
+	return s.redisClient.Publish(context.Background(), wsPushChannel, payload).Err()
 }
 
 // GetMessages 获取消息列表
@@ -205,15 +227,31 @@ func (s *MessageService) ProcessWebSocketMessage(
 	senderID string,
 	message []byte,
 ) (*models.Message, error) {
-
-	var inMessage models.Message
-	if err := json.Unmarshal(message, &inMessage); err != nil {
+	var raw struct {
+		ReceiverID string              `json:"receiver_id"`
+		ToID       string              `json:"to_id"`
+		Content    string              `json:"content"`
+		Type       models.MessageType  `json:"type"`
+		Payload    *models.Payload     `json:"payload"`
+	}
+	if err := json.Unmarshal(message, &raw); err != nil {
 		return nil, err
 	}
 
-	inMessage.SenderID = senderID
+	receiverID := raw.ReceiverID
+	if receiverID == "" {
+		receiverID = raw.ToID
+	}
+	if receiverID == "" {
+		return nil, fmt.Errorf("receiver_id is required")
+	}
 
-	result, err := s.SendMessage(ctx, senderID, inMessage.ReceiverID, inMessage.Content, &inMessage.Type, inMessage.Payload)
+	msgType := raw.Type
+	if msgType == "" {
+		msgType = models.MessageTypeText
+	}
+
+	result, err := s.SendMessage(ctx, senderID, receiverID, raw.Content, &msgType, raw.Payload)
 	if err != nil {
 		return nil, err
 	}

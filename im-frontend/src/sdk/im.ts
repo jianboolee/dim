@@ -103,8 +103,19 @@ export enum MessageType {
   }
 
   function normalizeMessage(raw: Record<string, unknown>): Message {
+    let id: string | undefined
+    if (raw.id != null) {
+      if (typeof raw.id === 'string') {
+        id = raw.id
+      } else if (typeof raw.id === 'object' && raw.id !== null && '$oid' in raw.id) {
+        id = String((raw.id as { $oid: string }).$oid)
+      } else {
+        id = String(raw.id)
+      }
+    }
+
     return {
-      id: raw.id != null ? String(raw.id) : undefined,
+      id,
       from_id: String(raw.sender_id ?? raw.from_id ?? ''),
       to_id: String(raw.receiver_id ?? raw.to_id ?? ''),
       type: (raw.type as MessageType) ?? MessageType.Text,
@@ -215,6 +226,9 @@ export enum MessageType {
         
         this.ws.onmessage = (event: MessageEvent) => {
           const raw = JSON.parse(event.data);
+          if (raw?.type === MessageType.Ping || raw?.type === MessageType.Pong) {
+            return;
+          }
           const message = normalizeMessage(raw);
           this._notifyMessageHandlers(message);
         };

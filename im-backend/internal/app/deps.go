@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"log"
 
 	"github.com/gin-gonic/gin"
@@ -31,6 +32,12 @@ type Dependencies struct {
 }
 
 func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.Client, withWS bool) *Dependencies {
+	if redisClient != nil {
+		if err := redisClient.Ping(context.Background()).Err(); err != nil {
+			log.Printf("WARNING: Redis ping failed: %v (split API/WS real-time push requires Redis)", err)
+		}
+	}
+
 	jwtService, err := jwtpkg.InitService(cfg.JWT.Secret, cfg.JWT.Expire, cfg.JWT.Issuer)
 	if err != nil {
 		log.Fatal("Failed to initialize JWT service:", err)
@@ -56,10 +63,10 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 
 	if withWS {
 		wsManager = service.NewWSManager(redisClient, sessionService)
-		messageService = service.NewMessageService(messageRepo, conversationRepo, conversationService, sessionService, wsManager)
+		messageService = service.NewMessageService(messageRepo, conversationRepo, conversationService, sessionService, wsManager, redisClient)
 		wsManager.SetMessageService(messageService)
 	} else {
-		messageService = service.NewMessageService(messageRepo, conversationRepo, conversationService, sessionService, nil)
+		messageService = service.NewMessageService(messageRepo, conversationRepo, conversationService, sessionService, nil, redisClient)
 	}
 
 	deps := &Dependencies{
