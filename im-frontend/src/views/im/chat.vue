@@ -218,7 +218,7 @@ const currentUserId = computed(() => userStore.userInfo?.id)
 const conversationId = computed(() => props.conversationId)
 const hasSelectedConversation = computed(() => Boolean(conversationId.value))
 const inputMinRows = computed(() => (isMobileViewport.value ? 1 : 2))
-const inputMaxRows = computed(() => (isMobileViewport.value ? 4 : 6))
+const inputMaxRows = computed(() => (isMobileViewport.value ? 10 : 15))
 const timelineItems = computed(() => buildMessageTimeline(messages.value))
 const peerUserId = computed(
   () =>
