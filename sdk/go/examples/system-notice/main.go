@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -13,12 +15,12 @@ import (
 	"d-im-go-sdk/examples/demo"
 )
 
+var FromUser = demo.USER_SYSTEM_NOTICE
+var ToUser = demo.USER_A
+
 type output struct {
-	Token          string `json:"token"`
-	ExpiresIn      int    `json:"expires_in"`
-	ConversationID string `json:"conversation_id"`
-	RedirectURL    string `json:"redirect_url"`
-	// Conversation   dim.Conversation `json:"conversation"`
+	ConversationID string      `json:"conversation_id"`
+	Message        dim.Message `json:"message"`
 }
 
 func main() {
@@ -43,32 +45,33 @@ func main() {
 	})
 
 	session, err := integrationClient.CreateConversation(ctx, dim.CreateConversationRequest{
-		FromUser: demo.USER_A,
-		ToUser:   demo.USER_B,
+		FromUser: FromUser,
+		ToUser:   ToUser,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// userClient := dim.NewUserClient(dim.Config{
-	// 	BaseURL: apiBase,
-	// 	Token:   session.Token,
-	// })
+	userClient := dim.NewUserClient(dim.Config{
+		BaseURL: apiBase,
+		Token:   session.Token,
+	})
 
-	// conversation, err := userClient.OpenConversation(ctx, session.ConversationID)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	// 生成 1000-9999 之间的随机数（保证4位）
+	randomNum := rand.Intn(9000) + 1000
+
+	content := fmt.Sprintf("%d 你好，这是一条系统通知，当前时间是: %s", randomNum, time.Now().Format("2006-01-02 15:04:05"))
+	message, err := userClient.SendTextMessage(ctx, session.ConversationID, content)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(output{
-		Token:          session.Token,
-		ExpiresIn:      session.ExpiresIn,
 		ConversationID: session.ConversationID,
-		RedirectURL:    session.RedirectURL,
-		// Conversation:   *conversation,
+		Message:        *message,
 	}); err != nil {
 		log.Fatal(err)
 	}

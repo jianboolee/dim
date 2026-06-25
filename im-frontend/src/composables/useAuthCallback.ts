@@ -28,7 +28,7 @@ export function useAuthCallback() {
 
       // 无 conversation_id：进入会话列表
       if (!conversationId) {
-        await router.replace({ name: 'im-home' })
+        await router.replace({ name: 'im-chat-index' })
         imStore.initSDK()
         return
       }

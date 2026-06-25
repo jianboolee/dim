@@ -13,13 +13,7 @@ import (
 	"d-im-go-sdk/examples/demo"
 )
 
-type output struct {
-	Token          string `json:"token"`
-	ExpiresIn      int    `json:"expires_in"`
-	ConversationID string `json:"conversation_id"`
-	RedirectURL    string `json:"redirect_url"`
-	// Conversation   dim.Conversation `json:"conversation"`
-}
+var LOGIN_USER = demo.USER_B
 
 func main() {
 	apiBase := envOr("IM_API_BASE", "http://localhost:8901")
@@ -33,43 +27,25 @@ func main() {
 		log.Fatal("INTEGRATION_API_KEY is required (flag -key or env)")
 	}
 
-	apiBase = strings.TrimRight(apiBase, "/")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	integrationClient := dim.NewIntegrationClient(dim.Config{
-		BaseURL: apiBase,
+		BaseURL: strings.TrimRight(apiBase, "/"),
 		APIKey:  integrationKey,
 	})
 
-	session, err := integrationClient.CreateConversation(ctx, dim.CreateConversationRequest{
-		FromUser: demo.USER_A,
-		ToUser:   demo.USER_B,
+	session, err := integrationClient.Login(ctx, dim.LoginRequest{
+		User: LOGIN_USER,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// userClient := dim.NewUserClient(dim.Config{
-	// 	BaseURL: apiBase,
-	// 	Token:   session.Token,
-	// })
-
-	// conversation, err := userClient.OpenConversation(ctx, session.ConversationID)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(output{
-		Token:          session.Token,
-		ExpiresIn:      session.ExpiresIn,
-		ConversationID: session.ConversationID,
-		RedirectURL:    session.RedirectURL,
-		// Conversation:   *conversation,
-	}); err != nil {
+	if err := encoder.Encode(session); err != nil {
 		log.Fatal(err)
 	}
 }

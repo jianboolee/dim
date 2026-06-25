@@ -10,9 +10,8 @@ import (
 	"time"
 
 	dim "d-im-go-sdk"
+	"d-im-go-sdk/examples/demo"
 )
-
-const ossAvatarSuffix = "?x-oss-process=image/resize,m_fill,w_200,h_200"
 
 var (
 	firstNames = []string{
@@ -107,9 +106,9 @@ func main() {
 func parseConfig() config {
 	apiBase := envOr("IM_API_BASE", "http://localhost:8901")
 	integrationKey := envOr("INTEGRATION_API_KEY", "")
-	toUserID := envOr("TO_USER_ID", "user_b")
-	toNickname := envOr("TO_USER_NICKNAME", "Brock")
-	toAvatar := envOr("TO_USER_AVATAR", "https://oss.21rv.com/uploads/images/20260624/mznepycjzlgsonoph9fi4lw6d82mezb1.jpg"+ossAvatarSuffix)
+	toUserID := envOr("TO_USER_ID", demo.USER_A.ID)
+	toNickname := envOr("TO_USER_NICKNAME", demo.USER_A.Nickname)
+	toAvatar := envOr("TO_USER_AVATAR", demo.USER_A.Avatar)
 
 	var (
 		flagAPIBase  string
@@ -163,7 +162,7 @@ func mockAvatarURL(index int) string {
 	if index > 100 {
 		index = ((index - 1) % 100) + 1
 	}
-	return fmt.Sprintf("https://oss.21rv.com/mock/images/%d.jpg%s", index, ossAvatarSuffix)
+	return fmt.Sprintf("https://oss.21rv.com/mock/images/%d.jpg%s", index, demo.AvatarSuffix)
 }
 
 func envOr(key, fallback string) string {

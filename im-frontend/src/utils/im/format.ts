@@ -44,12 +44,12 @@ export function normalizeUnreadCount(count: number): number {
   return Math.max(0, Math.floor(count))
 }
 
-/** 会话列表未读角标：0 不展示，超过 99 显示 99 */
+/** 会话列表未读角标：0 不展示，超过 99 显示 99+ */
 export function formatUnreadBadge(count: number): string {
   const normalized = normalizeUnreadCount(count)
   if (normalized <= 0) {
     return ''
   }
 
-  return normalized > 99 ? '99' : String(normalized)
+  return normalized > 99 ? '99+' : String(normalized)
 }

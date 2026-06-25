@@ -122,7 +122,6 @@ const {
   handleIncomingMessage,
   clearUnreadForPeer,
   ensureConversationInList,
-  openConversationInList,
   requestScrollToConversation,
   pendingScrollRequest,
 } = useConversationList()
@@ -197,7 +196,6 @@ const selectConversation = async (item: { id: string; peerId: string; conversati
   if (!item.id) return
 
   if (props.searchMode && item.id === props.activeConversationId) {
-    await openConversationInList(item.id)
     clearUnreadForPeer(item.peerId)
     requestScrollToConversation(item.id)
     emit('select', item.id)
@@ -207,7 +205,7 @@ const selectConversation = async (item: { id: string; peerId: string; conversati
   if (item.id === props.activeConversationId) {
     emit('select', '')
     if (props.navigateMode === 'none') return
-    const emptyLocation = { name: 'im-chat-empty' as const }
+    const emptyLocation = { name: 'im-chat-index' as const }
     if (props.navigateMode === 'replace') {
       router.replace(emptyLocation)
       return
@@ -216,8 +214,6 @@ const selectConversation = async (item: { id: string; peerId: string; conversati
     return
   }
 
-  await openConversationInList(item.id)
-  requestScrollToConversation(item.id)
   clearUnreadForPeer(item.peerId)
   emit('select', item.id)
 

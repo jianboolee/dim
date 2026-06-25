@@ -182,20 +182,15 @@ func (r *ConversationRepository) UpdateUnreadCount(
 	delta int,
 ) error {
 	field := "user_states." + userID + ".unread_count"
-
-	update := mongo.Pipeline{
-		{{Key: "$set", Value: bson.M{
-			field: bson.M{"$max": bson.A{
-				0,
-				bson.M{"$add": bson.A{
-					bson.M{"$ifNull": bson.A{"$" + field, 0}},
-					delta,
-				}},
-			}},
-		}}},
+	filter := bson.M{"_id": id}
+	if delta < 0 {
+		filter[field] = bson.M{"$gt": 0}
 	}
 
-	filter := bson.M{"_id": id}
+	update := bson.M{
+		"$inc": bson.M{field: delta},
+	}
+
 	_, err := r.collection.UpdateOne(ctx, filter, update)
 	return err
 }

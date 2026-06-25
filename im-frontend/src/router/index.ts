@@ -35,7 +35,7 @@ const router = createRouter({
         },
         {
           path: 'chat',
-          name: 'im-chat-empty',
+          name: 'im-chat-index',
           component: () => import('@/views/im/chat.vue'),
           props: { conversationId: '' },
         },
