@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log"
+	"log/slog"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -14,6 +15,7 @@ import (
 	"d-im/internal/repository"
 	"d-im/internal/router"
 	"d-im/internal/service"
+	"d-im/internal/upload"
 	jwtpkg "d-im/pkg/jwt"
 )
 
@@ -29,6 +31,7 @@ type Dependencies struct {
 	UserHandler           *handler.UserHandler
 	AuthHandler           *handler.AuthHandler
 	IntegrationHandler    *handler.IntegrationHandler
+	UploadHandler         *upload.Handler
 	WSHandler             *handler.WSHandler
 	WSManager             *service.WSManager
 }
@@ -59,6 +62,7 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 		jwtService,
 		cfg.App.FrontendBaseURL,
 	)
+	uploadHandler := newUploadHandler(cfg)
 
 	var wsManager *service.WSManager
 	var messageService *service.MessageService
@@ -83,6 +87,7 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 		UserHandler:           handler.NewUserHandler(userService),
 		AuthHandler:           handler.NewAuthHandler(jwtService),
 		IntegrationHandler:    handler.NewIntegrationHandler(integrationService),
+		UploadHandler:         uploadHandler,
 		WSManager:             wsManager,
 	}
 
@@ -91,6 +96,24 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 	}
 
 	return deps
+}
+
+func newUploadHandler(cfg *config.Config) *upload.Handler {
+	storageCfg := &upload.StorageConfig{
+		Endpoint:        cfg.Storage.OSSEndpoint,
+		AccessKeyID:     cfg.Storage.OSSAccessKeyID,
+		AccessKeySecret: cfg.Storage.OSSAccessKeySecret,
+		BucketName:      cfg.Storage.OSSBucketName,
+		CustomDomain:    cfg.Storage.OSSCustomDomain,
+		Directory:       cfg.Storage.OSSDirectory,
+	}
+
+	ossClient, err := upload.NewOSSClient(storageCfg, slog.Default())
+	if err != nil {
+		log.Printf("WARNING: upload storage disabled: %v", err)
+	}
+
+	return upload.NewHandler(upload.NewService(ossClient))
 }
 
 func (d *Dependencies) SetupAPIRouter() *gin.Engine {
@@ -102,6 +125,7 @@ func (d *Dependencies) SetupAPIRouter() *gin.Engine {
 		d.UserHandler,
 		d.AuthHandler,
 		d.IntegrationHandler,
+		d.UploadHandler,
 		d.JWTAuthMiddleware,
 		d.JWTRefreshMiddleware,
 		d.IntegrationMiddleware,

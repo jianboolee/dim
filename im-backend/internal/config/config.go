@@ -24,13 +24,21 @@ type Config struct {
 		DB       int
 	}
 	JWT struct {
-		Secret      string
-		Expire      int
-		MaxSession  int
-		Issuer      string
+		Secret     string
+		Expire     int
+		MaxSession int
+		Issuer     string
 	}
 	Integration struct {
 		APIKey string
+	}
+	Storage struct {
+		OSSEndpoint        string
+		OSSAccessKeyID     string
+		OSSAccessKeySecret string
+		OSSBucketName      string
+		OSSCustomDomain    string
+		OSSDirectory       string
 	}
 }
 
@@ -58,6 +66,13 @@ func LoadConfig() (*Config, error) {
 
 	viper.SetDefault("APP_NAME", "d-im")
 	viper.SetDefault("APP_DEFAULT_AVATAR", "")
+
+	viper.SetDefault("OSS_ENDPOINT", "")
+	viper.SetDefault("OSS_ACCESS_KEY_ID", "")
+	viper.SetDefault("OSS_ACCESS_KEY_SECRET", "")
+	viper.SetDefault("OSS_BUCKET_NAME", "")
+	viper.SetDefault("OSS_CUSTOM_DOMAIN", "")
+	viper.SetDefault("OSS_DIRECTORY", "uploads")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
@@ -90,6 +105,13 @@ func LoadConfig() (*Config, error) {
 	if cfg.App.DefaultAvatar == "" {
 		cfg.App.DefaultAvatar = viper.GetString("DEFAULT_AVATAR")
 	}
+
+	cfg.Storage.OSSEndpoint = viper.GetString("OSS_ENDPOINT")
+	cfg.Storage.OSSAccessKeyID = viper.GetString("OSS_ACCESS_KEY_ID")
+	cfg.Storage.OSSAccessKeySecret = viper.GetString("OSS_ACCESS_KEY_SECRET")
+	cfg.Storage.OSSBucketName = viper.GetString("OSS_BUCKET_NAME")
+	cfg.Storage.OSSCustomDomain = viper.GetString("OSS_CUSTOM_DOMAIN")
+	cfg.Storage.OSSDirectory = viper.GetString("OSS_DIRECTORY")
 
 	return cfg, nil
 }

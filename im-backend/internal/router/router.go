@@ -8,6 +8,7 @@ import (
 
 	"d-im/internal/config"
 	"d-im/internal/handler"
+	"d-im/internal/upload"
 )
 
 // SetupAPI 设置API路由
@@ -19,6 +20,7 @@ func SetupAPI(
 	userHandler *handler.UserHandler,
 	authHandler *handler.AuthHandler,
 	integrationHandler *handler.IntegrationHandler,
+	uploadHandler *upload.Handler,
 	jwtAuthMiddleware gin.HandlerFunc,
 	jwtRefreshMiddleware gin.HandlerFunc,
 	integrationAPIKeyMiddleware gin.HandlerFunc,
@@ -51,6 +53,7 @@ func SetupAPI(
 
 		api.GET("/messages/unread/count", messageHandler.GetUnreadCount)
 		api.PUT("/messages/:id/read", messageHandler.MarkMessageAsRead)
+		api.POST("/uploads", uploadHandler.UploadImages)
 
 		api.GET("/conversations", conversationHandler.GetUserConversations)
 		api.GET("/conversations/:id/messages", messageHandler.GetMessagesByConversationID)

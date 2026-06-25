@@ -10,7 +10,7 @@
         <input
           ref="imageInputRef"
           type="file"
-          accept="image/*"
+          accept=".jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp"
           class="hidden-input"
           @change="handleImageChange"
         >
@@ -27,6 +27,7 @@ import { takeInputFile, readImageDimensions, getFileFormat } from '@/utils/file'
 import { uploadIMFile } from '@/utils/upload'
 
 const IMAGE_MAX_SIZE = 10 * 1024 * 1024
+const IMAGE_ALLOWED_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp'])
 
 type PendingMediaInfo = MediaInfo & { uploading?: boolean }
 
@@ -56,6 +57,20 @@ function assertFileSize(file: File, maxBytes: number, message: string): boolean 
     return true
   }
   showToast(message)
+  return false
+}
+
+function getFileExtension(file: File): string {
+  const name = file.name.trim().toLowerCase()
+  const ext = name.includes('.') ? name.split('.').pop() : ''
+  return ext ?? ''
+}
+
+function assertImageExtension(file: File): boolean {
+  if (IMAGE_ALLOWED_EXTENSIONS.has(getFileExtension(file))) {
+    return true
+  }
+  showToast('仅支持 JPG、PNG、GIF、WEBP 图片')
   return false
 }
 
@@ -96,6 +111,7 @@ async function uploadImage(file: File) {
 async function handleImageChange(event: Event) {
   const file = takeInputFile(event)
   if (!file) return
+  if (!assertImageExtension(file)) return
   if (!assertFileSize(file, IMAGE_MAX_SIZE, '图片大小不能超过10MB')) return
 
   await uploadImage(file)
