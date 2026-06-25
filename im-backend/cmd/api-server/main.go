@@ -44,10 +44,6 @@ func main() {
 		log.Fatal("Failed to init indexes:", err)
 	}
 
-	if err := bootstrap.InitSeed(cfg); err != nil {
-		log.Fatal("Failed to init seed:", err)
-	}
-
 	r := deps.SetupAPIRouter()
 
 	srv := &http.Server{

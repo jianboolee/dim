@@ -1,11 +1,11 @@
 <template>
-  <div class="conversation-list-root" :class="{ 'is-embedded': embedded }">
-    <div v-if="loading" class="state-block">
+  <div ref="rootRef" class="conversation-list-root" :class="{ 'is-embedded': embedded }">
+    <div v-if="displayLoading" class="state-block">
       <div class="spinner"></div>
     </div>
 
     <div v-else class="conversation-list" @scroll="handleScroll">
-      <div v-if="error" class="inline-error">
+      <div v-if="displayError" class="inline-error">
         <div class="inline-error-main">
           <i class="ri-error-warning-line"></i>
           <span>{{ errorText }}</span>
@@ -16,6 +16,7 @@
       <div
         v-for="item in conversationItems"
         :key="item.id"
+        :data-conversation-id="item.id"
         class="conversation-item"
         :class="{ 'is-active': activeConversationId === item.id }"
         @click="selectConversation(item)"
@@ -46,12 +47,12 @@
         </div>
       </div>
 
-      <div v-if="conversationItems.length === 0 && !error" class="empty-state">
-        <i class="ri-chat-3-line"></i>
-        <p>暂无消息</p>
+      <div v-if="conversationItems.length === 0 && !displayError" class="empty-state">
+        <i :class="isSearching ? 'ri-search-line' : 'ri-chat-3-line'"></i>
+        <p>{{ emptyText }}</p>
       </div>
 
-      <div v-else-if="loadingMore" class="list-footer">
+      <div v-else-if="displayLoadingMore" class="list-footer">
         <div class="spinner"></div>
       </div>
     </div>
@@ -59,7 +60,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useIMStore } from '@/stores/im'
 import { useConversationList } from '@/composables/useConversationList'
@@ -71,6 +72,7 @@ import {
 } from '@/utils/im/format'
 import { getPeerUserId, getUnreadCount } from '@/utils/im/conversation'
 import PlaceholderImage from '@/components/common/PlaceholderImage.vue'
+import type { Conversation } from '@/sdk/im'
 
 const props = withDefaults(
   defineProps<{
@@ -80,11 +82,17 @@ const props = withDefaults(
     embedded?: boolean
     /** 点击会话后的路由行为：home 用 push，侧栏用 replace */
     navigateMode?: 'push' | 'replace' | 'none'
+    /** 会话搜索关键词 */
+    searchKeyword?: string
+    /** 仅用于搜索场景：空关键词时不展示普通会话 */
+    searchMode?: boolean
   }>(),
   {
     activeConversationId: '',
     embedded: false,
     navigateMode: 'push',
+    searchKeyword: '',
+    searchMode: false,
   },
 )
 
@@ -97,29 +105,65 @@ const imStore = useIMStore()
 
 const {
   conversations,
+  searchResults,
   loading,
   loadingMore,
+  searching,
+  searchingMore,
   error,
+  searchError,
   hasMore,
+  searchHasMore,
   currentUserId,
   loadConversations,
   loadMoreConversations,
+  searchConversations,
+  loadMoreSearchConversations,
   handleIncomingMessage,
   clearUnreadForPeer,
+  ensureConversationInList,
+  openConversationInList,
+  requestScrollToConversation,
+  pendingScrollRequest,
 } = useConversationList()
 
 const { userMap, fetchUsers, mergeUsers } = useUserProfiles()
+const rootRef = ref<HTMLElement | null>(null)
+let searchTimer: number | undefined
+
+const normalizedSearchKeyword = computed(() => props.searchKeyword.trim())
+const isSearching = computed(() => props.searchMode || normalizedSearchKeyword.value.length > 0)
+const hasSearchKeyword = computed(() => normalizedSearchKeyword.value.length > 0)
+const displayConversations = computed(() => (
+  isSearching.value ? searchResults.value : conversations.value
+))
+const displayLoading = computed(() => (
+  isSearching.value ? hasSearchKeyword.value && searching.value : loading.value
+))
+const displayLoadingMore = computed(() => (
+  isSearching.value ? searchingMore.value : loadingMore.value
+))
+const displayError = computed(() => (isSearching.value ? searchError.value : error.value))
+const displayHasMore = computed(() => (isSearching.value ? searchHasMore.value : hasMore.value))
 
 const errorText = computed(() => {
-  if (error.value === '未登录') return '登录状态已失效'
-  if (error.value === '加载更多会话失败') return '加载更多失败'
+  if (displayError.value === '未登录') return '登录状态已失效'
+  if (displayError.value === '加载更多会话失败' || displayError.value === '加载更多搜索会话失败') {
+    return '加载更多失败'
+  }
+  if (displayError.value === '搜索会话失败') return '搜索失败'
   return '会话列表加载失败'
+})
+
+const emptyText = computed(() => {
+  if (!isSearching.value) return '暂无消息'
+  return hasSearchKeyword.value ? '没有找到相关会话' : '搜索联系人或用户 ID'
 })
 
 const conversationItems = computed(() => {
   const uid = currentUserId.value
 
-  return conversations.value.map((conversation) => {
+  return displayConversations.value.map((conversation) => {
     const peerId = getPeerUserId(conversation, uid)
     const profile = conversation.to_user_info ?? userMap.value[peerId]
     const unreadCount = getUnreadCount(conversation, uid)
@@ -127,6 +171,7 @@ const conversationItems = computed(() => {
     return {
       id: conversation.id,
       peerId,
+      conversation,
       avatar: profile?.avatar,
       displayName: profile?.nickname ?? (peerId ? `用户${peerId.slice(-4)}` : '未知用户'),
       lastMessagePreview: formatLastMessagePreview(conversation.last_message),
@@ -140,8 +185,24 @@ const conversationItems = computed(() => {
   })
 })
 
-const selectConversation = (item: { id: string; peerId: string }) => {
+const scrollToConversation = (conversationId: string) => {
+  window.requestAnimationFrame(() => {
+    const items = rootRef.value?.querySelectorAll<HTMLElement>('.conversation-item') ?? []
+    const target = Array.from(items).find((item) => item.dataset.conversationId === conversationId)
+    target?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  })
+}
+
+const selectConversation = async (item: { id: string; peerId: string; conversation: Conversation }) => {
   if (!item.id) return
+
+  if (props.searchMode && item.id === props.activeConversationId) {
+    await openConversationInList(item.id)
+    clearUnreadForPeer(item.peerId)
+    requestScrollToConversation(item.id)
+    emit('select', item.id)
+    return
+  }
 
   if (item.id === props.activeConversationId) {
     emit('select', '')
@@ -155,6 +216,8 @@ const selectConversation = (item: { id: string; peerId: string }) => {
     return
   }
 
+  await openConversationInList(item.id)
+  requestScrollToConversation(item.id)
   clearUnreadForPeer(item.peerId)
   emit('select', item.id)
 
@@ -178,19 +241,29 @@ const onIncomingMessage = async (message: Parameters<typeof handleIncomingMessag
 }
 
 const refresh = async () => {
+  if (isSearching.value) {
+    await searchConversations(normalizedSearchKeyword.value)
+    mergeUsers(searchResults.value.map((conversation) => conversation.to_user_info))
+    return
+  }
   await loadConversations()
   mergeUsers(conversations.value.map((conversation) => conversation.to_user_info))
 }
 
 const loadMore = async () => {
-  if (!hasMore.value || loadingMore.value) return
+  if (!displayHasMore.value || displayLoadingMore.value) return
+  if (isSearching.value) {
+    await loadMoreSearchConversations()
+    mergeUsers(searchResults.value.map((conversation) => conversation.to_user_info))
+    return
+  }
   await loadMoreConversations()
   mergeUsers(conversations.value.map((conversation) => conversation.to_user_info))
 }
 
 const handleScroll = (event: Event) => {
   const target = event.target as HTMLElement
-  if (!target || loading.value || loadingMore.value || !hasMore.value) return
+  if (!target || displayLoading.value || displayLoadingMore.value || !displayHasMore.value) return
 
   const distanceToBottom = target.scrollHeight - target.scrollTop - target.clientHeight
   if (distanceToBottom < 80) {
@@ -201,19 +274,47 @@ const handleScroll = (event: Event) => {
 onMounted(async () => {
   imStore.initSDK()
   imStore.addMessageHandler(onIncomingMessage)
+  if (props.searchMode && !hasSearchKeyword.value) return
   await refresh()
 })
 
 onUnmounted(() => {
+  if (searchTimer) {
+    window.clearTimeout(searchTimer)
+  }
   imStore.removeMessageHandler(onIncomingMessage)
 })
 
 watch(
   () => imStore.imSDK,
   (sdk, prev) => {
+    if (props.searchMode && !hasSearchKeyword.value) return
     if (sdk && !prev && conversations.value.length === 0 && !loading.value) {
       void refresh()
     }
+  },
+)
+
+watch(
+  normalizedSearchKeyword,
+  (keyword) => {
+    if (searchTimer) {
+      window.clearTimeout(searchTimer)
+    }
+    searchTimer = window.setTimeout(async () => {
+      await searchConversations(keyword)
+      mergeUsers(searchResults.value.map((conversation) => conversation.to_user_info))
+    }, keyword ? 300 : 0)
+  },
+)
+
+watch(
+  pendingScrollRequest,
+  async (request) => {
+    if (!request?.conversationId) return
+    await ensureConversationInList(request.conversationId)
+    await nextTick()
+    scrollToConversation(request.conversationId)
   },
 )
 
@@ -322,11 +423,11 @@ defineExpose({ refresh })
 }
 
 .is-embedded .conversation-item:hover {
-  background: var(--bg-color-gray);
+  background: white;
 }
 
 .is-embedded .conversation-item.is-active {
-  background: white;
+  background: var(--bg-color-gray);
 }
 
 .conversation-list-root:not(.is-embedded) .conversation-item {

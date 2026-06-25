@@ -65,6 +65,28 @@ func (h *ConversationHandler) GetConversation(c *gin.Context) {
 	response.Success(c, "success", conversation)
 }
 
+func (h *ConversationHandler) OpenConversation(c *gin.Context) {
+	conversationID := c.Param("id")
+	objID, err := primitive.ObjectIDFromHex(conversationID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid conversation ID"})
+		return
+	}
+
+	currentUserID := contextx.MustGetUserID(c)
+	conversation, err := h.conversationService.OpenConversation(c.Request.Context(), objID, currentUserID)
+	if err != nil {
+		if errors.Is(err, service.ErrConversationAccessDenied) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open conversation"})
+		return
+	}
+
+	response.Success(c, "success", conversation)
+}
+
 // GetUserConversations 获取用户的所有会话
 func (h *ConversationHandler) GetUserConversations(c *gin.Context) {
 	senderID := contextx.MustGetUserID(c)
@@ -76,7 +98,7 @@ func (h *ConversationHandler) GetUserConversations(c *gin.Context) {
 		return
 	}
 
-	conversations, err := h.conversationService.GetUserConversations(c.Request.Context(), senderID, query.Limit, query.Cursor)
+	conversations, err := h.conversationService.GetUserConversations(c.Request.Context(), senderID, query.Limit, query.Cursor, query.Q)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidConversationCursor) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid cursor"})

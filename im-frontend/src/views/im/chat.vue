@@ -4,11 +4,15 @@
       <aside class="chat-sidebar">
         <div class="sidebar-header">
           <span class="sidebar-title">消息</span>
-          <button class="sidebar-icon-btn" type="button" aria-label="搜索会话">
+          <button class="sidebar-icon-btn" type="button" aria-label="搜索会话" @click="openConversationSearch">
             <i class="ri-search-line"></i>
           </button>
         </div>
-        <ConversationList embedded navigate-mode="replace" :active-conversation-id="conversationId" />
+        <ConversationList
+          embedded
+          navigate-mode="replace"
+          :active-conversation-id="conversationId"
+        />
         <div ref="sidebarMenuRef" class="sidebar-footer">
           <button
             class="sidebar-menu-btn"
@@ -149,6 +153,11 @@
         </div>
       </div>
     </div>
+    <ConversationSearchModal
+      v-model="showConversationSearch"
+      navigate-mode="replace"
+      :active-conversation-id="conversationId"
+    />
   </div>
 </template>
 
@@ -170,6 +179,7 @@ import { MessageComponents } from '@/components/im'
 import MessageMoreOptions from '@/components/im/MessageMoreOptions.vue'
 import MultilineInput from '@/components/im/MultilineInput.vue'
 import ConversationList from '@/components/im/ConversationList.vue'
+import ConversationSearchModal from '@/components/im/ConversationSearchModal.vue'
 import { usePageTitleNotification } from '@/composables/usePageTitleNotification'
 import { buildMessageTimeline } from '@/utils/im/timeline'
 
@@ -182,7 +192,13 @@ const userStore = useUserStore()
 const imStore = useIMStore()
 const imTabStore = useIMTabStore()
 const unreadMessageStore = useUnreadMessageStore()
-const { conversations, clearUnreadForPeer } = useConversationList()
+const {
+  conversations,
+  clearUnreadForPeer,
+  handleIncomingMessage: updateConversationByMessage,
+  openConversationInList,
+  requestScrollToConversation,
+} = useConversationList()
 const { userMap, fetchUser, mergeUsers } = useUserProfiles()
 
 const messageText = ref('')
@@ -193,6 +209,7 @@ const messageListRef = ref<HTMLElement | null>(null)
 const sidebarMenuRef = ref<HTMLElement | null>(null)
 const showMoreOptions = ref(false)
 const showSidebarMenu = ref(false)
+const showConversationSearch = ref(false)
 const isMobileViewport = ref(false)
 let cleanupViewportListener: (() => void) | null = null
 
@@ -254,6 +271,11 @@ const handleLogout = () => {
 const handleTakeoverTab = () => {
   imTabStore.claimActive()
   initChat()
+}
+
+const openConversationSearch = () => {
+  showConversationSearch.value = true
+  showSidebarMenu.value = false
 }
 
 const handleDocumentPointerDown = (event: PointerEvent) => {
@@ -384,10 +406,21 @@ const confirmPendingMessage = (pendingId: string, confirmed: ChatMessage) => {
   mergeMessages([{ ...confirmed, status: 'sent' }])
 }
 
+const syncConversationByMessage = (message: ChatMessage, shouldScroll = false) => {
+  updateConversationByMessage(
+    message as Parameters<typeof updateConversationByMessage>[0],
+    conversationId.value,
+  )
+  if (shouldScroll) {
+    requestScrollToConversation(conversationId.value)
+  }
+}
+
 const handleNewMessage = async (message: ChatMessage) => {
   if (!isCurrentChatMessage(message)) return
 
   mergeMessages([message])
+  syncConversationByMessage(message, message.from_id === currentUserId.value)
   scrollToBottom(true, message.from_id === currentUserId.value)
 
   if (message.from_id === peerUserId.value && message.id) {
@@ -435,6 +468,7 @@ const sendMessage = async () => {
     )
     if (response) {
       confirmPendingMessage(tempMessage.id!, response)
+      syncConversationByMessage(response, true)
     }
   } catch (error) {
     console.error('发送消息失败:', error)
@@ -623,12 +657,15 @@ const fetchConversation = async () => {
       mergeUsers([existing.to_user_info])
       targetUser.value = existing.to_user_info
     }
-    return
   }
 
-  if (!imStore.imSDK) return
+  const openedConversation = await openConversationInList(conversationId.value)
+  if (openedConversation) {
+    conversation.value = openedConversation
+  }
+  requestScrollToConversation(conversationId.value)
+  if (!conversation.value) return
 
-  conversation.value = await imStore.imSDK.getConversation(conversationId.value)
   if (conversation.value.to_user_info) {
     mergeUsers([conversation.value.to_user_info])
     targetUser.value = conversation.value.to_user_info
@@ -659,6 +696,7 @@ const retryMessage = async (message: ChatMessage) => {
     )
     if (response) {
       confirmPendingMessage(message.id!, response)
+      syncConversationByMessage(response, true)
     }
   } catch (error) {
     console.error('重新发送消息失败:', error)
@@ -724,6 +762,7 @@ const handleUploadSuccess = async (_file: File, type: string, fileInfo: MediaInf
     )
     if (response) {
       confirmPendingMessage(current.id!, response)
+      syncConversationByMessage(response, true)
       if (previewUrl?.startsWith('blob:')) {
         URL.revokeObjectURL(previewUrl)
       }

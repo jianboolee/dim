@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"regexp"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -92,6 +93,44 @@ func (r *UserRepository) FindByIDs(ctx context.Context, ids []string) (map[strin
 			return nil, err
 		}
 		users[user.ID] = &user
+	}
+
+	if err := cursor.Err(); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+func (r *UserRepository) Search(ctx context.Context, keyword string, limit int64) ([]*models.User, error) {
+	if keyword == "" {
+		return []*models.User{}, nil
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+
+	pattern := regexp.QuoteMeta(keyword)
+	filter := bson.M{
+		"$or": []bson.M{
+			{"id": bson.M{"$regex": pattern, "$options": "i"}},
+			{"nickname": bson.M{"$regex": pattern, "$options": "i"}},
+		},
+	}
+
+	cursor, err := r.collection.Find(ctx, filter, options.Find().SetLimit(limit))
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	users := make([]*models.User, 0)
+	for cursor.Next(ctx) {
+		var user models.User
+		if err := cursor.Decode(&user); err != nil {
+			return nil, err
+		}
+		users = append(users, &user)
 	}
 
 	if err := cursor.Err(); err != nil {

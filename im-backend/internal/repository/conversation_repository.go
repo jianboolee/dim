@@ -98,6 +98,73 @@ func (r *ConversationRepository) ListConversations(ctx context.Context, filter b
 	return conversations, nil
 }
 
+func (r *ConversationRepository) ListUserConversations(
+	ctx context.Context,
+	userID string,
+	filter bson.M,
+	limit int64,
+	cursorSortAt time.Time,
+	cursorID primitive.ObjectID,
+) ([]*models.Conversation, error) {
+	if filter == nil {
+		filter = bson.M{}
+	}
+
+	sortAtExpression := bson.M{
+		"$max": bson.A{
+			bson.M{"$ifNull": bson.A{"$last_message.created_at", "$updated_at"}},
+			bson.M{"$ifNull": bson.A{fmt.Sprintf("$user_states.%s.last_opened_at", userID), "$updated_at"}},
+			"$updated_at",
+		},
+	}
+
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: filter}},
+		{{Key: "$addFields", Value: bson.M{"sort_at": sortAtExpression}}},
+	}
+
+	if !cursorSortAt.IsZero() && !cursorID.IsZero() {
+		pipeline = append(pipeline, bson.D{{Key: "$match", Value: bson.M{
+			"$or": []bson.M{
+				{"sort_at": bson.M{"$lt": cursorSortAt}},
+				{
+					"sort_at": cursorSortAt,
+					"_id":     bson.M{"$lt": cursorID},
+				},
+			},
+		}}})
+	}
+
+	pipeline = append(pipeline, bson.D{{Key: "$sort", Value: bson.D{
+		{Key: "sort_at", Value: -1},
+		{Key: "_id", Value: -1},
+	}}})
+
+	if limit > 0 {
+		pipeline = append(pipeline, bson.D{{Key: "$limit", Value: limit}})
+	}
+
+	cursor, err := r.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var conversations []*models.Conversation
+	for cursor.Next(ctx) {
+		var conv models.Conversation
+		if err := cursor.Decode(&conv); err != nil {
+			return nil, err
+		}
+		conversations = append(conversations, &conv)
+	}
+	if err := cursor.Err(); err != nil {
+		return nil, err
+	}
+
+	return conversations, nil
+}
+
 // UpdateConversation 更新会话信息（部分字段）
 func (r *ConversationRepository) UpdateConversation(ctx context.Context, id primitive.ObjectID, update bson.M) error {
 	if update == nil {
@@ -114,18 +181,34 @@ func (r *ConversationRepository) UpdateUnreadCount(
 	userID string,
 	delta int,
 ) error {
-	field := "unread_counts." + userID
+	field := "user_states." + userID + ".unread_count"
+
+	update := mongo.Pipeline{
+		{{Key: "$set", Value: bson.M{
+			field: bson.M{"$max": bson.A{
+				0,
+				bson.M{"$add": bson.A{
+					bson.M{"$ifNull": bson.A{"$" + field, 0}},
+					delta,
+				}},
+			}},
+		}}},
+	}
+
 	filter := bson.M{"_id": id}
-	if delta < 0 {
-		filter[field] = bson.M{"$gt": 0}
-	}
-
-	update := bson.M{
-		"$inc": bson.M{field: delta},
-		"$set": bson.M{"updated_at": time.Now()},
-	}
-
 	_, err := r.collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *ConversationRepository) OpenConversation(ctx context.Context, id primitive.ObjectID, userID string, openedAt time.Time) error {
+	fieldPrefix := "user_states." + userID
+	update := bson.M{
+		"$set": bson.M{
+			fieldPrefix + ".last_opened_at": openedAt,
+		},
+	}
+
+	_, err := r.collection.UpdateOne(ctx, bson.M{"_id": id, "participants": userID}, update)
 	return err
 }
 
@@ -150,7 +233,7 @@ func (r *ConversationRepository) GetUnreadCount(ctx context.Context, userID stri
 				"unread": bson.M{
 					"$max": []interface{}{
 						0,
-						bson.M{"$ifNull": []interface{}{fmt.Sprintf("$unread_counts.%s", userID), 0}},
+						bson.M{"$ifNull": []interface{}{fmt.Sprintf("$user_states.%s.unread_count", userID), 0}},
 					},
 				},
 			},
@@ -204,9 +287,9 @@ func (r *ConversationRepository) UpsertConversationByParticipants(
 			"updated_at":   now,
 		},
 		"$setOnInsert": bson.M{
-			"hash_id":       hashID,
-			"unread_counts": bson.M{},
-			"created_at":    now,
+			"hash_id":     hashID,
+			"user_states": bson.M{},
+			"created_at":  now,
 		},
 	}
 

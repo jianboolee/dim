@@ -16,18 +16,24 @@ const (
 	ConversationTypeChannel ConversationType = "channel" // 频道会话
 )
 
+type ConversationUserState struct {
+	LastOpenedAt time.Time `bson:"last_opened_at,omitempty" json:"last_opened_at,omitempty"`
+	LastReadAt   time.Time `bson:"last_read_at,omitempty" json:"last_read_at,omitempty"`
+	UnreadCount  int64     `bson:"unread_count" json:"unread_count"`
+}
+
 // Conversation 表示一个会话
 type Conversation struct {
-	ID           primitive.ObjectID `bson:"_id" json:"id"`
-	HashID       string             `bson:"hash_id" json:"hash_id"`           // 会话ID的哈希值, 根据参与者生成唯一、稳定的 ObjectID（顺序无关 + 去重）
-	Type         ConversationType   `bson:"type" json:"type"`                 // 会话类型
-	Participants []string           `bson:"participants" json:"participants"` // 参与者的用户ID列表
-	LastMessage  *Message           `bson:"last_message,omitempty" json:"last_message"`
-	ImageURL     string             `bson:"image_url" json:"image_url"`         // 会话图片
-	UnreadCounts map[string]int64   `bson:"unread_counts" json:"unread_counts"` // 每个用户的未读数
-	LastActivity time.Time          `json:"last_activity" bson:"-"`
-	CreatedAt    time.Time          `bson:"created_at" json:"created_at"`
-	UpdatedAt    time.Time          `bson:"updated_at" json:"updated_at"`
+	ID           primitive.ObjectID               `bson:"_id" json:"id"`
+	HashID       string                           `bson:"hash_id" json:"hash_id"`           // 会话ID的哈希值, 根据参与者生成唯一、稳定的 ObjectID（顺序无关 + 去重）
+	Type         ConversationType                 `bson:"type" json:"type"`                 // 会话类型
+	Participants []string                         `bson:"participants" json:"participants"` // 参与者的用户ID列表
+	LastMessage  *Message                         `bson:"last_message,omitempty" json:"last_message"`
+	ImageURL     string                           `bson:"image_url" json:"image_url"` // 会话图片
+	UserStates   map[string]ConversationUserState `bson:"user_states,omitempty" json:"user_states,omitempty"`
+	LastActivity time.Time                        `json:"last_activity" bson:"-"`
+	CreatedAt    time.Time                        `bson:"created_at" json:"created_at"`
+	UpdatedAt    time.Time                        `bson:"updated_at" json:"updated_at"`
 
 	// 新增字段 👇
 	RefType     string            `bson:"ref_type,omitempty" json:"ref_type,omitempty"`         // 引用类型，如 "used_car"、"listing"
@@ -38,10 +44,17 @@ type Conversation struct {
 
 // GetUnreadCount 获取指定用户的未读数
 func (c *Conversation) GetUnreadCount(userID string) int64 {
-	if count, ok := c.UnreadCounts[userID]; ok {
-		return count
+	if state, ok := c.UserStates[userID]; ok {
+		return state.UnreadCount
 	}
 	return 0
+}
+
+func (c *Conversation) GetLastOpenedAt(userID string) time.Time {
+	if state, ok := c.UserStates[userID]; ok {
+		return state.LastOpenedAt
+	}
+	return time.Time{}
 }
 
 func (c *Conversation) HasParticipant(userID string) bool {
@@ -53,10 +66,16 @@ func (c *Conversation) HasParticipant(userID string) bool {
 	return false
 }
 
-// SetLastActivity 设置最后活动时间
-func (c *Conversation) GetLastActivity() {
+// GetLastActivity 设置当前用户视角下的最后活动时间
+func (c *Conversation) GetLastActivity(userID ...string) {
+	c.LastActivity = c.UpdatedAt
 	if c.LastMessage != nil {
 		c.LastActivity = c.LastMessage.CreatedAt
+	}
+	if len(userID) > 0 {
+		if openedAt := c.GetLastOpenedAt(userID[0]); openedAt.After(c.LastActivity) {
+			c.LastActivity = openedAt
+		}
 	}
 }
 

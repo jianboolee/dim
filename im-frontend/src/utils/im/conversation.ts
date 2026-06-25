@@ -7,13 +7,13 @@ export function getPeerUserId(conversation: Conversation, currentUserId: string)
 
 export function getUnreadCount(conversation: Conversation, currentUserId: string): number {
   if (!currentUserId) return 0
-  return normalizeUnreadCount(conversation.unread_counts[currentUserId] ?? 0)
+  return normalizeUnreadCount(conversation.user_states?.[currentUserId]?.unread_count ?? 0)
 }
 
 export function sortConversationsByActivity(conversations: Conversation[]): Conversation[] {
   return [...conversations].sort((a, b) => {
-    const timeA = a.last_message?.created_at || a.updated_at || a.last_activity
-    const timeB = b.last_message?.created_at || b.updated_at || b.last_activity
+    const timeA = a.last_activity || a.last_message?.created_at || a.updated_at
+    const timeB = b.last_activity || b.last_message?.created_at || b.updated_at
     return new Date(timeB).getTime() - new Date(timeA).getTime()
   })
 }
@@ -32,6 +32,14 @@ function matchesMessage(conversation: Conversation, message: Message): boolean {
   return conversation.participants.includes(fromId) && conversation.participants.includes(message.to_id)
 }
 
+function maxTime(...values: Array<string | undefined>): string {
+  const timestamps = values
+    .map((value) => (value ? new Date(value).getTime() : 0))
+    .filter((value) => Number.isFinite(value) && value > 0)
+  const max = Math.max(...timestamps)
+  return max > 0 ? new Date(max).toISOString() : new Date().toISOString()
+}
+
 export function buildConversationFromMessage(message: Message, currentUserId: string): Conversation {
   const fromId = message.from_id ?? ''
   const timestamp = message.created_at ?? new Date().toISOString()
@@ -42,7 +50,9 @@ export function buildConversationFromMessage(message: Message, currentUserId: st
     participants: [fromId, message.to_id],
     last_message: message,
     image_url: previewImageFromMessage(message),
-    unread_counts: message.to_id === currentUserId ? { [currentUserId]: 1 } : {},
+    user_states: message.to_id === currentUserId
+      ? { [currentUserId]: { unread_count: 1 } }
+      : {},
     created_at: timestamp,
     updated_at: timestamp,
     last_activity: timestamp,
@@ -61,7 +71,7 @@ export function applyIncomingMessage(
   if (index === -1) {
     const created = buildConversationFromMessage(message, currentUserId)
     if (activeConversationId && created.id === activeConversationId && message.to_id === currentUserId) {
-      created.unread_counts = { [currentUserId]: 0 }
+      created.user_states = { [currentUserId]: { unread_count: 0 } }
     }
     return sortConversationsByActivity([created, ...conversations])
   }
@@ -75,14 +85,17 @@ export function applyIncomingMessage(
     ...existing,
     last_message: message,
     updated_at: message.created_at ?? existing.updated_at,
-    last_activity: message.created_at ?? existing.last_activity,
+    last_activity: maxTime(message.created_at, existing.last_activity, existing.updated_at),
     image_url: previewImage || existing.image_url,
-    unread_counts: shouldIncrementUnread
+    user_states: shouldIncrementUnread
       ? {
-          ...existing.unread_counts,
-          [currentUserId]: normalizeUnreadCount(existing.unread_counts[currentUserId] ?? 0) + 1,
+          ...existing.user_states,
+          [currentUserId]: {
+            ...existing.user_states?.[currentUserId],
+            unread_count: getUnreadCount(existing, currentUserId) + 1,
+          },
         }
-      : existing.unread_counts,
+      : existing.user_states,
   }
 
   const next = [...conversations]
@@ -107,9 +120,12 @@ export function withClearedUnreadForPeer(
 
     return {
       ...conversation,
-      unread_counts: {
-        ...conversation.unread_counts,
-        [currentUserId]: 0,
+      user_states: {
+        ...conversation.user_states,
+        [currentUserId]: {
+          ...conversation.user_states?.[currentUserId],
+          unread_count: 0,
+        },
       },
     }
   })

@@ -72,7 +72,7 @@ export enum MessageType {
     type: string;
     participants: string[];
     last_message: Message;
-    unread_counts: { [key: string]: number };
+    user_states?: { [key: string]: { last_opened_at?: string; last_read_at?: string; unread_count?: number } };
     created_at: string;
     updated_at: string;
     last_activity: string;

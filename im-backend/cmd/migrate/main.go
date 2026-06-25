@@ -19,8 +19,4 @@ func main() {
 		log.Fatal("Failed to init indexes:", err)
 	}
 
-	// 创建默认用户
-	if err := bootstrap.InitSeed(cfg); err != nil {
-		log.Fatal("Failed to init seed:", err)
-	}
 }

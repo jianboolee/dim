@@ -93,7 +93,7 @@ func InitMessageIndexes(ctx context.Context, db *mongo.Database) error {
 			},
 			Options: options.Index().
 				SetUnique(true).
-				SetPartialFilterExpression(bson.M{"client_message_id": bson.M{"$exists": true, "$ne": ""}}).
+				SetPartialFilterExpression(bson.M{"client_message_id": bson.M{"$exists": true, "$gt": ""}}).
 				SetName("unique_message_client_id"),
 		},
 	})
