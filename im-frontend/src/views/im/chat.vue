@@ -203,6 +203,7 @@ const showConversationSearch = ref(false)
 const isMobileViewport = ref(false)
 let cleanupViewportListener: (() => void) | null = null
 const pendingUploadMessageIds = new WeakMap<File, string>()
+const messageDrafts = new Map<string, string>()
 
 const isConnected = computed(() => imStore.isConnected)
 const currentUserId = computed(() => userStore.userInfo?.id)
@@ -224,6 +225,17 @@ const { setBaseTitle } = usePageTitleNotification('消息')
 watch(pageTitle, (title) => {
   setBaseTitle(title)
 }, { immediate: true })
+
+watch(messageText, (value) => {
+  const id = conversationId.value
+  if (!id) return
+
+  if (value) {
+    messageDrafts.set(id, value)
+  } else {
+    messageDrafts.delete(id)
+  }
+})
 
 watch(
   () => conversations.value.find(
@@ -428,6 +440,7 @@ const sendMessage = async () => {
   const content = messageText.value.trim()
   const clientMessageId = createClientMessageId()
   messageText.value = ''
+  messageDrafts.delete(conversationId.value)
 
   const tempMessage: ChatMessage = {
     id: `temp-${clientMessageId}`,
@@ -871,9 +884,12 @@ const resetChatState = () => {
   firstLoad.value = true
   hasMore.value = true
   messages.value = []
-  messageText.value = ''
   targetUser.value = null
   conversation.value = null
+}
+
+const restoreMessageDraft = (id: string) => {
+  messageText.value = id ? messageDrafts.get(id) ?? '' : ''
 }
 
 const initChat = async () => {
@@ -890,12 +906,14 @@ const initChat = async () => {
 
   if (!conversationId.value) {
     resetChatState()
+    restoreMessageDraft('')
     imStore.initSDK()
     imStore.addMessageHandler(handleNewMessage)
     return
   }
 
   resetChatState()
+  restoreMessageDraft(conversationId.value)
   imStore.initSDK()
   imStore.addMessageHandler(handleNewMessage)
 
@@ -948,6 +966,9 @@ watch(
   () => props.conversationId,
   (nextConversationId, prevConversationId) => {
     if (nextConversationId !== prevConversationId) {
+      if (prevConversationId && messageText.value) {
+        messageDrafts.set(prevConversationId, messageText.value)
+      }
       imStore.removeMessageHandler(handleNewMessage)
       initChat()
     }
@@ -1401,13 +1422,13 @@ onUnmounted(() => {
 }
 
 .message-input .send-btn:disabled {
-  opacity: 0.38;
+  /* opacity: 0.38; */
   cursor: not-allowed;
 }
 
-.message-input .send-btn:not(:disabled):active {
+/* .message-input .send-btn:not(:disabled):active {
   opacity: 0.85;
-}
+} */
 
 .loading-spinner {
   display: flex;

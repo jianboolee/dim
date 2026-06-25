@@ -130,7 +130,7 @@ async function handleImageChange(event: Event) {
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: #60646f;
+  color: var(--text-color-dark);
   display: flex;
   align-items: center;
   justify-content: center;

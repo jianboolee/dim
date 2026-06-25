@@ -11,6 +11,13 @@
       @blur="handleBlur"
       :placeholder="placeholder"
       :rows="minRows"
+      name="im-message-compose"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+      spellcheck="false"
+      data-lpignore="true"
+      data-form-type="other"
     ></textarea>
   </div>
 </template>

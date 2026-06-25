@@ -70,24 +70,3 @@ go run ./examples/seed \
   -count 20
 ```
 
-
-
-```go
-
-imc := dim.NewIntegrationClient(dim.Config{
-    BaseURL: "http://localhost:8901",
-    APIKey:  "change-me-integration-key",
-})
-
-
-
-
-imSessiong = imc.CreateConversation()
-
-imSessiong = imc.EnsureConversation()
-
-imSessiong.sendMessage(string SenderID, string ReceiverID, dim.Message{})
-
-imSessiong.sendTextMessage(string SenderID, string ReceiverID, string messageContent)
-
-```
