@@ -32,6 +32,7 @@ const (
 )
 
 var ErrInvalidConversationCursor = errors.New("invalid conversation cursor")
+var ErrInvalidConversationID = errors.New("invalid conversation id")
 var ErrConversationAccessDenied = errors.New("conversation access denied")
 
 type conversationCursor struct {
@@ -71,9 +72,10 @@ func (s *ConversationService) GetConversation(ctx context.Context, id primitive.
 }
 
 // GetUserConversations 获取用户的所有会话
-func (s *ConversationService) GetUserConversations(ctx context.Context, senderID string, limit int64, cursorValue string, keyword string) (*dto.ConversationListResponse, error) {
+func (s *ConversationService) GetUserConversations(ctx context.Context, senderID string, limit int64, cursorValue string, keyword string, activeConversationID string) (*dto.ConversationListResponse, error) {
 	limit = normalizeConversationLimit(limit)
 	keyword = strings.TrimSpace(keyword)
+	activeConversationID = strings.TrimSpace(activeConversationID)
 
 	filter := bson.M{"participants": senderID}
 	if keyword != "" {
@@ -118,6 +120,16 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, senderID
 		}
 		cursorSortAt = cursor.SortAt
 		cursorID = cursorObjectID
+	}
+
+	if activeConversationID != "" && cursorValue == "" && keyword == "" {
+		activeID, err := primitive.ObjectIDFromHex(activeConversationID)
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid active conversation id", ErrInvalidConversationID)
+		}
+		if _, err := s.ActivateConversation(ctx, activeID, senderID); err != nil {
+			return nil, err
+		}
 	}
 
 	conversations, err := s.repo.ListUserConversations(ctx, senderID, filter, limit+1, cursorSortAt, cursorID)
@@ -293,7 +305,7 @@ func (s *ConversationService) toConversationDTOs(ctx context.Context, conversati
 	return results
 }
 
-func (s *ConversationService) OpenConversation(ctx context.Context, id primitive.ObjectID, currentUserID string) (*dto.ConversationDTO, error) {
+func (s *ConversationService) ActivateConversation(ctx context.Context, id primitive.ObjectID, currentUserID string) (*dto.ConversationDTO, error) {
 	conversation, err := s.repo.GetConversation(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversation: %w", err)
@@ -302,13 +314,13 @@ func (s *ConversationService) OpenConversation(ctx context.Context, id primitive
 		return nil, ErrConversationAccessDenied
 	}
 
-	if err := s.repo.OpenConversation(ctx, id, currentUserID, time.Now()); err != nil {
-		return nil, fmt.Errorf("failed to open conversation: %w", err)
+	if err := s.repo.ActivateConversation(ctx, id, currentUserID, time.Now()); err != nil {
+		return nil, fmt.Errorf("failed to activate conversation: %w", err)
 	}
 
 	conversation, err = s.repo.GetConversation(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get opened conversation: %w", err)
+		return nil, fmt.Errorf("failed to get activated conversation: %w", err)
 	}
 	conversation.GetLastActivity(currentUserID)
 

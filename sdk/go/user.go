@@ -13,9 +13,10 @@ type UserClient struct {
 }
 
 type ConversationListOptions struct {
-	Limit  int
-	Cursor string
-	Query  string
+	Limit                int
+	Cursor               string
+	Query                string
+	ActiveConversationID string
 }
 
 type MessageListOptions struct {
@@ -36,9 +37,9 @@ func (c *UserClient) GetConversation(ctx context.Context, conversationID string)
 	return &out, nil
 }
 
-func (c *UserClient) OpenConversation(ctx context.Context, conversationID string) (*Conversation, error) {
+func (c *UserClient) ActivateConversation(ctx context.Context, conversationID string) (*Conversation, error) {
 	var out Conversation
-	if err := c.client.do(ctx, http.MethodPost, "/im/api/conversations/"+url.PathEscape(conversationID)+"/open", nil, &out); err != nil {
+	if err := c.client.do(ctx, http.MethodPost, "/im/api/conversations/"+url.PathEscape(conversationID)+"/activate", nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -54,6 +55,9 @@ func (c *UserClient) ListConversations(ctx context.Context, options Conversation
 	}
 	if options.Query != "" {
 		values.Set("q", options.Query)
+	}
+	if options.ActiveConversationID != "" {
+		values.Set("active_conversation_id", options.ActiveConversationID)
 	}
 
 	path := "/im/api/conversations"

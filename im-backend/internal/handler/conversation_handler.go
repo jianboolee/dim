@@ -65,7 +65,7 @@ func (h *ConversationHandler) GetConversation(c *gin.Context) {
 	response.Success(c, "success", conversation)
 }
 
-func (h *ConversationHandler) OpenConversation(c *gin.Context) {
+func (h *ConversationHandler) ActivateConversation(c *gin.Context) {
 	conversationID := c.Param("id")
 	objID, err := primitive.ObjectIDFromHex(conversationID)
 	if err != nil {
@@ -74,13 +74,13 @@ func (h *ConversationHandler) OpenConversation(c *gin.Context) {
 	}
 
 	currentUserID := contextx.MustGetUserID(c)
-	conversation, err := h.conversationService.OpenConversation(c.Request.Context(), objID, currentUserID)
+	conversation, err := h.conversationService.ActivateConversation(c.Request.Context(), objID, currentUserID)
 	if err != nil {
 		if errors.Is(err, service.ErrConversationAccessDenied) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open conversation"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to activate conversation"})
 		return
 	}
 
@@ -98,10 +98,18 @@ func (h *ConversationHandler) GetUserConversations(c *gin.Context) {
 		return
 	}
 
-	conversations, err := h.conversationService.GetUserConversations(c.Request.Context(), senderID, query.Limit, query.Cursor, query.Q)
+	conversations, err := h.conversationService.GetUserConversations(c.Request.Context(), senderID, query.Limit, query.Cursor, query.Q, query.ActiveConversationID)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidConversationCursor) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid cursor"})
+			return
+		}
+		if errors.Is(err, service.ErrInvalidConversationID) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid conversation ID"})
+			return
+		}
+		if errors.Is(err, service.ErrConversationAccessDenied) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
 			return
 		}
 		log.Printf("Error getting conversations: %v", err)

@@ -23,9 +23,10 @@ type ConversationDTO struct {
 
 // ConversationQuery 会话查询参数
 type ConversationQuery struct {
-	Limit  int64  `form:"limit,omitempty"`
-	Cursor string `form:"cursor,omitempty"`
-	Q      string `form:"q,omitempty"`
+	Limit                int64  `form:"limit,omitempty"`
+	Cursor               string `form:"cursor,omitempty"`
+	Q                    string `form:"q,omitempty"`
+	ActiveConversationID string `form:"active_conversation_id,omitempty"`
 }
 
 type ConversationListResponse struct {

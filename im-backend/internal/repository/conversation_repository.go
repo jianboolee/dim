@@ -113,7 +113,7 @@ func (r *ConversationRepository) ListUserConversations(
 	sortAtExpression := bson.M{
 		"$max": bson.A{
 			bson.M{"$ifNull": bson.A{"$last_message.created_at", "$updated_at"}},
-			bson.M{"$ifNull": bson.A{fmt.Sprintf("$user_states.%s.last_opened_at", userID), "$updated_at"}},
+			bson.M{"$ifNull": bson.A{fmt.Sprintf("$user_states.%s.last_activated_at", userID), "$updated_at"}},
 			"$updated_at",
 		},
 	}
@@ -195,11 +195,11 @@ func (r *ConversationRepository) UpdateUnreadCount(
 	return err
 }
 
-func (r *ConversationRepository) OpenConversation(ctx context.Context, id primitive.ObjectID, userID string, openedAt time.Time) error {
+func (r *ConversationRepository) ActivateConversation(ctx context.Context, id primitive.ObjectID, userID string, activatedAt time.Time) error {
 	fieldPrefix := "user_states." + userID
 	update := bson.M{
 		"$set": bson.M{
-			fieldPrefix + ".last_opened_at": openedAt,
+			fieldPrefix + ".last_activated_at": activatedAt,
 		},
 	}
 

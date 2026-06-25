@@ -196,7 +196,7 @@ const {
   conversations,
   clearUnreadForPeer,
   handleIncomingMessage: updateConversationByMessage,
-  openConversationInList,
+  ensureConversationInList,
   requestScrollToConversation,
 } = useConversationList()
 const { userMap, fetchUser, mergeUsers } = useUserProfiles()
@@ -659,9 +659,11 @@ const fetchConversation = async () => {
     }
   }
 
-  const openedConversation = await openConversationInList(conversationId.value)
-  if (openedConversation) {
-    conversation.value = openedConversation
+  const ensuredConversation = await ensureConversationInList(conversationId.value, {
+    activateIfMissing: true,
+  })
+  if (ensuredConversation) {
+    conversation.value = ensuredConversation
   }
   requestScrollToConversation(conversationId.value)
   if (!conversation.value) return

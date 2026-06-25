@@ -17,9 +17,9 @@ const (
 )
 
 type ConversationUserState struct {
-	LastOpenedAt time.Time `bson:"last_opened_at,omitempty" json:"last_opened_at,omitempty"`
-	LastReadAt   time.Time `bson:"last_read_at,omitempty" json:"last_read_at,omitempty"`
-	UnreadCount  int64     `bson:"unread_count" json:"unread_count"`
+	LastActivatedAt time.Time `bson:"last_activated_at,omitempty" json:"last_activated_at,omitempty"`
+	LastReadAt      time.Time `bson:"last_read_at,omitempty" json:"last_read_at,omitempty"`
+	UnreadCount     int64     `bson:"unread_count" json:"unread_count"`
 }
 
 // Conversation 表示一个会话
@@ -50,9 +50,9 @@ func (c *Conversation) GetUnreadCount(userID string) int64 {
 	return 0
 }
 
-func (c *Conversation) GetLastOpenedAt(userID string) time.Time {
+func (c *Conversation) GetLastActivatedAt(userID string) time.Time {
 	if state, ok := c.UserStates[userID]; ok {
-		return state.LastOpenedAt
+		return state.LastActivatedAt
 	}
 	return time.Time{}
 }
@@ -73,8 +73,8 @@ func (c *Conversation) GetLastActivity(userID ...string) {
 		c.LastActivity = c.LastMessage.CreatedAt
 	}
 	if len(userID) > 0 {
-		if openedAt := c.GetLastOpenedAt(userID[0]); openedAt.After(c.LastActivity) {
-			c.LastActivity = openedAt
+		if activatedAt := c.GetLastActivatedAt(userID[0]); activatedAt.After(c.LastActivity) {
+			c.LastActivity = activatedAt
 		}
 	}
 }

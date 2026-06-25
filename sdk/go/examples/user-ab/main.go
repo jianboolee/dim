@@ -55,7 +55,7 @@ func main() {
 	// 	Token:   session.Token,
 	// })
 
-	// conversation, err := userClient.OpenConversation(ctx, session.ConversationID)
+	// conversation, err := userClient.ActivateConversation(ctx, session.ConversationID)
 	// if err != nil {
 	// 	log.Fatal(err)
 	// }

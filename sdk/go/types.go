@@ -10,9 +10,9 @@ type User struct {
 }
 
 type ConversationUserState struct {
-	LastOpenedAt time.Time `json:"last_opened_at,omitempty"`
-	LastReadAt   time.Time `json:"last_read_at,omitempty"`
-	UnreadCount  int64     `json:"unread_count"`
+	LastActivatedAt time.Time `json:"last_activated_at,omitempty"`
+	LastReadAt      time.Time `json:"last_read_at,omitempty"`
+	UnreadCount     int64     `json:"unread_count"`
 }
 
 type Conversation struct {

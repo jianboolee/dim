@@ -56,7 +56,7 @@ func SetupAPI(
 		api.GET("/conversations/:id/messages", messageHandler.GetMessagesByConversationID)
 		api.POST("/conversations/:id/messages", messageHandler.SendMessageToConversation)
 		api.POST("/conversations", conversationHandler.CreateConversation)
-		api.POST("/conversations/:id/open", conversationHandler.OpenConversation)
+		api.POST("/conversations/:id/activate", conversationHandler.ActivateConversation)
 		api.GET("/conversations/:id", conversationHandler.GetConversation)
 
 		api.GET("/sessions/:user_id", sessionHandler.GetUserStatus)

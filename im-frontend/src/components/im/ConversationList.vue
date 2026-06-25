@@ -242,7 +242,9 @@ const refresh = async () => {
     mergeUsers(searchResults.value.map((conversation) => conversation.to_user_info))
     return
   }
-  await loadConversations()
+  await loadConversations({
+    activeConversationId: props.activeConversationId || undefined,
+  })
   mergeUsers(conversations.value.map((conversation) => conversation.to_user_info))
 }
 

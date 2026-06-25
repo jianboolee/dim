@@ -75,7 +75,7 @@ export enum MessageType {
   
   // 会话接口
   export interface ConversationUserState {
-    last_opened_at?: string;
+    last_activated_at?: string;
     last_read_at?: string;
     unread_count?: number;
   }
@@ -107,6 +107,7 @@ export enum MessageType {
     limit?: number;
     cursor?: string;
     q?: string;
+    active_conversation_id?: string;
   }
   
   // 会话状态接口
@@ -577,6 +578,9 @@ export enum MessageType {
       if (params.limit) queryParams.append('limit', params.limit.toString());
       if (params.cursor) queryParams.append('cursor', params.cursor);
       if (params.q) queryParams.append('q', params.q);
+      if (params.active_conversation_id) {
+        queryParams.append('active_conversation_id', params.active_conversation_id);
+      }
 
       const suffix = queryParams.toString() ? `?${queryParams}` : '';
       const data = await apiRequest<Record<string, unknown>[] | Record<string, unknown>>(
@@ -618,10 +622,10 @@ export enum MessageType {
       return normalizeConversation(data);
     }
 
-    async openConversation(conversationId: string): Promise<Conversation> {
+    async activateConversation(conversationId: string): Promise<Conversation> {
       const data = await apiRequest<Record<string, unknown>>(
         this.baseURL,
-        `/im/api/conversations/${conversationId}/open`,
+        `/im/api/conversations/${conversationId}/activate`,
         this.token,
         { method: 'POST' },
       );
