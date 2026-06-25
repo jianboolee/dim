@@ -61,7 +61,7 @@
           </div>
           <i v-if="!isConnected"  class="ri-loader-4-line nav-reconnect-icon" aria-label="连接中"></i>
         </div>
-        <button class="nav-side-btn" type="button">
+        <button class="nav-side-btn" type="button" aria-label="会话信息" @click="openConversationInfo">
           <i class="ri-more-line"></i>
         </button>
       </div>
@@ -147,6 +147,12 @@
       navigate-mode="replace"
       :active-conversation-id="conversationId"
     />
+    <ConversationInfoDrawer
+      v-model="showConversationInfoDrawer"
+      :participants="conversationInfoParticipants"
+      @search="handleSearchInConversation"
+      @clear="handleClearConversationHistory"
+    />
   </div>
 </template>
 
@@ -169,6 +175,7 @@ import MessageMoreOptions from '@/components/im/MessageMoreOptions.vue'
 import MultilineInput from '@/components/im/MultilineInput.vue'
 import ConversationList from '@/components/im/ConversationList.vue'
 import ConversationSearchModal from '@/components/im/ConversationSearchModal.vue'
+import ConversationInfoDrawer from '@/components/im/ConversationInfoDrawer.vue'
 import { usePageTitleNotification } from '@/composables/usePageTitleNotification'
 import { buildMessageTimeline } from '@/utils/im/timeline'
 import { readImageDimensions, getFileFormat } from '@/utils/file'
@@ -200,6 +207,7 @@ const messageListRef = ref<HTMLElement | null>(null)
 const sidebarMenuRef = ref<HTMLElement | null>(null)
 const showSidebarMenu = ref(false)
 const showConversationSearch = ref(false)
+const showConversationInfoDrawer = ref(false)
 const isMobileViewport = ref(false)
 let cleanupViewportListener: (() => void) | null = null
 const pendingUploadMessageIds = new WeakMap<File, string>()
@@ -218,6 +226,25 @@ const peerUserId = computed(
     conversation.value?.participants.find((id) => id !== currentUserId.value) ||
     '',
 )
+const conversationInfoParticipants = computed<UserInfo[]>(() => {
+  const currentId = currentUserId.value
+  const participantIds = conversation.value?.participants.filter((id) => id && id !== currentId) ?? []
+  const usersById = new Map<string, UserInfo>()
+
+  if (conversation.value?.to_user_info?.id && conversation.value.to_user_info.id !== currentId) {
+    usersById.set(conversation.value.to_user_info.id, conversation.value.to_user_info)
+  }
+
+  if (targetUser.value?.id && targetUser.value.id !== currentId) {
+    usersById.set(targetUser.value.id, targetUser.value)
+  }
+
+  participantIds.forEach((id) => {
+    usersById.set(id, userMap.value[id] ?? usersById.get(id) ?? { id })
+  })
+
+  return [...usersById.values()]
+})
 
 const pageTitle = computed(() => targetUser.value?.nickname || '消息')
 const { setBaseTitle } = usePageTitleNotification('消息')
@@ -279,6 +306,19 @@ const handleTakeoverTab = () => {
 const openConversationSearch = () => {
   showConversationSearch.value = true
   showSidebarMenu.value = false
+}
+
+const openConversationInfo = () => {
+  showConversationInfoDrawer.value = true
+  showSidebarMenu.value = false
+}
+
+const handleSearchInConversation = () => {
+  showToast('查找聊天内容稍后开放')
+}
+
+const handleClearConversationHistory = () => {
+  showToast('清空聊天记录稍后开放')
 }
 
 const handleDocumentPointerDown = (event: PointerEvent) => {
@@ -899,12 +939,14 @@ const initChat = async () => {
   }
 
   if (imTabStore.isSuspended) {
+    showConversationInfoDrawer.value = false
     resetChatState()
     imStore.closeConnection()
     return
   }
 
   if (!conversationId.value) {
+    showConversationInfoDrawer.value = false
     resetChatState()
     restoreMessageDraft('')
     imStore.initSDK()
@@ -969,6 +1011,7 @@ watch(
       if (prevConversationId && messageText.value) {
         messageDrafts.set(prevConversationId, messageText.value)
       }
+      showConversationInfoDrawer.value = false
       imStore.removeMessageHandler(handleNewMessage)
       initChat()
     }
