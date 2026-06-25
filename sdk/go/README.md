@@ -31,6 +31,16 @@ _, err = userClient.SendTextMessage(ctx, session.ConversationID, "hello")
 
 ## Seed Example
 
+Create the fixed `user_a` / `user_b` demo conversation and print the returned
+conversation info:
+
+```bash
+cd sdk/go
+go run ./examples/user-ab \
+  -api-base http://localhost:8901 \
+  -key change-me-integration-key
+```
+
 The seed example simulates a business system creating conversations and sending
 messages through the SDK.
 
