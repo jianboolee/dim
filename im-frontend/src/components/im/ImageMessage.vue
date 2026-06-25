@@ -2,23 +2,26 @@
 <template>
   <div class="message-content message-image">
     <div class="message-arrow"></div>
-    <div 
-      class="image-container" 
-      :style="containerStyle"
-    >
+    <div class="image-container" :style="containerStyle">
       <div class="image-wrapper">
         <ImageView
           :src="message.media_info?.url || ''"
           :alt="message.content"
           placeholderText="图片"
           :width="containerStyle.width"
+          :height="containerStyle.height"
+          maxWidth="100%"
+          fit="cover"
           @click="preview"
           @load="handleImageLoad"
         />
         
         <!-- 上传中状态 -->
         <div v-if="message.media_info?.uploading" class="upload-overlay">
-          <div class="upload-spinner"></div>
+          <div class="upload-indicator">
+            <div class="upload-spinner"></div>
+            <span>上传中</span>
+          </div>
         </div>
       </div>
     </div>
@@ -91,15 +94,25 @@ const getValidDimensions = () => {
 // 计算容器样式
 const containerStyle = computed(() => {
   const { width, height } = getValidDimensions()
-  const aspectRatio = (height / width) * 100
-  const maxWidth = width > height ? '180px' : '120px'
+  const safeWidth = Math.max(width, 1)
+  const safeHeight = Math.max(height, 1)
+  const ratio = safeWidth / safeHeight
+  const maxBubbleWidth = 220
+  const maxBubbleHeight = 280
+  const minBubbleWidth = 96
+  const minBubbleHeight = 96
+  const rawWidth = ratio >= 1
+    ? maxBubbleWidth
+    : Math.min(maxBubbleWidth, maxBubbleHeight * ratio)
+  const rawHeight = ratio >= 1
+    ? Math.min(maxBubbleHeight, maxBubbleWidth / ratio)
+    : maxBubbleHeight
+  const displayWidth = Math.round(Math.max(minBubbleWidth, rawWidth))
+  const displayHeight = Math.round(Math.max(minBubbleHeight, rawHeight))
   
   return {
-    'padding-bottom': `${aspectRatio}%`,
-    'width': `${width}px`,
-    'max-width': maxWidth,
-    'min-width': '100px',
-    'min-height': 'auto'
+    width: `${displayWidth}px`,
+    height: `${displayHeight}px`,
   }
 })
 
@@ -120,27 +133,30 @@ const preview = () => {
 
 <style scoped>
 .message-content.message-image {
+  position: relative;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
   background: transparent;
 }
 
 .image-container {
   position: relative;
-  width: 100%;
-  min-width: 120px;
-  min-height: auto;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #eef1f6;
 }
 
 .image-wrapper {
-  position: absolute;
-  top: 0;
-  left: 0;
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.image-wrapper :deep(.image-view) {
+  width: 100%;
+  height: 100%;
 }
 
 /* 上传中的遮罩层 */
@@ -150,16 +166,33 @@ const preview = () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.18), rgba(15, 23, 42, 0.34)),
+    rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(1px);
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: inherit;
+}
+
+.upload-indicator {
+  min-width: 72px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.58);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .upload-spinner {
-  width: 24px;
-  height: 24px;
+  width: 15px;
+  height: 15px;
   border: 2px solid rgba(255, 255, 255, 0.3);
   border-top-color: white;
   border-radius: 50%;
@@ -199,6 +232,12 @@ const preview = () => {
   right: -6px;
   border-width: 6px 0 6px 6px;
   border-color: transparent transparent transparent var(--bg-color);
+}
+
+.message-content.message-image :deep(.message-retry-btn) {
+  left: -36px;
+  top: 4px;
+  z-index: 2;
 }
 
 </style> 

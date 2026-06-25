@@ -4,7 +4,8 @@
     class="image-view"
     :style="{
       width: typeof width === 'number' ? `${width}px` : width,
-      maxWidth: imageLoaded ? (isLandscape ? '180px' : '180px') : '180px'
+      height: typeof height === 'number' ? `${height}px` : height,
+      maxWidth
     }"
   >
     <template v-if="!error">
@@ -17,7 +18,8 @@
         @error="handleError"
         class="image"
         :style="{
-          objectFit: imageLoaded ? 'contain' : 'cover'
+          objectFit: fit,
+          height: height ? '100%' : 'auto'
         }"
       >
       <div v-show="loading" class="loading">
@@ -45,11 +47,17 @@ const props = withDefaults(defineProps<{
   src: string
   alt?: string
   width?: string | number
+  height?: string | number
+  maxWidth?: string
+  fit?: 'cover' | 'contain'
   placeholderText?: string
   placeholderBgColor?: string
 }>(), {
   alt: '',
   width: '100%',
+  height: '',
+  maxWidth: '180px',
+  fit: 'contain',
   placeholderText: '',
   placeholderBgColor: '#EFF1F8'
 })
@@ -57,12 +65,10 @@ const props = withDefaults(defineProps<{
 const loading = ref(true)
 const error = ref(false)
 const imageRef = ref<HTMLImageElement | null>(null)
-const imageLoaded = ref(false)
 const isLandscape = ref(false)
 
 const handleLoad = () => {
   loading.value = false
-  imageLoaded.value = true
   
   // 获取图片的实际宽高比
   if (imageRef.value) {
@@ -84,12 +90,10 @@ const handleError = () => {
   background: var(--bg-color-light);
   border-radius: inherit;
   line-height: 0;
-  border-radius: 12px;
 }
 
 .image {
   width: 100%;
-  height: auto;
   display: block;
   border-radius: inherit;
 }
@@ -104,7 +108,6 @@ const handleError = () => {
   align-items: center;
   justify-content: center;
   background: var(--bg-color-light);
-  aspect-ratio: 1/1;
 }
 
 .placeholder {

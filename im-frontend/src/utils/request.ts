@@ -13,6 +13,7 @@ interface RequestOptions {
   body?: unknown
   headers?: Record<string, string>
   params?: Record<string, string>
+  timeout?: number
   skipAuthRefresh?: boolean
 }
 
@@ -39,6 +40,7 @@ export const request = async <T>(url: string, options: RequestOptions = {}): Pro
       headers,
       data: options.body,
       params: options.params,
+      timeout: options.timeout,
     })
     return response.data
   } catch (error) {

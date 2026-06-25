@@ -67,7 +67,7 @@
       </div>
     </div>
 
-    <div class="message-container" @click="showMoreOptions = false; showSidebarMenu = false">
+    <div class="message-container" @click="showSidebarMenu = false">
       <div ref="messageListRef" class="message-list" @scroll="handleScroll">
         <div v-if="loading" class="loading-spinner">
           <div class="spinner"></div>
@@ -118,15 +118,11 @@
             @focus="handleMessageInputFocus"
           />
           <div class="message-input-actions">
-            <button
-              type="button"
-              class="addon-btn"
-              :class="{ 'is-active': showMoreOptions }"
-              aria-label="更多"
-              @click="handlePlusClick"
-            >
-              <i :class="showMoreOptions ? 'ri-close-line' : 'ri-add-line'"></i>
-            </button>
+            <MessageMoreOptions
+              @select-file="handleSelectFile"
+              @upload-success="handleUploadSuccess"
+              @upload-error="handleUploadError"
+            />
             <button
               type="button"
               class="send-btn"
@@ -138,13 +134,6 @@
           </div>
         </div>
       </div>
-
-      <MessageMoreOptions
-        v-model="showMoreOptions"
-        @select-file="handleSelectFile"
-        @upload-success="handleUploadSuccess"
-        @upload-error="handleUploadError"
-      />
     </div>
       </div>
       <div v-else class="chat-main chat-empty-main">
@@ -182,6 +171,8 @@ import ConversationList from '@/components/im/ConversationList.vue'
 import ConversationSearchModal from '@/components/im/ConversationSearchModal.vue'
 import { usePageTitleNotification } from '@/composables/usePageTitleNotification'
 import { buildMessageTimeline } from '@/utils/im/timeline'
+import { readImageDimensions, getFileFormat } from '@/utils/file'
+import { uploadIMFile } from '@/utils/upload'
 
 const props = defineProps<{
   conversationId: string
@@ -207,11 +198,11 @@ const conversation = ref<Conversation | null>(null)
 const targetUser = ref<UserInfo | null>(null)
 const messageListRef = ref<HTMLElement | null>(null)
 const sidebarMenuRef = ref<HTMLElement | null>(null)
-const showMoreOptions = ref(false)
 const showSidebarMenu = ref(false)
 const showConversationSearch = ref(false)
 const isMobileViewport = ref(false)
 let cleanupViewportListener: (() => void) | null = null
+const pendingUploadMessageIds = new WeakMap<File, string>()
 
 const isConnected = computed(() => imStore.isConnected)
 const currentUserId = computed(() => userStore.userInfo?.id)
@@ -338,7 +329,6 @@ const scrollToBottom = (smooth = true, force = false) => {
 
 const handleMessageInputFocus = () => {
   scrollToBottom(true, true)
-  showMoreOptions.value = false
 }
 
 const sortMessages = (items: ChatMessage[]) =>
@@ -653,6 +643,11 @@ const retryMessage = async (message: ChatMessage) => {
   const current = messages.value[messageIndex]
   if (!current) return
 
+  if (current.type === MessageType.Image && current.media_info?.local_file) {
+    await retryUploadImageMessage(current, messageIndex)
+    return
+  }
+
   const clientMessageId = current.client_message_id ?? createClientMessageId()
   current.status = 'sending'
   current.client_message_id = clientMessageId
@@ -682,20 +677,77 @@ const retryMessage = async (message: ChatMessage) => {
   }
 }
 
-const handlePlusClick = () => {
-  showMoreOptions.value = !showMoreOptions.value
-  if (showMoreOptions.value) {
-    nextTick(() => scrollToBottom(true, true))
+const retryUploadImageMessage = async (message: ChatMessage, messageIndex: number) => {
+  const file = message.media_info?.local_file
+  if (!file) {
+    showToast('图片文件已失效，请重新选择')
+    return
+  }
+
+  const current = messages.value[messageIndex]
+  if (!current) return
+
+  const clientMessageId = current.client_message_id ?? createClientMessageId()
+  current.status = 'sending'
+  current.client_message_id = clientMessageId
+  current.media_info = {
+    ...current.media_info!,
+    uploading: true,
+    upload_failed: false,
+  }
+  messages.value = [...messages.value]
+
+  try {
+    const uploaded = await uploadIMFile(file)
+    const dimensions = await readImageDimensions(file)
+    const format = uploaded.format ?? getFileFormat(file)
+    const mediaInfo: MediaInfo = {
+      url: uploaded.url,
+      size: uploaded.size,
+      width: uploaded.width ?? dimensions.width,
+      height: uploaded.height ?? dimensions.height,
+      format,
+    }
+
+    const response = await imStore.imSDK?.sendMessage(
+      conversationId.value,
+      MessageType.Image,
+      '',
+      mediaInfo,
+      undefined,
+      undefined,
+      clientMessageId,
+    )
+    if (response) {
+      const previewUrl = current.media_info?.url
+      confirmPendingMessage(current.id!, response)
+      syncConversationByMessage(response, true)
+      if (previewUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl)
+      }
+    }
+  } catch (error) {
+    console.error('重新上传图片失败:', error)
+    const latest = messages.value.find((msg) => msg.id === current.id)
+    if (latest?.media_info) {
+      latest.status = 'failed'
+      latest.media_info.uploading = false
+      latest.media_info.upload_failed = true
+      latest.media_info.local_file = file
+      messages.value = [...messages.value]
+    }
+    showToast('上传失败，点击重试')
   }
 }
 
-const handleSelectFile = (_file: File, type: string, fileInfo: MediaInfo & { uploading?: boolean }) => {
+const handleSelectFile = (file: File, type: string, fileInfo: MediaInfo & { uploading?: boolean }) => {
   if (!currentUserId.value || !peerUserId.value) return
 
   const messageType = type as MessageType
   const clientMessageId = createClientMessageId()
+  const tempMessageId = `temp-${clientMessageId}`
   const tempMessage: ChatMessage = {
-    id: `temp-${clientMessageId}`,
+    id: tempMessageId,
     client_message_id: clientMessageId,
     conversation_id: conversationId.value,
     from_id: currentUserId.value,
@@ -705,17 +757,23 @@ const handleSelectFile = (_file: File, type: string, fileInfo: MediaInfo & { upl
     status: 'sending',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-    media_info: { ...fileInfo, uploading: true },
+    media_info: { ...fileInfo, uploading: true, local_file: file },
   }
 
+  pendingUploadMessageIds.set(file, tempMessageId)
   messages.value = [...messages.value, tempMessage]
   scrollToBottom(true, true)
 }
 
-const handleUploadSuccess = async (_file: File, type: string, fileInfo: MediaInfo) => {
+const handleUploadSuccess = async (file: File, type: string, fileInfo: MediaInfo) => {
   const messageType = type as MessageType
+  const pendingMessageId = pendingUploadMessageIds.get(file)
   const messageIndex = messages.value.findIndex(
-    (msg) => msg.status === 'sending' && msg.type === messageType && msg.media_info?.uploading,
+    (msg) =>
+      msg.status === 'sending' &&
+      msg.type === messageType &&
+      msg.media_info?.uploading &&
+      (!pendingMessageId || msg.id === pendingMessageId),
   )
   if (messageIndex === -1) return
 
@@ -737,6 +795,7 @@ const handleUploadSuccess = async (_file: File, type: string, fileInfo: MediaInf
     if (response) {
       confirmPendingMessage(current.id!, response)
       syncConversationByMessage(response, true)
+      pendingUploadMessageIds.delete(file)
       if (previewUrl?.startsWith('blob:')) {
         URL.revokeObjectURL(previewUrl)
       }
@@ -745,29 +804,41 @@ const handleUploadSuccess = async (_file: File, type: string, fileInfo: MediaInf
     console.error('发送媒体消息失败:', error)
     if (messages.value[messageIndex]) {
       messages.value[messageIndex].status = 'failed'
+      if (messages.value[messageIndex].media_info) {
+        messages.value[messageIndex].media_info.uploading = false
+        messages.value[messageIndex].media_info.local_file = file
+      }
       messages.value = [...messages.value]
     }
+    pendingUploadMessageIds.delete(file)
     showToast('发送失败')
   }
 }
 
-const handleUploadError = (_file: File, type: string) => {
+const handleUploadError = (file: File, type: string) => {
   const messageType = type as MessageType
+  const pendingMessageId = pendingUploadMessageIds.get(file)
   const messageIndex = messages.value.findIndex(
-    (msg) => msg.status === 'sending' && msg.type === messageType && msg.media_info?.uploading,
+    (msg) =>
+      msg.status === 'sending' &&
+      msg.type === messageType &&
+      msg.media_info?.uploading &&
+      (!pendingMessageId || msg.id === pendingMessageId),
   )
   if (messageIndex === -1) return
 
   const current = messages.value[messageIndex]
   if (!current) return
 
-  const previewUrl = current.media_info?.url
   current.status = 'failed'
-  messages.value = [...messages.value]
-
-  if (previewUrl?.startsWith('blob:')) {
-    URL.revokeObjectURL(previewUrl)
+  current.media_info = {
+    ...current.media_info!,
+    uploading: false,
+    upload_failed: true,
+    local_file: file,
   }
+  messages.value = [...messages.value]
+  pendingUploadMessageIds.delete(file)
 }
 
 const waitForConnection = (timeoutMs = 10000) =>
@@ -801,7 +872,6 @@ const resetChatState = () => {
   hasMore.value = true
   messages.value = []
   messageText.value = ''
-  showMoreOptions.value = false
   targetUser.value = null
   conversation.value = null
 }
@@ -1309,36 +1379,6 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   padding: 6px 0;
-}
-
-.addon-btn {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 2px solid #333;
-  border-radius: 50%;
-  background: transparent;
-  color: #333;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.2s ease, background 0.2s ease;
-}
-
-.addon-btn i {
-  font-size: 20px;
-  line-height: 1;
-}
-
-.addon-btn.is-active {
-  background: #ededed;
-
-}
-
-.addon-btn:active {
-  opacity: 0.75;
 }
 
 .message-input .send-btn {

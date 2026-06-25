@@ -16,5 +16,9 @@ export type ChatMessageStatus = 'sending' | 'failed' | 'sent' | 'delivered'
 
 export type ChatMessage = Omit<Message, 'status' | 'media_info'> & {
   status?: ChatMessageStatus
-  media_info?: MediaInfo & { uploading?: boolean }
+  media_info?: MediaInfo & {
+    uploading?: boolean
+    local_file?: File
+    upload_failed?: boolean
+  }
 }

@@ -1,42 +1,37 @@
-<!-- 消息更多选项组件 -->
+<!-- 图片消息上传按钮 -->
 <template>
-  <div class="message-more-options" :class="{ 'is-active': modelValue }">
-    <div class="options-grid">
-      <div class="option-item" @click="openImagePicker">
-        <div class="option-icon">
-          <i class="ri-image-line"></i>
-        </div>
-        <div class="option-label">图片</div>
-        <input
-          ref="imageInputRef"
-          type="file"
-          accept=".jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp"
-          class="hidden-input"
-          @change="handleImageChange"
-        >
-      </div>
-    </div>
-  </div>
+  <button
+    class="image-upload-btn"
+    type="button"
+    aria-label="发送图片"
+    @click="openImagePicker"
+  >
+    <i class="ri-image-line"></i>
+  </button>
+  <input
+    ref="imageInputRef"
+    type="file"
+    multiple
+    accept=".jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp"
+    class="hidden-input"
+    @change="handleImageChange"
+  >
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import { showToast } from '@/plugins/toast'
 import { MessageType, type MediaInfo } from '@/sdk/im'
-import { takeInputFile, readImageDimensions, getFileFormat } from '@/utils/file'
+import { readImageDimensions, getFileFormat } from '@/utils/file'
 import { uploadIMFile } from '@/utils/upload'
 
 const IMAGE_MAX_SIZE = 10 * 1024 * 1024
+const IMAGE_MAX_COUNT = 9
 const IMAGE_ALLOWED_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp'])
 
 type PendingMediaInfo = MediaInfo & { uploading?: boolean }
 
-defineProps<{
-  modelValue: boolean
-}>()
-
 const emit = defineEmits<{
-  'update:modelValue': [value: boolean]
   'select-file': [file: File, type: MessageType, fileInfo: PendingMediaInfo]
   'upload-success': [file: File, type: MessageType, fileInfo: MediaInfo]
   'upload-error': [file: File, type: MessageType]
@@ -48,15 +43,19 @@ function openImagePicker() {
   imageInputRef.value?.click()
 }
 
-function closePanel() {
-  emit('update:modelValue', false)
-}
-
 function assertFileSize(file: File, maxBytes: number, message: string): boolean {
   if (file.size <= maxBytes) {
     return true
   }
   showToast(message)
+  return false
+}
+
+function assertImageCount(files: File[]): boolean {
+  if (files.length <= IMAGE_MAX_COUNT) {
+    return true
+  }
+  showToast(`一次最多选择${IMAGE_MAX_COUNT}张图片`)
   return false
 }
 
@@ -86,7 +85,6 @@ async function uploadImage(file: File) {
     height: 0,
     uploading: true,
   })
-  closePanel()
 
   try {
     const uploaded = await uploadIMFile(file)
@@ -109,62 +107,44 @@ async function uploadImage(file: File) {
 }
 
 async function handleImageChange(event: Event) {
-  const file = takeInputFile(event)
-  if (!file) return
-  if (!assertImageExtension(file)) return
-  if (!assertFileSize(file, IMAGE_MAX_SIZE, '图片大小不能超过10MB')) return
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  input.value = ''
 
-  await uploadImage(file)
+  if (files.length === 0) return
+  if (!assertImageCount(files)) return
+  if (!files.every(assertImageExtension)) return
+  if (!files.every((file) => assertFileSize(file, IMAGE_MAX_SIZE, '图片大小不能超过10MB'))) {
+    return
+  }
+
+  await Promise.all(files.map((file) => uploadImage(file)))
 }
 </script>
 
 <style scoped>
-.message-more-options {
-  overflow: hidden;
-  max-height: 0;
-  opacity: 0;
-  border-top: 1px solid transparent;
-  transition: max-height 0.25s ease, opacity 0.2s ease, border-color 0.2s ease;
-}
-
-.message-more-options.is-active {
-  max-height: 140px;
-  opacity: 1;
-  border-top-color: var(--border-color-light);
-}
-
-.options-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--spacing-base);
-  padding: var(--spacing-base);
-}
-
-.option-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-mini);
-  cursor: pointer;
-}
-
-.option-icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 12px;
-  background: var(--bg-color);
+.image-upload-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #60646f;
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.option-icon i {
-  font-size: 24px;
-  color: var(--text-color-dark);
+.image-upload-btn i {
+  font-size: 20px;
+  line-height: 1;
 }
 
-.option-label {
-  font-size: 12px;
+.image-upload-btn:active {
+  background: rgba(15, 23, 42, 0.08);
   color: var(--text-color-dark);
 }
 

@@ -11,6 +11,8 @@ export interface UploadedFile {
   format?: string
 }
 
+export const UPLOAD_TIMEOUT_MS = 60000
+
 function normalizeUploadPayload(data: unknown): UploadedFile[] {
   if (Array.isArray(data)) {
     return data as UploadedFile[]
@@ -39,6 +41,7 @@ export async function uploadIMFiles(files: File | File[]): Promise<UploadedFile[
     method: 'POST',
     body: formData,
     headers: {},
+    timeout: UPLOAD_TIMEOUT_MS,
   })
 
   const uploaded = normalizeUploadPayload(response)
