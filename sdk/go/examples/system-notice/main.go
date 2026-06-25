@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -16,7 +15,7 @@ import (
 )
 
 var FromUser = demo.USER_SYSTEM_NOTICE
-var ToUser = demo.USER_A
+var ToUser = demo.USER_JIANBO
 
 type output struct {
 	ConversationID string      `json:"conversation_id"`
@@ -57,10 +56,7 @@ func main() {
 		Token:   session.Token,
 	})
 
-	// 生成 1000-9999 之间的随机数（保证4位）
-	randomNum := rand.Intn(9000) + 1000
-
-	content := fmt.Sprintf("%d 你好，这是一条系统通知，当前时间是: %s", randomNum, time.Now().Format("2006-01-02 15:04:05"))
+	content := fmt.Sprintf("你好，欢迎使用消息系统，当前时间是: %s", time.Now().Format("2006-01-02 15:04:05"))
 	message, err := userClient.SendTextMessage(ctx, session.ConversationID, content)
 	if err != nil {
 		log.Fatal(err)

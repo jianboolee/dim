@@ -16,6 +16,12 @@ var USER_SYSTEM_OPS = dim.User{
 	Avatar:   "https://oss.21rv.com/uploads/avatar/23.jpg" + AvatarSuffix,
 }
 
+var USER_JIANBO = dim.User{
+	ID:       "jianbo",
+	Nickname: "Jianbo",
+	Avatar:   "https://oss.21rv.com/uploads/avatar/3.jpg" + AvatarSuffix,
+}
+
 var USER_A = dim.User{
 	ID:       "user_a",
 	Nickname: "Alice",
