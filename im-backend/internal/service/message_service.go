@@ -218,6 +218,9 @@ func (s *MessageService) FindMessagesByConversationID(ctx context.Context, conve
 	for i := range messages {
 		messages[i].DecodePayload()
 	}
+	if err := s.conversationService.MarkConversationRead(ctx, conversationID, currentUserID); err != nil {
+		return nil, fmt.Errorf("failed to mark conversation as read: %w", err)
+	}
 	return messages, nil
 }
 

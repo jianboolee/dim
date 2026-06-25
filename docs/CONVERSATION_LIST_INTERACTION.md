@@ -60,7 +60,7 @@
 ### 会话列表
 
 ```http
-GET /im/api/conversations?limit=20&cursor=...&active_conversation_id=...
+GET /im/api/conversations?limit=20&cursor=...
 ```
 
 参数说明：
@@ -70,9 +70,8 @@ GET /im/api/conversations?limit=20&cursor=...&active_conversation_id=...
 | `limit` | 每页数量，默认 20 |
 | `cursor` | 游标分页 |
 | `q` | 搜索关键词 |
-| `active_conversation_id` | 当前需要确保出现在首屏的会话 ID |
 
-当 `active_conversation_id` 存在、没有 `cursor`、没有 `q` 时，服务端先对该会话执行激活，再返回第一页列表。因为激活会更新 `last_activated_at`，这个会话会按服务端排序稳定进入第一页。
+普通会话列表刷新不应携带当前会话 ID，也不应写入任何排序相关字段。列表接口只返回服务端按 `last_activity` 排好的会话页。
 
 ### 激活会话
 
@@ -109,10 +108,12 @@ sequenceDiagram
   participant Manager as Conversation List Manager
   participant API as IM API
 
-  Page->>Manager: loadConversations(activeConversationId)
-  Manager->>API: GET /conversations?limit=20&active_conversation_id=id
-  API->>API: activate conversation
+  Page->>Manager: loadConversations()
+  Manager->>API: GET /conversations?limit=20
   API-->>Manager: sorted first page
+  Manager->>Manager: if target missing, activateConversation(id)
+  Manager->>API: POST /conversations/:id/activate
+  API-->>Manager: activated conversation
   Manager->>Manager: replace list and sort by last_activity
   Page->>API: GET /conversations/:id/messages
   Manager->>Page: request scroll to active conversation
@@ -150,17 +151,17 @@ sequenceDiagram
 推荐规则：
 
 - 收到非当前会话的新消息：未读数 +1。
-- 当前会话收到新消息并成功标记已读：清空该会话本地未读。
-- 进入会话后拉取历史消息并标记已读：清空该会话本地未读。
+- 当前用户拉取某个会话消息时，服务端清空该用户在该会话下的未读数，并写入 `last_read_at`。
+- 当前会话收到新消息后，前端可以先清空本地未读角标；后续拉取或同步消息时，服务端状态也会归零。
 - `activate` 不清理未读数。
 
-后续可以增加会话级已读接口，例如：
+如果后续需要更明确的手动已读语义，可以再增加会话级已读接口，例如：
 
 ```http
 PUT /im/api/conversations/:id/read
 ```
 
-这样会比逐条消息标记已读更适合 App 端。
+当前阶段不要求前端或 Flutter 端逐条调用消息已读接口。
 
 ## Flutter 实现建议
 
@@ -219,4 +220,3 @@ Flutter 页面只做：
 | 前端列表管理 | `im-frontend/src/stores/conversationList.ts` |
 | 前端薄包装 | `im-frontend/src/composables/useConversationList.ts` |
 | Go SDK 方法 | `ActivateConversation`、`ListConversations` |
-

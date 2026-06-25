@@ -423,8 +423,7 @@ const handleNewMessage = async (message: ChatMessage) => {
   syncConversationByMessage(message, message.from_id === currentUserId.value)
   scrollToBottom(true, message.from_id === currentUserId.value)
 
-  if (message.from_id === peerUserId.value && message.id) {
-    await markMessageAsRead(message.id)
+  if (message.from_id === peerUserId.value) {
     await syncUnreadState()
   }
 }
@@ -528,18 +527,7 @@ const fetchHistoryMessages = async (loadMore = false) => {
 
     hasMore.value = newMessages.length === pageSize
 
-    const unreadMessages = messages.value.filter(
-      (msg) => msg.status !== 'read' && msg.from_id === peerUserId.value && msg.id,
-    )
-    const markedIds = new Set<string>()
-    for (const msg of unreadMessages) {
-      if (!msg.id || markedIds.has(msg.id)) continue
-      markedIds.add(msg.id)
-      await markMessageAsRead(msg.id)
-      msg.status = 'read'
-    }
-
-    if (!loadMore && markedIds.size > 0) {
+    if (!loadMore) {
       await syncUnreadState()
     }
   } catch (error) {
@@ -589,14 +577,6 @@ const syncLatestMessages = async () => {
 
     mergeMessages(incoming)
 
-    const unreadMessages = incoming.filter(
-      (msg) => msg.status !== 'read' && msg.from_id === peerUserId.value && msg.id,
-    )
-    for (const msg of unreadMessages) {
-      if (!msg.id) continue
-      await markMessageAsRead(msg.id)
-    }
-
     await syncUnreadState()
     scrollToBottom(true, wasNearBottom)
   } catch (error) {
@@ -609,14 +589,6 @@ const syncUnreadState = async () => {
     clearUnreadForPeer(peerUserId.value)
   }
   unreadMessageStore.decrement()
-}
-
-const markMessageAsRead = async (messageId: string) => {
-  try {
-    await imStore.imSDK?.markMessageAsRead(messageId)
-  } catch (error) {
-    console.error('标记消息已读失败:', error)
-  }
 }
 
 const fetchTargetUser = async () => {

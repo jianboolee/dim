@@ -195,6 +195,21 @@ func (r *ConversationRepository) UpdateUnreadCount(
 	return err
 }
 
+func (r *ConversationRepository) MarkConversationRead(ctx context.Context, id primitive.ObjectID, userID string, readAt time.Time) error {
+	fieldPrefix := "user_states." + userID
+	update := bson.M{
+		"$set": bson.M{
+			fieldPrefix + ".unread_count": int64(0),
+		},
+		"$max": bson.M{
+			fieldPrefix + ".last_read_at": readAt,
+		},
+	}
+
+	_, err := r.collection.UpdateOne(ctx, bson.M{"_id": id, "participants": userID}, update)
+	return err
+}
+
 func (r *ConversationRepository) ActivateConversation(ctx context.Context, id primitive.ObjectID, userID string, activatedAt time.Time) error {
 	fieldPrefix := "user_states." + userID
 	update := bson.M{

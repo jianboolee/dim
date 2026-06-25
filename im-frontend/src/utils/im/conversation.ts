@@ -103,7 +103,7 @@ export function applyIncomingMessage(
   return sortConversationsByActivity(next)
 }
 
-/** 清除指定会话的未读数（进入聊天或标已读后同步侧栏） */
+/** 清除指定会话的本地未读数（进入聊天或当前会话收到消息后同步侧栏） */
 export function withClearedUnreadForPeer(
   conversations: Conversation[],
   peerId: string,

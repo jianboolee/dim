@@ -187,6 +187,11 @@ func (s *ConversationService) UpdateUnreadCount(ctx context.Context, conversatio
 	return s.repo.UpdateUnreadCount(ctx, conversationID, userID, increment)
 }
 
+// MarkConversationRead 标记当前用户已读该会话，清空会话级未读数。
+func (s *ConversationService) MarkConversationRead(ctx context.Context, conversationID primitive.ObjectID, userID string) error {
+	return s.repo.MarkConversationRead(ctx, conversationID, userID, time.Now())
+}
+
 // GetConversations 获取会话列表
 func (s *ConversationService) GetConversations(ctx context.Context, userID string) ([]*dto.ConversationDTO, error) {
 	conversations, err := s.repo.ListUserConversations(ctx, userID, bson.M{"participants": userID}, 100, time.Time{}, primitive.NilObjectID)

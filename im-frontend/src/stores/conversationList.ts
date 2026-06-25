@@ -279,6 +279,10 @@ export const useConversationListStore = defineStore('conversationList', () => {
   ) {
     if (!conversationId) return null
 
+    if (options.activateIfMissing && conversations.value.length === 0 && !loading.value && !loadPromise) {
+      await loadConversations()
+    }
+
     const existing = conversations.value.find((conversation) => conversation.id === conversationId)
     if (existing) return existing
 

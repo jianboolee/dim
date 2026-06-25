@@ -15,7 +15,6 @@ export enum MessageType {
     Sending = 'sending',
     Sent = 'sent',
     Delivered = 'delivered',
-    Read = 'read',
     Failed = 'failed'
   }
   
@@ -631,24 +630,6 @@ export enum MessageType {
       );
 
       return normalizeConversation(data);
-    }
-  
-    /**
-     * 标记消息为已读
-     */
-    async markMessageAsRead(messageID: string): Promise<boolean> {
-      const response = await fetch(`${this.baseURL}/im/api/messages/${messageID}/read`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${this.token}`
-        }
-      });
-  
-      if (!response.ok) {
-        throw new Error(`Failed to mark message as read: ${response.statusText}`);
-      }
-  
-      return response.ok;
     }
   
     /**
