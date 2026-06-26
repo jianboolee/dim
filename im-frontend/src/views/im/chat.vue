@@ -15,13 +15,29 @@
         />
         <div ref="sidebarMenuRef" class="sidebar-footer">
           <button
-            class="sidebar-menu-btn"
+            class="sidebar-footer-trigger"
             type="button"
             :class="{ 'is-active': showSidebarMenu }"
             aria-label="更多"
             @click="showSidebarMenu = !showSidebarMenu"
           >
-            <i class="ri-menu-line"></i>
+            <div class="sidebar-footer-user" :title="userStore.userInfo?.nickname || '当前用户'">
+              <img
+                v-if="userStore.userInfo?.avatar"
+                class="sidebar-footer-avatar"
+                :src="userStore.userInfo.avatar"
+                alt=""
+              >
+              <div v-else class="sidebar-footer-avatar sidebar-footer-avatar-fallback">
+                <i class="ri-user-3-line"></i>
+              </div>
+              <span class="sidebar-footer-name">
+                {{ userStore.userInfo?.nickname || '当前用户' }}
+              </span>
+            </div>
+            <span class="sidebar-menu-btn" aria-hidden="true">
+              <i class="ri-menu-line"></i>
+            </span>
           </button>
           <div v-if="showSidebarMenu" class="sidebar-menu">
             <div class="sidebar-user">
@@ -1107,11 +1123,70 @@ onUnmounted(() => {
   border-top: 1px solid var(--border-color-light);
 }
 
+.sidebar-footer-trigger {
+  width: 100%;
+  border: none;
+  padding: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background 0.15s ease;
+}
+
+.sidebar-footer-trigger:hover,
+.sidebar-footer-trigger.is-active {
+  background: var(--bg-color-gray);
+}
+
+.sidebar-footer-user {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-footer-avatar {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #eef1f6;
+}
+
+.sidebar-footer-avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-color-secondary);
+}
+
+.sidebar-footer-avatar-fallback i {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.sidebar-footer-name {
+  min-width: 0;
+  color: var(--text-color-dark);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sidebar-menu {
   position: absolute;
   left: var(--spacing-base);
   bottom: calc(100% + 6px);
-  min-width: 176px;
+  width: 270px;
   padding: 6px;
   border: 1px solid var(--border-color-light);
   border-radius: 8px;
