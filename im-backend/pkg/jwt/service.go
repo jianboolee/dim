@@ -37,13 +37,13 @@ func NewService(secret string, expiresIn, refreshExpiresIn, maxSession time.Dura
 	if secret == "" {
 		return nil, errors.New("jwt secret is required")
 	}
-	if expiresIn <= 0 {
+	if expiresIn < time.Second {
 		expiresIn = DefaultExpiresIn
 	}
-	if refreshExpiresIn <= 0 {
+	if refreshExpiresIn < time.Second {
 		refreshExpiresIn = DefaultRefreshExpiresIn
 	}
-	if maxSession <= 0 {
+	if maxSession < time.Second {
 		maxSession = DefaultMaxSession
 	}
 	if refreshExpiresIn > maxSession {
@@ -97,7 +97,8 @@ func (s *Service) RefreshTokenExpiry(now, sessionStart time.Time) time.Time {
 }
 
 func (s *Service) SignAccessToken(userID, sessionID string, sessionStart time.Time) (string, int, error) {
-	return s.signToken(userID, sessionID, "access", sessionStart, time.Now(), s.AccessTokenExpiry(time.Now(), sessionStart))
+	now := time.Now()
+	return s.signToken(userID, sessionID, "access", sessionStart, now, s.AccessTokenExpiry(now, sessionStart))
 }
 
 func (s *Service) SignRefreshToken(userID, sessionID string, sessionStart time.Time) (string, time.Time, error) {
@@ -176,7 +177,11 @@ func (s *Service) signToken(
 	if err != nil {
 		return "", 0, err
 	}
-	return signed, int(time.Until(expiresAt).Seconds()), nil
+	ttl := int(time.Until(expiresAt).Round(time.Second).Seconds())
+	if ttl < 0 {
+		ttl = 0
+	}
+	return signed, ttl, nil
 }
 
 func (s *Service) keyFunc(token *jwt.Token) (interface{}, error) {

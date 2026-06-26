@@ -11,7 +11,7 @@ import { useConversationList } from '@/composables/useConversationList'
 import { useIMStore } from '@/stores/im'
 import { useIMTabStore } from '@/stores/imTab'
 import { useUnreadMessageStore } from '@/stores/unreadMessage'
-import { getTokenExpiryMs, isTokenExpiringSoon, REFRESH_THRESHOLD_MS } from '@/utils/token'
+import { getRefreshScheduleDelayMs, getTokenExpiryMs, isTokenExpiringSoon } from '@/utils/token'
 import type { UserInfo } from '@/types/user'
 import { SUCCESS_CODE, type ApiResponse } from '@/types/api'
 
@@ -66,12 +66,11 @@ export const useUserStore = defineStore('user', () => {
       return
     }
 
-    const expiryMs = getTokenExpiryMs(nextToken)
-    if (expiryMs == null) {
+    const delay = getRefreshScheduleDelayMs(nextToken)
+    if (delay == null) {
       return
     }
 
-    const delay = Math.max(expiryMs - Date.now() - REFRESH_THRESHOLD_MS, 0)
     refreshTimer = setTimeout(() => {
       void ensureValidToken({ force: true, logoutOnAuthError: true })
     }, delay)
