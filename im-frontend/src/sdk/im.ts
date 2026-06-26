@@ -389,6 +389,7 @@ export enum MessageType {
      * 断开 WebSocket 连接
      */
     disconnect(): void {
+      this.stopHeartbeat();
       if (this.ws) {
         this.ws.close();
         this.ws = null;
@@ -714,7 +715,10 @@ export enum MessageType {
       }
   
       this.heartbeatTimer = setInterval(() => {
-        this.send({ type: MessageType.Ping, to_id: '', content: '' });
+        this.send({ type: MessageType.Ping, to_id: '', content: '' }).catch((error) => {
+          console.error('Heartbeat failed:', error);
+          this.disconnect();
+        });
       }, this.heartbeatInterval);
     }
   

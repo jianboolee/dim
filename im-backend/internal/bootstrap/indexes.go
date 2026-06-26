@@ -155,7 +155,7 @@ func InitSessionIndexes(ctx context.Context, db *mongo.Database) error {
 	indexModel := mongo.IndexModel{
 		Keys: bson.M{"last_seen": 1},
 		Options: options.Index().
-			SetExpireAfterSeconds(60 * 60 * 24), // 24 小时后过期（你可改成 300 秒等）
+			SetExpireAfterSeconds(60 * 5), // 5 分钟后过期
 	}
 
 	fmt.Printf("Indexes ensured for %s\n", sessionCollection.Name())

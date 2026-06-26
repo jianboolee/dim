@@ -71,6 +71,6 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 	h.wsManager.Register <- client
 
 	// 启动读写 goroutines
-	go client.WritePump()
+	go client.WritePump(h.wsManager)
 	go client.ReadPump(h.wsManager)
 }

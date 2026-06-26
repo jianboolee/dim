@@ -68,7 +68,11 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 	var messageService *service.MessageService
 
 	if withWS {
-		wsManager = service.NewWSManager(redisClient, sessionService)
+		wsManager = service.NewWSManager(redisClient, sessionService, service.WSManagerOptions{
+			PingPeriod: cfg.WebSocket.HeartbeatInterval,
+			PongWait:   cfg.WebSocket.PongTimeout,
+			WriteWait:  cfg.WebSocket.WriteTimeout,
+		})
 		messageService = service.NewMessageService(messageRepo, conversationRepo, conversationService, sessionService, wsManager, redisClient)
 		wsManager.SetMessageService(messageService)
 	} else {

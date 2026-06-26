@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -15,6 +16,11 @@ type Config struct {
 	Server struct {
 		APIPort int
 		WSPort  int
+	}
+	WebSocket struct {
+		HeartbeatInterval time.Duration
+		PongTimeout       time.Duration
+		WriteTimeout      time.Duration
 	}
 	MongoDB struct {
 		URI      string
@@ -50,6 +56,9 @@ func LoadConfig() (*Config, error) {
 
 	viper.SetDefault("API_SERVER_PORT", 8080)
 	viper.SetDefault("WS_SERVER_PORT", 9000)
+	viper.SetDefault("WS_HEARTBEAT_INTERVAL", "30s")
+	viper.SetDefault("WS_PONG_TIMEOUT", "75s")
+	viper.SetDefault("WS_WRITE_TIMEOUT", "10s")
 
 	viper.SetDefault("MONGODB_URI", "mongodb://localhost:27017")
 	viper.SetDefault("MONGODB_DATABASE", "x_im")
@@ -86,6 +95,9 @@ func LoadConfig() (*Config, error) {
 
 	cfg.Server.APIPort = viper.GetInt("API_SERVER_PORT")
 	cfg.Server.WSPort = viper.GetInt("WS_SERVER_PORT")
+	cfg.WebSocket.HeartbeatInterval = viper.GetDuration("WS_HEARTBEAT_INTERVAL")
+	cfg.WebSocket.PongTimeout = viper.GetDuration("WS_PONG_TIMEOUT")
+	cfg.WebSocket.WriteTimeout = viper.GetDuration("WS_WRITE_TIMEOUT")
 
 	cfg.MongoDB.URI = viper.GetString("MONGODB_URI")
 	cfg.MongoDB.Database = viper.GetString("MONGODB_DATABASE")

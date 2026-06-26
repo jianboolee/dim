@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -12,9 +13,10 @@ import (
 )
 
 type Client struct {
-	UserID string
-	Conn   *websocket.Conn
-	Send   chan []byte
+	UserID    string
+	Conn      *websocket.Conn
+	Send      chan []byte
+	closeOnce sync.Once
 }
 
 type WsMessageType string
@@ -24,11 +26,15 @@ const (
 	WsMessageTypePong WsMessageType = "pong"
 )
 
-const (
-	writeWait  = 10 * time.Second
-	pongWait   = 60 * time.Second
-	pingPeriod = 50 * time.Second
-)
+const defaultWriteWait = 10 * time.Second
+const defaultPongWait = 75 * time.Second
+const defaultPingPeriod = 30 * time.Second
+
+type WSManagerOptions struct {
+	PingPeriod time.Duration
+	PongWait   time.Duration
+	WriteWait  time.Duration
+}
 
 type wsMessage struct {
 	Type WsMessageType `json:"type"`
@@ -42,11 +48,30 @@ type WSManager struct {
 	redisClient    *redis.Client
 	mutex          sync.RWMutex
 	stop           chan struct{}
+	done           chan struct{}
+	stopOnce       sync.Once
+	redisCancel    context.CancelFunc
 	messageService *MessageService
 	sessionService *SessionService
+	pingPeriod     time.Duration
+	pongWait       time.Duration
+	writeWait      time.Duration
 }
 
-func NewWSManager(redisClient *redis.Client, sessionService *SessionService) *WSManager {
+func NewWSManager(redisClient *redis.Client, sessionService *SessionService, options WSManagerOptions) *WSManager {
+	if options.PingPeriod <= 0 {
+		options.PingPeriod = defaultPingPeriod
+	}
+	if options.PongWait <= 0 {
+		options.PongWait = defaultPongWait
+	}
+	if options.WriteWait <= 0 {
+		options.WriteWait = defaultWriteWait
+	}
+	if options.PongWait <= options.PingPeriod {
+		options.PongWait = options.PingPeriod + 30*time.Second
+	}
+
 	return &WSManager{
 		Clients:        make(map[string]*Client),
 		Broadcast:      make(chan []byte),
@@ -54,7 +79,11 @@ func NewWSManager(redisClient *redis.Client, sessionService *SessionService) *WS
 		Unregister:     make(chan *Client),
 		redisClient:    redisClient,
 		stop:           make(chan struct{}),
+		done:           make(chan struct{}),
 		sessionService: sessionService,
+		pingPeriod:     options.PingPeriod,
+		pongWait:       options.PongWait,
+		writeWait:      options.WriteWait,
 	}
 }
 
@@ -65,6 +94,7 @@ func (m *WSManager) SetMessageService(messageService *MessageService) {
 
 func (m *WSManager) Run() {
 	m.startRedisSubscriber()
+	defer close(m.done)
 
 	for {
 		select {
@@ -72,7 +102,7 @@ func (m *WSManager) Run() {
 			m.mutex.Lock()
 			if oldClient, ok := m.Clients[client.UserID]; ok && oldClient != client {
 				delete(m.Clients, client.UserID)
-				close(oldClient.Send)
+				oldClient.closeSend()
 				_ = oldClient.Conn.Close()
 			}
 			m.Clients[client.UserID] = client
@@ -85,19 +115,7 @@ func (m *WSManager) Run() {
 			}
 
 		case client := <-m.Unregister:
-			m.mutex.Lock()
-			currentClient, ok := m.Clients[client.UserID]
-			if ok && currentClient == client {
-				delete(m.Clients, client.UserID)
-				close(client.Send)
-				log.Printf("Client disconnected: %s", client.UserID)
-
-				// 更新用户离线状态
-				if err := m.sessionService.UpdateUserStatus(context.Background(), client.UserID, false); err != nil {
-					log.Printf("Failed to update user status: %v", err)
-				}
-			}
-			m.mutex.Unlock()
+			m.unregister(client)
 
 		case message := <-m.Broadcast:
 			var msg struct {
@@ -119,6 +137,32 @@ func (m *WSManager) Run() {
 	}
 }
 
+func (m *WSManager) unregister(client *Client) {
+	m.mutex.Lock()
+	currentClient, ok := m.Clients[client.UserID]
+	if ok && currentClient == client {
+		delete(m.Clients, client.UserID)
+		client.closeSend()
+		log.Printf("Client disconnected: %s", client.UserID)
+	}
+	m.mutex.Unlock()
+
+	if ok && currentClient == client {
+		// 更新用户离线状态
+		if err := m.sessionService.UpdateUserStatus(context.Background(), client.UserID, false); err != nil {
+			log.Printf("Failed to update user status: %v", err)
+		}
+	}
+}
+
+func (m *WSManager) unregisterAsync(client *Client) {
+	select {
+	case m.Unregister <- client:
+	case <-m.done:
+	case <-m.stop:
+	}
+}
+
 // TryDeliver 尝试向本进程已连接的客户端投递消息
 func (m *WSManager) TryDeliver(userID string, message []byte) bool {
 	m.mutex.RLock()
@@ -129,13 +173,12 @@ func (m *WSManager) TryDeliver(userID string, message []byte) bool {
 		return false
 	}
 
-	select {
-	case client.Send <- message:
+	if client.enqueue(message) {
 		return true
-	default:
-		log.Printf("Client send buffer full, dropping direct delivery for %s", userID)
-		return false
 	}
+
+	log.Printf("Client send buffer full or closed, dropping direct delivery for %s", userID)
+	return false
 }
 
 func (m *WSManager) startRedisSubscriber() {
@@ -143,20 +186,33 @@ func (m *WSManager) startRedisSubscriber() {
 		return
 	}
 
-	pubsub := m.redisClient.Subscribe(context.Background(), wsPushChannel)
+	ctx, cancel := context.WithCancel(context.Background())
+	m.redisCancel = cancel
+
+	pubsub := m.redisClient.Subscribe(ctx, wsPushChannel)
 	log.Printf("Redis subscriber listening on channel: %s", wsPushChannel)
 	go func() {
+		defer pubsub.Close()
 		ch := pubsub.Channel()
-		for msg := range ch {
-			var event WSPushEvent
-			if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
-				log.Printf("Failed to unmarshal ws push event: %v", err)
-				continue
-			}
-			if m.TryDeliver(event.ReceiverID, []byte(event.Message)) {
-				log.Printf("Delivered message to %s via redis push", event.ReceiverID)
-			} else {
-				log.Printf("No connected client for %s (redis push)", event.ReceiverID)
+		for {
+			select {
+			case msg, ok := <-ch:
+				if !ok {
+					return
+				}
+
+				var event WSPushEvent
+				if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
+					log.Printf("Failed to unmarshal ws push event: %v", err)
+					continue
+				}
+				if m.TryDeliver(event.ReceiverID, []byte(event.Message)) {
+					log.Printf("Delivered message to %s via redis push", event.ReceiverID)
+				} else {
+					log.Printf("No connected client for %s (redis push)", event.ReceiverID)
+				}
+			case <-m.stop:
+				return
 			}
 		}
 	}()
@@ -168,8 +224,11 @@ func (m *WSManager) SendMessage(userID string, message []byte) error {
 	client, ok := m.Clients[userID]
 	m.mutex.RUnlock()
 
-	if ok {
-		client.Send <- message
+	if !ok {
+		return nil
+	}
+	if !client.enqueue(message) {
+		return fmt.Errorf("client send buffer full or closed for %s", userID)
 	}
 	return nil
 }
@@ -178,8 +237,12 @@ func (m *WSManager) SendMessage(userID string, message []byte) error {
 func (m *WSManager) Shutdown() {
 	log.Println("Starting WebSocket manager shutdown...")
 
-	// 发送停止信号
-	close(m.stop)
+	m.stopOnce.Do(func() {
+		close(m.stop)
+		if m.redisCancel != nil {
+			m.redisCancel()
+		}
+	})
 
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -187,25 +250,19 @@ func (m *WSManager) Shutdown() {
 	// 关闭所有客户端连接
 	for _, client := range m.Clients {
 		log.Printf("Closing connection for client: %s", client.UserID)
-		close(client.Send)
-		client.Conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		client.closeSend()
 		client.Conn.Close()
 	}
 
 	// 清空客户端映射
 	m.Clients = make(map[string]*Client)
 
-	// 关闭所有通道
-	close(m.Register)
-	close(m.Unregister)
-	close(m.Broadcast)
-
 	log.Println("WebSocket manager shutdown completed")
 }
 
 // WritePump 处理向客户端写入消息
-func (c *Client) WritePump() {
-	ticker := time.NewTicker(pingPeriod)
+func (c *Client) WritePump(manager *WSManager) {
+	ticker := time.NewTicker(manager.pingPeriod)
 	defer func() {
 		ticker.Stop()
 		c.Conn.Close()
@@ -214,7 +271,7 @@ func (c *Client) WritePump() {
 	for {
 		select {
 		case message, ok := <-c.Send:
-			_ = c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(manager.writeWait))
 			if !ok {
 				_ = c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
@@ -233,10 +290,12 @@ func (c *Client) WritePump() {
 				return
 			}
 		case <-ticker.C:
-			_ = c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(manager.writeWait))
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
+		case <-manager.stop:
+			return
 		}
 	}
 }
@@ -244,16 +303,16 @@ func (c *Client) WritePump() {
 // ReadPump 处理从客户端读取消息
 func (c *Client) ReadPump(manager *WSManager) {
 	defer func() {
-		manager.Unregister <- c
+		manager.unregisterAsync(c)
 		c.Conn.Close()
 	}()
 
 	// 设置读取超时，防止阻塞太久
-	_ = c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+	_ = c.Conn.SetReadDeadline(time.Now().Add(manager.pongWait))
 
 	// 设置PongHandler，接收到Pong时重置读取超时
 	c.Conn.SetPongHandler(func(string) error {
-		_ = c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+		_ = c.Conn.SetReadDeadline(time.Now().Add(manager.pongWait))
 		return nil
 	})
 
@@ -285,13 +344,11 @@ func (c *Client) ReadPump(manager *WSManager) {
 				log.Printf("Failed to marshal pong response: %v", err)
 				continue
 			}
-			select {
-			case c.Send <- responseBytes:
-			default:
+			if !c.enqueue(responseBytes) {
 				log.Printf("Client send buffer full, dropping pong for %s", c.UserID)
 			}
 			// 重置读取超时并继续等待下一条消息
-			_ = c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+			_ = c.Conn.SetReadDeadline(time.Now().Add(manager.pongWait))
 			continue
 		}
 
@@ -322,5 +379,26 @@ func (c *Client) ReadPump(manager *WSManager) {
 				log.Printf("Failed to push message to sender: %v", err)
 			}
 		}
+	}
+}
+
+func (c *Client) closeSend() {
+	c.closeOnce.Do(func() {
+		close(c.Send)
+	})
+}
+
+func (c *Client) enqueue(message []byte) (ok bool) {
+	defer func() {
+		if recover() != nil {
+			ok = false
+		}
+	}()
+
+	select {
+	case c.Send <- message:
+		return true
+	default:
+		return false
 	}
 }

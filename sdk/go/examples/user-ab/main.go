@@ -14,11 +14,11 @@ import (
 )
 
 type output struct {
-	Token          string `json:"token"`
-	ExpiresIn      int    `json:"expires_in"`
-	ConversationID string `json:"conversation_id"`
-	RedirectURL    string `json:"redirect_url"`
-	// Conversation   dim.Conversation `json:"conversation"`
+	Token          string           `json:"token"`
+	ExpiresIn      int              `json:"expires_in"`
+	ConversationID string           `json:"conversation_id"`
+	RedirectURL    string           `json:"redirect_url"`
+	Conversation   dim.Conversation `json:"conversation"`
 }
 
 func main() {
@@ -50,15 +50,16 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// userClient := dim.NewUserClient(dim.Config{
-	// 	BaseURL: apiBase,
-	// 	Token:   session.Token,
-	// })
+	// 激活会话
+	userClient := dim.NewUserClient(dim.Config{
+		BaseURL: apiBase,
+		Token:   session.Token,
+	})
 
-	// conversation, err := userClient.ActivateConversation(ctx, session.ConversationID)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	conversation, err := userClient.ActivateConversation(ctx, session.ConversationID)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetEscapeHTML(false)
@@ -68,7 +69,7 @@ func main() {
 		ExpiresIn:      session.ExpiresIn,
 		ConversationID: session.ConversationID,
 		RedirectURL:    session.RedirectURL,
-		// Conversation:   *conversation,
+		Conversation:   *conversation,
 	}); err != nil {
 		log.Fatal(err)
 	}

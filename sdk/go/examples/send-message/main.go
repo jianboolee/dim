@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"log"
-	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -15,8 +13,8 @@ import (
 	"d-im-go-sdk/examples/demo"
 )
 
-var FromUser = demo.USER_B
-var ToUser = demo.USER_A
+var FromUser = demo.USER_A
+var ToUser = demo.USER_B
 
 type output struct {
 	ConversationID string      `json:"conversation_id"`
@@ -57,9 +55,7 @@ func main() {
 		Token:   session.Token,
 	})
 
-	// 生成 1000-9999 之间的随机数（保证4位）
-	randomNum := rand.Intn(9000) + 1000
-	content := fmt.Sprintf("%d 你好，当前时间是: %s", randomNum, time.Now().Format("2006-01-02 15:04:05"))
+	content := "你好啊~"
 
 	message, err := userClient.SendTextMessage(ctx, session.ConversationID, content)
 	if err != nil {
