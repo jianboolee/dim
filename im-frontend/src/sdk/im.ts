@@ -131,6 +131,25 @@ export enum MessageType {
     data: T;
   }
 
+  const SUCCESS_CODE = 0;
+
+  function unwrapApiResponse<T>(json: unknown): T {
+    if (
+      json &&
+      typeof json === 'object' &&
+      'code' in json &&
+      typeof (json as { code: unknown }).code === 'number'
+    ) {
+      const response = json as ApiResponse<T>;
+      if (response.code !== SUCCESS_CODE) {
+        throw new Error(response.message || 'Request failed');
+      }
+      return response.data;
+    }
+
+    return json as T;
+  }
+
   function normalizeMessage(raw: Record<string, unknown>): Message {
     const payload = raw.payload as Record<string, unknown> | undefined
     let id: string | undefined
@@ -281,11 +300,7 @@ export enum MessageType {
     }
 
     const json = await response.json();
-    if (json && typeof json.code === 'number' && 'data' in json) {
-      return (json as ApiResponse<T>).data;
-    }
-
-    return json as T;
+    return unwrapApiResponse<T>(json);
   }
   
   // 连接状态接口
@@ -545,11 +560,7 @@ export enum MessageType {
       }
 
       const json = await response.json();
-      if (json && typeof json.code === 'number' && json.data) {
-        return normalizeMessage(json.data);
-      }
-
-      return normalizeMessage(json);
+      return normalizeMessage(unwrapApiResponse<Record<string, unknown>>(json));
     }
   
     async getConversationMessages(conversationId: string, params: MessageQueryParams = {}): Promise<Message[]> {

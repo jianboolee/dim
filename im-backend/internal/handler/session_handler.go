@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
 
 	"d-im/internal/contextx"
@@ -26,7 +24,7 @@ func (h *SessionHandler) GetUserStatus(c *gin.Context) {
 
 	session, err := h.sessionService.GetUserStatus(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user status"})
+		response.InternalServerError(c, "Failed to get user status")
 		return
 	}
 
@@ -40,13 +38,13 @@ func (h *SessionHandler) GetUsersStatus(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		response.BadRequest(c, "Invalid request body")
 		return
 	}
 
 	sessions, err := h.sessionService.GetUsersStatus(c.Request.Context(), req.UserIDs)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get users status"})
+		response.InternalServerError(c, "Failed to get users status")
 		return
 	}
 
@@ -58,7 +56,7 @@ func (h *SessionHandler) KeepAlive(c *gin.Context) {
 	userID := contextx.MustGetUserID(c)
 
 	if err := h.sessionService.KeepAlive(c.Request.Context(), userID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to keep alive"})
+		response.InternalServerError(c, "Failed to keep alive")
 		return
 	}
 
@@ -69,7 +67,7 @@ func (h *SessionHandler) KeepAlive(c *gin.Context) {
 func (h *SessionHandler) GetOnlineUserCount(c *gin.Context) {
 	count, err := h.sessionService.GetOnlineUserCount(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get online user count"})
+		response.InternalServerError(c, "Failed to get online user count")
 		return
 	}
 	response.Success(c, "success", count)

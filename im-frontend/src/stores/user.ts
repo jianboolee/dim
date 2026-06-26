@@ -12,7 +12,7 @@ import { useIMStore } from '@/stores/im'
 import { useUnreadMessageStore } from '@/stores/unreadMessage'
 import { getTokenExpiryMs, isTokenExpiringSoon, REFRESH_THRESHOLD_MS } from '@/utils/token'
 import type { UserInfo } from '@/types/user'
-import type { ApiResponse } from '@/types/api'
+import { SUCCESS_CODE, type ApiResponse } from '@/types/api'
 
 let refreshPromise: Promise<string | null> | null = null
 let authChannel: BroadcastChannel | null = null
@@ -258,18 +258,18 @@ export const useUserStore = defineStore('user', () => {
 
   const fetchUser = async (): Promise<UserInfo> => {
     const response = await request<ApiResponse<UserInfo>>('/im/api/users/me')
-    if (response.code === 200 && response.data?.id) {
+    if (response.code === SUCCESS_CODE && response.data?.id) {
       setUserInfo(response.data)
       return response.data
     }
     throw new Error('无法获取用户信息')
   }
 
-  watch(token, (newToken) => {
-    if (newToken) {
-      unreadMessageStore.reset()
+  watch(token, (newToken, oldToken) => {
+    if (newToken && !oldToken) {
       unreadMessageStore.startHeartbeat()
-    } else {
+    } else if (!newToken && oldToken) {
+      unreadMessageStore.reset()
       unreadMessageStore.stopHeartbeat()
     }
   })

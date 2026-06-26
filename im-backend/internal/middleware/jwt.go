@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"d-im/internal/contextx"
+	"d-im/internal/response"
 	jwtpkg "d-im/pkg/jwt"
 )
 
@@ -13,14 +14,14 @@ func JWTAuth(jwtService *jwtpkg.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			c.JSON(401, gin.H{"error": "Authorization header is required"})
+			response.Unauthorized(c, "Authorization header is required")
 			c.Abort()
 			return
 		}
 
 		const prefix = "Bearer "
 		if len(authHeader) <= len(prefix) || authHeader[:len(prefix)] != prefix {
-			c.JSON(401, gin.H{"error": "Invalid authorization format"})
+			response.Unauthorized(c, "Invalid authorization format")
 			c.Abort()
 			return
 		}
@@ -29,7 +30,7 @@ func JWTAuth(jwtService *jwtpkg.Service) gin.HandlerFunc {
 		claims := &jwtpkg.AuthTokenClaims{}
 		if err := jwtService.ParseAccessToken(tokenString, claims); err != nil {
 			log.Printf("Token validation error: %v", err)
-			c.JSON(401, gin.H{"error": err.Error()})
+			response.Unauthorized(c, err.Error())
 			c.Abort()
 			return
 		}

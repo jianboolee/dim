@@ -1,5 +1,5 @@
 import { config } from '@/config'
-import type { ApiResponse } from '@/types/api'
+import { SUCCESS_CODE, type ApiResponse } from '@/types/api'
 import axios from '@/plugins/axios'
 import { isAxiosError } from 'axios'
 
@@ -48,7 +48,7 @@ export async function exchangeAccessToken(
       },
     )
 
-    if (response.data.code === 200 && response.data.data?.token) {
+    if (response.data.code === SUCCESS_CODE && response.data.data?.token) {
       return response.data.data
     }
 
@@ -71,7 +71,7 @@ export async function refreshAccessToken(): Promise<AccessTokenData> {
       },
     )
 
-    if (response.data.code === 200 && response.data.data?.token) {
+    if (response.data.code === SUCCESS_CODE && response.data.data?.token) {
       return response.data.data
     }
 

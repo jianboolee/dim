@@ -3,7 +3,6 @@ package handler
 import (
 	"errors"
 	"log"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -28,14 +27,14 @@ func NewConversationHandler(conversationService *service.ConversationService) *C
 func (h *ConversationHandler) CreateConversation(c *gin.Context) {
 	var req dto.ConversationCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		response.BadRequest(c, "Invalid request body")
 		return
 	}
 
 	senderID := contextx.MustGetUserID(c)
 	conversation, err := h.conversationService.CreatePrivateConversation(c.Request.Context(), senderID, req.ReceiverID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create conversation"})
+		response.InternalServerError(c, "Failed to create conversation")
 		return
 	}
 
@@ -47,7 +46,7 @@ func (h *ConversationHandler) GetConversation(c *gin.Context) {
 	conversationID := c.Param("id")
 	objID, err := primitive.ObjectIDFromHex(conversationID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid conversation ID"})
+		response.BadRequest(c, "Invalid conversation ID")
 		return
 	}
 
@@ -55,10 +54,10 @@ func (h *ConversationHandler) GetConversation(c *gin.Context) {
 	conversation, err := h.conversationService.GetConversation(c.Request.Context(), objID, currentUserID)
 	if err != nil {
 		if errors.Is(err, service.ErrConversationAccessDenied) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
+			response.Forbidden(c, "Forbidden")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get conversation"})
+		response.InternalServerError(c, "Failed to get conversation")
 		return
 	}
 
@@ -69,7 +68,7 @@ func (h *ConversationHandler) ActivateConversation(c *gin.Context) {
 	conversationID := c.Param("id")
 	objID, err := primitive.ObjectIDFromHex(conversationID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid conversation ID"})
+		response.BadRequest(c, "Invalid conversation ID")
 		return
 	}
 
@@ -77,10 +76,10 @@ func (h *ConversationHandler) ActivateConversation(c *gin.Context) {
 	conversation, err := h.conversationService.ActivateConversation(c.Request.Context(), objID, currentUserID)
 	if err != nil {
 		if errors.Is(err, service.ErrConversationAccessDenied) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
+			response.Forbidden(c, "Forbidden")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to activate conversation"})
+		response.InternalServerError(c, "Failed to activate conversation")
 		return
 	}
 
@@ -94,26 +93,26 @@ func (h *ConversationHandler) GetUserConversations(c *gin.Context) {
 	query := &dto.ConversationQuery{}
 	shoudBind := c.ShouldBindQuery(query)
 	if shoudBind != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": shoudBind.Error()})
+		response.BadRequest(c, shoudBind.Error())
 		return
 	}
 
 	conversations, err := h.conversationService.GetUserConversations(c.Request.Context(), senderID, query.Limit, query.Cursor, query.Q, query.ActiveConversationID)
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidConversationCursor) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid cursor"})
+			response.BadRequest(c, "Invalid cursor")
 			return
 		}
 		if errors.Is(err, service.ErrInvalidConversationID) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid conversation ID"})
+			response.BadRequest(c, "Invalid conversation ID")
 			return
 		}
 		if errors.Is(err, service.ErrConversationAccessDenied) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
+			response.Forbidden(c, "Forbidden")
 			return
 		}
 		log.Printf("Error getting conversations: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get conversations"})
+		response.InternalServerError(c, "Failed to get conversations")
 		return
 	}
 

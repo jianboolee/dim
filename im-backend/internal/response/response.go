@@ -6,6 +6,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const SuccessCode = 0
+
 // Response 统一响应结构
 type ResponseData struct {
 	Code    int         `json:"code"`
@@ -32,7 +34,7 @@ type PaginationMeta struct {
 // SuccessWithMessage 带消息的成功响应
 func Success(c *gin.Context, message string, data interface{}) {
 	c.JSON(http.StatusOK, ResponseData{
-		Code:    200,
+		Code:    SuccessCode,
 		Message: message,
 		Data:    data,
 	})
@@ -51,7 +53,7 @@ func Pagination(c *gin.Context, data interface{}, total int64, page, pageSize in
 	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
 
 	c.JSON(http.StatusOK, PaginationResponseData{
-		Code:    0,
+		Code:    SuccessCode,
 		Message: "success",
 		Data:    data,
 		Meta: PaginationMeta{

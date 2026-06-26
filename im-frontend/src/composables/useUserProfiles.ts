@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { request } from '@/utils/request'
-import type { ApiResponse } from '@/types/api'
+import { SUCCESS_CODE, type ApiResponse } from '@/types/api'
 import type { UserInfo } from '@/types/user'
 
 const cache = ref<Record<string, UserInfo>>({})
@@ -19,7 +19,7 @@ export function useUserProfiles() {
     const promise = (async () => {
       try {
         const response = await request<ApiResponse<UserInfo>>(`/im/api/users/${userId}`)
-        if (response.code === 200) {
+        if (response.code === SUCCESS_CODE) {
           cache.value = { ...cache.value, [userId]: response.data }
           return response.data
         }

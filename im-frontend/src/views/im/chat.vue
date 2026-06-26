@@ -631,7 +631,8 @@ const syncUnreadState = async () => {
   if (peerUserId.value) {
     clearUnreadForPeer(peerUserId.value)
   }
-  unreadMessageStore.decrement()
+  unreadMessageStore.requestRefresh()
+  await unreadMessageStore.fetchUnreadCount()
 }
 
 const fetchTargetUser = async () => {
