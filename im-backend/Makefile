@@ -183,21 +183,6 @@ docker-push: ## 推送 Docker 镜像到远程仓库
 	@docker push $(DOCKER_REGISTRY)/$(DOCKER_NAMESPACE)/$(DOCKER_IMAGE):$(VERSION)
 	@docker push $(DOCKER_REGISTRY)/$(DOCKER_NAMESPACE)/$(DOCKER_IMAGE):latest
 
-# Docker Compose 目标
-.PHONY: docker-compose-up
-docker-compose-up: ## 启动 Docker Compose 服务
-	@echo "启动 Docker Compose 服务..."
-	@docker-compose -f deploy/docker-compose.yml up -d
-
-.PHONY: docker-compose-down
-docker-compose-down: ## 停止 Docker Compose 服务
-	@echo "停止 Docker Compose 服务..."
-	@docker-compose -f deploy/docker-compose.yml down
-
-.PHONY: docker-compose-logs
-docker-compose-logs: ## 查看 Docker Compose 日志
-	@docker-compose -f deploy/docker-compose.yml logs -f
-
 # 开发目标
 .PHONY: dev-setup
 dev-setup: ## 设置开发环境
@@ -223,8 +208,4 @@ fmt: ## 格式化代码
 # 部署目标
 .PHONY: deploy
 deploy: build docker-build docker-push ## 完整部署流程
-	@echo "部署完成！"
-
-.PHONY: deploy-local
-deploy-local: build docker-compose-up ## 本地部署
-	@echo "本地部署完成！" 
+	@echo "部署完成！" 

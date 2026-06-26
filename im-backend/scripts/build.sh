@@ -92,22 +92,6 @@ else
     print_warning "未找到 config 目录"
 fi
 
-# 复制部署文件
-print_step "复制部署文件..."
-if [[ -f "deploy/docker-compose.yml" ]]; then
-    cp docker-compose.yml $BUILD_DIR/ 2>/dev/null
-    print_success "docker-compose.yml 复制成功"
-else
-    print_warning "未找到 docker-compose.yml"
-fi
-
-if [[ -f "deploy/nginx.conf" ]]; then
-    cp deploy/nginx.conf $BUILD_DIR/ 2>/dev/null
-    print_success "nginx.conf 复制成功"
-else
-    print_warning "未找到 nginx.conf"
-fi
-
 print_success "构建完成！"
 print_info "构建产物在 $BUILD_DIR 目录:"
 echo -e "  ${CYAN}- $API_SERVER_NAME:${NC} API 服务器二进制"

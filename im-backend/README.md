@@ -21,9 +21,6 @@
 ├── pkg/                   # 可以被外部应用程序使用的库代码
 │   ├── jwt/               # JWT 工具包
 │   └── utils/             # 通用工具包
-├── deploy/                # 部署相关文件
-│   ├── docker-compose.yml # Docker Compose 配置
-│   └── nginx.conf         # Nginx 配置
 ├── scripts/               # 启动脚本
 │   ├── start-api.sh       # API 服务器启动脚本
 │   ├── start-ws.sh        # WebSocket 服务器启动脚本
@@ -101,11 +98,9 @@ go run cmd/ws-server/main.go
 go run cmd/server/main.go
 ```
 
-**方式三：使用 Docker Compose**
-```bash
-# 启动所有服务
-docker-compose -f deploy/docker-compose.yml up -d
-```
+**方式三：生产部署**
+
+生产环境使用仓库根目录 `deploy/` 下的 Portainer Stack 模板，详见 [`deploy/README.md`](../deploy/README.md)。
 
 ### 构建
 

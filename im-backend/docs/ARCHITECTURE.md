@@ -99,9 +99,6 @@ d-im/
 │   └── utils/             # 通用工具
 │       ├── file.go
 │       └── image.go
-├── deploy/                # 部署配置
-│   ├── docker-compose.yml # Docker Compose 配置
-│   └── nginx.conf         # Nginx 配置
 ├── scripts/               # 启动脚本
 │   ├── start-api.sh       # API 服务器启动脚本
 │   ├── start-ws.sh        # WebSocket 服务器启动脚本
@@ -177,9 +174,6 @@ make run-api
 
 # 启动 WebSocket 服务器
 make run-ws
-
-# 启动 Nginx 代理
-docker-compose -f deploy/docker-compose.yml up nginx
 ```
 
 ### 2. 统一部署模式
@@ -189,12 +183,9 @@ docker-compose -f deploy/docker-compose.yml up nginx
 make run-unified
 ```
 
-### 3. Docker Compose 部署
+### 3. 生产部署
 
-```bash
-# 启动所有服务
-make docker-compose-up
-```
+使用仓库根目录 `deploy/` 下的 Portainer Stack 模板，详见 [`deploy/README.md`](../../deploy/README.md)。
 
 ## 扩展性设计
 

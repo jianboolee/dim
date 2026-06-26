@@ -109,18 +109,9 @@ make run-unified
 go run cmd/server/main.go
 ```
 
-### 方式三：Docker Compose 部署
+### 方式三：生产部署
 
-```bash
-# 启动所有服务（包括 MongoDB 和 Redis）
-make docker-compose-up
-
-# 查看服务状态
-docker-compose -f deploy/docker-compose.yml ps
-
-# 查看日志
-make docker-compose-logs
-```
+生产环境使用仓库根目录 `deploy/` 下的 Portainer Stack 模板，详见 [`deploy/README.md`](../../deploy/README.md)。
 
 ## 测试连接
 
@@ -163,33 +154,6 @@ ws.onclose = function() {
 ws.onerror = function(error) {
     console.error('WebSocket 错误:', error);
 };
-```
-
-### 3. 使用 SDK 测试
-
-```typescript
-// 使用 TypeScript SDK
-import { IMClient } from './sdk/im';
-
-const client = new IMClient({
-    apiUrl: 'http://localhost:8080',
-    wsUrl: 'ws://localhost:9000',
-    token: 'YOUR_JWT_TOKEN'
-});
-
-// 连接 WebSocket
-await client.connect();
-
-// 发送消息
-await client.sendMessage({
-    receiverId: 'target_user_id',
-    content: 'Hello from SDK!'
-});
-
-// 监听消息
-client.onMessage((message) => {
-    console.log('收到消息:', message);
-});
 ```
 
 ## 开发工具
@@ -284,14 +248,7 @@ chmod 644 config/keys/public.pem
 
 ### 1. 查看日志
 
-```bash
-# 查看 Docker 容器日志
-docker-compose -f deploy/docker-compose.yml logs -f api-server
-docker-compose -f deploy/docker-compose.yml logs -f ws-server
-
-# 查看 Nginx 日志
-docker-compose -f deploy/docker-compose.yml logs -f nginx
-```
+开发环境直接查看终端输出；生产环境通过 Portainer 或容器运行时查看各服务日志。
 
 ### 2. 健康检查
 
