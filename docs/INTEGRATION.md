@@ -37,9 +37,9 @@ sequenceDiagram
 | 变量 | 说明 |
 |------|------|
 | `JWT_SECRET` | HS256 签名密钥（足够长的随机字符串） |
-| `JWT_EXPIRE` | Access Token 有效期（秒），建议 900～1800 |
-| `JWT_REFRESH_EXPIRE` | Refresh Token 有效期（秒），默认 86400；通常不大于 `JWT_MAX_SESSION` |
-| `JWT_MAX_SESSION` | 绝对会话上限（秒），默认 86400（24h）；超过后须重新从业务系统进入 |
+| `JWT_EXPIRE` | Access Token 有效期（`time.ParseDuration` 格式，如 `1h`、`30m`），默认 `1h` |
+| `JWT_REFRESH_EXPIRE` | Refresh Token 有效期（`time.ParseDuration` 格式，如 `168h`、`168h`），默认 `168h`；通常不大于 `JWT_MAX_SESSION` |
+| `JWT_MAX_SESSION` | 绝对会话上限（`time.ParseDuration` 格式，如 `168h`），超过后须重新从业务系统进入 |
 | `JWT_ISSUER` | JWT issuer，默认 `d-im` |
 | `JWT_REFRESH_COOKIE_NAME` | Refresh Token Cookie 名称，默认 `d_im_refresh_token` |
 | `JWT_REFRESH_COOKIE_DOMAIN` | Refresh Token Cookie 域名，默认当前域 |
@@ -188,10 +188,10 @@ curl -X POST http://localhost:8901/im/api/integration/login \
 
 | 项 | 说明 |
 |----|------|
-| Access Token TTL | `JWT_EXPIRE`（默认 3600s，建议缩短到 15～30 分钟） |
+| Access Token TTL | `JWT_EXPIRE`（默认 `1h`，建议 `15m`～`30m`） |
 | Refresh Token 介质 | `HttpOnly + Secure + SameSite` Cookie |
-| Refresh Token TTL | `JWT_REFRESH_EXPIRE`，且不会超过 `JWT_MAX_SESSION` |
-| 绝对会话上限 | `JWT_MAX_SESSION`（默认 86400s），自首次登录 `iat` 起算 |
+| Refresh Token TTL | `JWT_REFRESH_EXPIRE`（如 `168h`、`168h`），且不会超过 `JWT_MAX_SESSION` |
+| 绝对会话上限 | `JWT_MAX_SESSION`（默认 `168h`），自首次登录 `iat` 起算 |
 | 建立会话 | `POST /im/api/auth/exchange`（Bearer 入口 access token，返回新 access token 并写入 refresh cookie） |
 | 续期接口 | `POST /im/api/auth/refresh`（仅依赖 refresh cookie，轮换 refresh token 并返回新 access token） |
 | 登出接口 | `POST /im/api/auth/logout`（清理 refresh cookie 并撤销当前会话） |

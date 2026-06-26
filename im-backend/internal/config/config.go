@@ -33,9 +33,9 @@ type Config struct {
 	}
 	JWT struct {
 		Secret                string
-		Expire                int
-		RefreshExpire         int
-		MaxSession            int
+		Expire                time.Duration
+		RefreshExpire         time.Duration
+		MaxSession            time.Duration
 		Issuer                string
 		RefreshCookieName     string
 		RefreshCookieDomain   string
@@ -73,9 +73,9 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("REDIS_DB", 0)
 
 	viper.SetDefault("JWT_SECRET", "")
-	viper.SetDefault("JWT_EXPIRE", 3600)
-	viper.SetDefault("JWT_REFRESH_EXPIRE", 86400)
-	viper.SetDefault("JWT_MAX_SESSION", 86400)
+	viper.SetDefault("JWT_EXPIRE", "1h")
+	viper.SetDefault("JWT_REFRESH_EXPIRE", "168h")
+	viper.SetDefault("JWT_MAX_SESSION", "168h")
 	viper.SetDefault("JWT_ISSUER", "d-im")
 	viper.SetDefault("JWT_REFRESH_COOKIE_NAME", "d_im_refresh_token")
 	viper.SetDefault("JWT_REFRESH_COOKIE_DOMAIN", "")
@@ -117,9 +117,9 @@ func LoadConfig() (*Config, error) {
 	cfg.Redis.DB = viper.GetInt("REDIS_DB")
 
 	cfg.JWT.Secret = viper.GetString("JWT_SECRET")
-	cfg.JWT.Expire = viper.GetInt("JWT_EXPIRE")
-	cfg.JWT.RefreshExpire = viper.GetInt("JWT_REFRESH_EXPIRE")
-	cfg.JWT.MaxSession = viper.GetInt("JWT_MAX_SESSION")
+	cfg.JWT.Expire = viper.GetDuration("JWT_EXPIRE")
+	cfg.JWT.RefreshExpire = viper.GetDuration("JWT_REFRESH_EXPIRE")
+	cfg.JWT.MaxSession = viper.GetDuration("JWT_MAX_SESSION")
 	cfg.JWT.Issuer = viper.GetString("JWT_ISSUER")
 	cfg.JWT.RefreshCookieName = viper.GetString("JWT_REFRESH_COOKIE_NAME")
 	cfg.JWT.RefreshCookieDomain = viper.GetString("JWT_REFRESH_COOKIE_DOMAIN")
