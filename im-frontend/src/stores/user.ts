@@ -9,6 +9,7 @@ import {
 } from '@/utils/authRefresh'
 import { useConversationList } from '@/composables/useConversationList'
 import { useIMStore } from '@/stores/im'
+import { useIMTabStore } from '@/stores/imTab'
 import { useUnreadMessageStore } from '@/stores/unreadMessage'
 import { getTokenExpiryMs, isTokenExpiringSoon, REFRESH_THRESHOLD_MS } from '@/utils/token'
 import type { UserInfo } from '@/types/user'
@@ -106,6 +107,9 @@ export const useUserStore = defineStore('user', () => {
     token.value = null
     userInfo.value = null
 
+    const imTabStore = useIMTabStore()
+    imTabStore.reset()
+
     const imStore = useIMStore()
     imStore.closeConnection()
 
@@ -122,6 +126,9 @@ export const useUserStore = defineStore('user', () => {
   const logout = async (options: LogoutOptions = {}) => {
     const { broadcast = true, revokeSession = true } = options
 
+    clearLocalAuthState(broadcast)
+    applyLogoutSideEffects()
+
     if (revokeSession) {
       try {
         await logoutSession()
@@ -129,9 +136,6 @@ export const useUserStore = defineStore('user', () => {
         console.error('登出会话失败:', error)
       }
     }
-
-    clearLocalAuthState(broadcast)
-    applyLogoutSideEffects()
   }
 
   const hasUsableToken = (value: string | null) => {
