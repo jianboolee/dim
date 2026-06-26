@@ -49,7 +49,6 @@ WORKDIR /app
 
 # 复制二进制文件和配置
 COPY --from=api-server /app/api-server /app/
-COPY --from=api-server /app/config /app/config
 
 # 暴露端口
 EXPOSE 8080
@@ -71,7 +70,6 @@ WORKDIR /app
 
 # 复制二进制文件和配置
 COPY --from=ws-server /app/ws-server /app/
-COPY --from=ws-server /app/config /app/config
 
 # 暴露端口
 EXPOSE 9000
@@ -93,7 +91,6 @@ WORKDIR /app
 
 # 复制二进制文件和配置
 COPY --from=unified-server /app/unified-server /app/
-COPY --from=unified-server /app/config /app/config
 
 # 暴露端口
 EXPOSE 8080
