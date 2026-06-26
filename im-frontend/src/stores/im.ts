@@ -88,9 +88,6 @@ export const useIMStore = defineStore('im', () => {
 
             if (status.status === 'connected') {
                 imSDK.value?.startHeartbeat()
-                void unreadMessageStore.fetchUnreadCount().catch((error) => {
-                    console.error('同步未读消息总数失败:', error)
-                })
             } else if (status.status === 'disconnected' && !manualDisconnect.value && !connectingPromise.value) {
                 imSDK.value?.stopHeartbeat()
                 handleReconnectError()
