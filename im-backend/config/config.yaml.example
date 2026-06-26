@@ -28,6 +28,6 @@ log:
 
 # WebSocket 配置
 websocket:
-  heartbeat_interval: 30s  # 对应环境变量 WS_HEARTBEAT_INTERVAL
+  heartbeat_interval: 60s  # 对应环境变量 WS_HEARTBEAT_INTERVAL
   pong_timeout: 75s        # 对应环境变量 WS_PONG_TIMEOUT
   write_timeout: 10s       # 对应环境变量 WS_WRITE_TIMEOUT

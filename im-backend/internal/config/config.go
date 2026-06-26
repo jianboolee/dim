@@ -61,7 +61,7 @@ func LoadConfig() (*Config, error) {
 
 	viper.SetDefault("API_SERVER_PORT", 8080)
 	viper.SetDefault("WS_SERVER_PORT", 9000)
-	viper.SetDefault("WS_HEARTBEAT_INTERVAL", "30s")
+	viper.SetDefault("WS_HEARTBEAT_INTERVAL", "60s")
 	viper.SetDefault("WS_PONG_TIMEOUT", "75s")
 	viper.SetDefault("WS_WRITE_TIMEOUT", "10s")
 
