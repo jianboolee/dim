@@ -3,47 +3,96 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
-	"d-im/internal/contextx"
 	"d-im/internal/response"
-	jwtpkg "d-im/pkg/jwt"
+	"d-im/internal/service"
 )
 
 type AuthHandler struct {
-	jwtService *jwtpkg.Service
+	authService *service.AuthService
 }
 
-func NewAuthHandler(jwtService *jwtpkg.Service) *AuthHandler {
-	return &AuthHandler{jwtService: jwtService}
+func NewAuthHandler(authService *service.AuthService) *AuthHandler {
+	return &AuthHandler{authService: authService}
 }
 
-type refreshTokenResponse struct {
+type tokenResponse struct {
 	Token     string `json:"token"`
 	ExpiresIn int    `json:"expires_in"`
 }
 
-// Refresh 滑动续期 access token
-func (h *AuthHandler) Refresh(c *gin.Context) {
-	claims := contextx.GetTokenClaims(c)
-	if claims == nil {
-		response.Unauthorized(c, "invalid token")
+func (h *AuthHandler) Exchange(c *gin.Context) {
+	accessToken := readBearerToken(c.GetHeader("Authorization"))
+	if accessToken == "" {
+		response.Unauthorized(c, "Authorization header is required")
 		return
 	}
 
-	token, expiresIn, err := h.jwtService.RefreshToken(claims)
+	result, err := h.authService.Exchange(c.Request.Context(), accessToken)
 	if err != nil {
-		if errors.Is(err, jwtpkg.ErrSessionExpired) {
-			response.Error(c, http.StatusUnauthorized, http.StatusUnauthorized, "session expired")
-			return
-		}
-		response.InternalServerError(c, "failed to refresh token")
+		h.handleAuthError(c, err)
 		return
 	}
 
-	response.Success(c, "success", refreshTokenResponse{
-		Token:     token,
-		ExpiresIn: expiresIn,
+	h.authService.SetRefreshCookie(c, result.RefreshToken, result.RefreshExpiresAt)
+	response.Success(c, "success", tokenResponse{
+		Token:     result.AccessToken,
+		ExpiresIn: result.AccessExpiresIn,
 	})
+}
+
+func (h *AuthHandler) Refresh(c *gin.Context) {
+	refreshToken, err := h.authService.ReadRefreshToken(c)
+	if err != nil {
+		h.authService.ClearRefreshCookie(c)
+		h.handleAuthError(c, err)
+		return
+	}
+
+	result, err := h.authService.Refresh(c.Request.Context(), refreshToken)
+	if err != nil {
+		h.authService.ClearRefreshCookie(c)
+		h.handleAuthError(c, err)
+		return
+	}
+
+	h.authService.SetRefreshCookie(c, result.RefreshToken, result.RefreshExpiresAt)
+	response.Success(c, "success", tokenResponse{
+		Token:     result.AccessToken,
+		ExpiresIn: result.AccessExpiresIn,
+	})
+}
+
+func (h *AuthHandler) Logout(c *gin.Context) {
+	refreshToken, err := h.authService.ReadRefreshToken(c)
+	if err == nil && refreshToken != "" {
+		_ = h.authService.Logout(c.Request.Context(), refreshToken)
+	}
+
+	h.authService.ClearRefreshCookie(c)
+	response.Success(c, "success", gin.H{"success": true})
+}
+
+func (h *AuthHandler) handleAuthError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, service.ErrAuthTokenMissing):
+		response.Unauthorized(c, "refresh token is required")
+	case errors.Is(err, service.ErrAuthSessionExpired):
+		response.Error(c, http.StatusUnauthorized, http.StatusUnauthorized, "session expired")
+	case errors.Is(err, service.ErrInvalidAuthToken), errors.Is(err, service.ErrAuthSessionNotFound):
+		response.Unauthorized(c, "invalid token")
+	default:
+		response.InternalServerError(c, "authentication failed")
+	}
+}
+
+func readBearerToken(authHeader string) string {
+	const prefix = "Bearer "
+	if !strings.HasPrefix(authHeader, prefix) {
+		return ""
+	}
+	return strings.TrimSpace(authHeader[len(prefix):])
 }

@@ -27,7 +27,7 @@ func JWTAuth(jwtService *jwtpkg.Service) gin.HandlerFunc {
 
 		tokenString := authHeader[len(prefix):]
 		claims := &jwtpkg.AuthTokenClaims{}
-		if err := jwtService.Parse(tokenString, claims); err != nil {
+		if err := jwtService.ParseAccessToken(tokenString, claims); err != nil {
 			log.Printf("Token validation error: %v", err)
 			c.JSON(401, gin.H{"error": err.Error()})
 			c.Abort()

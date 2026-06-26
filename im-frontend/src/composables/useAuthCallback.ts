@@ -23,7 +23,7 @@ export function useAuthCallback() {
     }
 
     try {
-      userStore.setToken(token)
+      await userStore.establishSession(token)
       await userStore.fetchUser()
 
       // 无 conversation_id：进入会话列表

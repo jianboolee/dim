@@ -8,26 +8,25 @@ import (
 
 	"d-im/internal/dto"
 	"d-im/internal/models"
-	jwtpkg "d-im/pkg/jwt"
 )
 
 type IntegrationService struct {
 	userService         *UserService
 	conversationService *ConversationService
-	jwtService          *jwtpkg.Service
+	authService         *AuthService
 	frontendBaseURL     string
 }
 
 func NewIntegrationService(
 	userService *UserService,
 	conversationService *ConversationService,
-	jwtService *jwtpkg.Service,
+	authService *AuthService,
 	frontendBaseURL string,
 ) *IntegrationService {
 	return &IntegrationService{
 		userService:         userService,
 		conversationService: conversationService,
-		jwtService:          jwtService,
+		authService:         authService,
 		frontendBaseURL:     frontendBaseURL,
 	}
 }
@@ -50,10 +49,6 @@ func (s *IntegrationService) upsertIntegrationUser(ctx context.Context, input dt
 	return s.userService.UpsertUsers(ctx, user)
 }
 
-func (s *IntegrationService) signTokenForUser(userID string) (string, error) {
-	return s.jwtService.SignUserToken(userID)
-}
-
 // CreateLoginSession 业务用户 SSO 进入 IM 会话列表
 func (s *IntegrationService) CreateLoginSession(
 	ctx context.Context,
@@ -67,15 +62,15 @@ func (s *IntegrationService) CreateLoginSession(
 		return nil, fmt.Errorf("failed to upsert user: %w", err)
 	}
 
-	token, err := s.signTokenForUser(req.User.ID)
+	session, err := s.authService.CreateSession(ctx, req.User.ID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to sign token: %w", err)
+		return nil, fmt.Errorf("failed to create auth session: %w", err)
 	}
 
 	return &dto.IntegrationLoginResponse{
-		Token:       token,
-		ExpiresIn:   s.jwtService.ExpiresInSeconds(),
-		RedirectURL: s.buildEnterRedirectURL(token, ""),
+		Token:       session.AccessToken,
+		ExpiresIn:   session.AccessExpiresIn,
+		RedirectURL: s.buildEnterRedirectURL(session.AccessToken, ""),
 	}, nil
 }
 
@@ -108,15 +103,15 @@ func (s *IntegrationService) CreateConversationSession(
 		return nil, fmt.Errorf("failed to create conversation: %w", err)
 	}
 
-	token, err := s.signTokenForUser(req.FromUser.ID)
+	session, err := s.authService.CreateSession(ctx, req.FromUser.ID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to sign token: %w", err)
+		return nil, fmt.Errorf("failed to create auth session: %w", err)
 	}
 
 	return &dto.IntegrationCreateConversationResponse{
-		Token:          token,
-		ExpiresIn:      s.jwtService.ExpiresInSeconds(),
+		Token:          session.AccessToken,
+		ExpiresIn:      session.AccessExpiresIn,
 		ConversationID: conversation.ID.Hex(),
-		RedirectURL:    s.buildEnterRedirectURL(token, conversation.ID.Hex()),
+		RedirectURL:    s.buildEnterRedirectURL(session.AccessToken, conversation.ID.Hex()),
 	}, nil
 }

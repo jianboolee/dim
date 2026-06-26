@@ -13,7 +13,7 @@ import (
 	"d-im-go-sdk/examples/demo"
 )
 
-var LOGIN_USER = demo.USER_A
+var LOGIN_USER = demo.USER_JIANBO
 
 func main() {
 	apiBase := envOr("IM_API_BASE", "http://localhost:8901")

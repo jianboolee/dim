@@ -3,34 +3,47 @@ import type { ApiResponse } from '@/types/api'
 import axios from '@/plugins/axios'
 import { isAxiosError } from 'axios'
 
-export interface RefreshTokenData {
+export interface AccessTokenData {
   token: string
   expires_in: number
 }
 
-export type RefreshAccessTokenErrorReason = 'auth' | 'network' | 'server'
+export type AuthActionErrorReason = 'auth' | 'network' | 'server'
 
-export class RefreshAccessTokenError extends Error {
-  reason: RefreshAccessTokenErrorReason
+export class AuthActionError extends Error {
+  reason: AuthActionErrorReason
   status?: number
 
-  constructor(reason: RefreshAccessTokenErrorReason, message: string, status?: number) {
+  constructor(reason: AuthActionErrorReason, message: string, status?: number) {
     super(message)
-    this.name = 'RefreshAccessTokenError'
+    this.name = 'AuthActionError'
     this.reason = reason
     this.status = status
   }
 }
 
-export async function refreshAccessToken(currentToken: string): Promise<RefreshTokenData> {
+function normalizeAuthError(error: unknown, fallbackMessage: string): never {
+  const status = isAxiosError(error) ? error.response?.status : undefined
+  if (status === 401 || status === 403) {
+    throw new AuthActionError('auth', '登录态已失效', status)
+  }
+  if (status != null) {
+    throw new AuthActionError('server', fallbackMessage, status)
+  }
+  throw new AuthActionError('network', fallbackMessage)
+}
+
+export async function exchangeAccessToken(
+  accessToken: string,
+): Promise<AccessTokenData> {
   try {
-    const response = await axios.post<ApiResponse<RefreshTokenData>>(
-      '/im/api/auth/refresh',
+    const response = await axios.post<ApiResponse<AccessTokenData>>(
+      '/im/api/auth/exchange',
       {},
       {
         baseURL: config.baseURL,
         headers: {
-          Authorization: `Bearer ${currentToken}`,
+          Authorization: `Bearer ${accessToken}`,
         },
       },
     )
@@ -39,19 +52,51 @@ export async function refreshAccessToken(currentToken: string): Promise<RefreshT
       return response.data.data
     }
 
-    throw new RefreshAccessTokenError('server', response.data.message || '刷新登录态失败')
+    throw new AuthActionError('server', response.data.message || '建立登录会话失败')
   } catch (error) {
-    if (error instanceof RefreshAccessTokenError) {
+    if (error instanceof AuthActionError) {
       throw error
     }
+    normalizeAuthError(error, '建立登录会话失败')
+  }
+}
 
-    const status = isAxiosError(error) ? error.response?.status : undefined
-    if (status === 401 || status === 403) {
-      throw new RefreshAccessTokenError('auth', '登录态已失效', status)
+export async function refreshAccessToken(): Promise<AccessTokenData> {
+  try {
+    const response = await axios.post<ApiResponse<AccessTokenData>>(
+      '/im/api/auth/refresh',
+      {},
+      {
+        baseURL: config.baseURL,
+      },
+    )
+
+    if (response.data.code === 200 && response.data.data?.token) {
+      return response.data.data
     }
-    if (status != null) {
-      throw new RefreshAccessTokenError('server', '刷新登录态失败', status)
+
+    throw new AuthActionError('server', response.data.message || '刷新登录态失败')
+  } catch (error) {
+    if (error instanceof AuthActionError) {
+      throw error
     }
-    throw new RefreshAccessTokenError('network', '网络异常，刷新登录态失败')
+    normalizeAuthError(error, '刷新登录态失败')
+  }
+}
+
+export async function logoutSession(): Promise<void> {
+  try {
+    await axios.post(
+      '/im/api/auth/logout',
+      {},
+      {
+        baseURL: config.baseURL,
+      },
+    )
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.status && error.response.status < 500) {
+      return
+    }
+    throw error
   }
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -14,7 +15,7 @@ import (
 )
 
 var FromUser = demo.USER_A
-var ToUser = demo.USER_B
+var ToUser = demo.USER_JIANBO
 
 type output struct {
 	ConversationID string      `json:"conversation_id"`
@@ -55,7 +56,7 @@ func main() {
 		Token:   session.Token,
 	})
 
-	content := "你好啊~"
+	content := fmt.Sprintf("你好啊~, 当前时间是: %s", time.Now().Format("2006-01-02 15:04:05"))
 
 	message, err := userClient.SendTextMessage(ctx, session.ConversationID, content)
 	if err != nil {

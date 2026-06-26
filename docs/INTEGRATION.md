@@ -37,9 +37,14 @@ sequenceDiagram
 | 变量 | 说明 |
 |------|------|
 | `JWT_SECRET` | HS256 签名密钥（足够长的随机字符串） |
-| `JWT_EXPIRE` | Access Token 有效期（秒），建议 1800～3600 |
+| `JWT_EXPIRE` | Access Token 有效期（秒），建议 900～1800 |
+| `JWT_REFRESH_EXPIRE` | Refresh Token 有效期（秒），默认 86400；通常不大于 `JWT_MAX_SESSION` |
 | `JWT_MAX_SESSION` | 绝对会话上限（秒），默认 86400（24h）；超过后须重新从业务系统进入 |
 | `JWT_ISSUER` | JWT issuer，默认 `d-im` |
+| `JWT_REFRESH_COOKIE_NAME` | Refresh Token Cookie 名称，默认 `d_im_refresh_token` |
+| `JWT_REFRESH_COOKIE_DOMAIN` | Refresh Token Cookie 域名，默认当前域 |
+| `JWT_REFRESH_COOKIE_SECURE` | 生产环境建议设为 `true` |
+| `JWT_REFRESH_COOKIE_SAMESITE` | `Lax` / `Strict` / `None`，默认 `Lax` |
 | `INTEGRATION_API_KEY` | 业务服务端调用创建会话接口的密钥 |
 | `IM_FRONTEND_BASE_URL` | 前端基址，用于拼接 `redirect_url` |
 | `MONGODB_URI` / `MONGODB_DATABASE` | MongoDB 连接 |
@@ -175,18 +180,22 @@ curl -X POST http://localhost:8901/im/api/integration/login \
 | 密钥 | `JWT_SECRET`（仅 im-backend 持有） |
 | 用户标识 | 标准 claim `sub` = 用户 ID |
 | 签发方 | im-backend（创建会话时） |
-| 校验 | 所有 `/im/api/*`（integration 与 auth/refresh 除外）及 `/im/ws` |
+| 校验 | 所有 `/im/api/*`（integration 与 `auth/exchange`、`auth/refresh`、`auth/logout` 除外）及 `/im/ws` |
 
-## 会话续期（滑动 Access Token）
+## 会话续期（Access + Refresh Token）
 
-用户从业务系统进入 IM 后，**前端在页面保持打开期间自动续期**，无需业务系统重复签发 JWT。
+用户从业务系统进入 IM 后，前端会先用 URL 中的短期 access token 调用 `exchange` 建立浏览器会话，随后由 `HttpOnly` refresh cookie 负责续期，无需业务系统重复签发 JWT。
 
 | 项 | 说明 |
 |----|------|
-| Access Token TTL | `JWT_EXPIRE`（默认 3600s） |
+| Access Token TTL | `JWT_EXPIRE`（默认 3600s，建议缩短到 15～30 分钟） |
+| Refresh Token 介质 | `HttpOnly + Secure + SameSite` Cookie |
+| Refresh Token TTL | `JWT_REFRESH_EXPIRE`，且不会超过 `JWT_MAX_SESSION` |
 | 绝对会话上限 | `JWT_MAX_SESSION`（默认 86400s），自首次登录 `iat` 起算 |
-| 续期接口 | `POST /im/api/auth/refresh`（Bearer 当前 token，允许已过期但未超绝对上限） |
-| 前端策略 | 到期前 5 分钟 + 标签页重新可见时静默刷新；401 时尝试续期并重试一次 |
+| 建立会话 | `POST /im/api/auth/exchange`（Bearer 入口 access token，返回新 access token 并写入 refresh cookie） |
+| 续期接口 | `POST /im/api/auth/refresh`（仅依赖 refresh cookie，轮换 refresh token 并返回新 access token） |
+| 登出接口 | `POST /im/api/auth/logout`（清理 refresh cookie 并撤销当前会话） |
+| 前端策略 | 启动时尝试 silent refresh；按 access token `exp` 精确定时刷新；页面重新可见时补偿刷新；401 时强制 refresh 并重试一次；多标签页通过 `BroadcastChannel` 同步 |
 
 续期后返回：
 
@@ -207,10 +216,11 @@ curl -X POST http://localhost:8901/im/api/integration/login \
 
 1. 用户打开 `redirect_url`（路由 `/im/enter`）
 2. 前端读取 query `token`（及可选的 `conversation_id`）
-3. 写入本地 token，调用 `GET /im/api/users/me`
-4. **无 `conversation_id`**：`router.replace` 到 `/im/home`（会话列表）
-5. **有 `conversation_id`**：拉取会话、解析对方 ID，跳转 `/im/chat/:peerId`
-6. 从 URL 移除 token，初始化 WebSocket
+3. 调用 `POST /im/api/auth/exchange`，用该 access token 建立浏览器会话并写入 refresh cookie
+4. 前端保存返回的新 access token 到内存，调用 `GET /im/api/users/me`
+5. **无 `conversation_id`**：`router.replace` 到 `/im/home`（会话列表）
+6. **有 `conversation_id`**：拉取会话、解析对方 ID，跳转 `/im/chat/:peerId`
+7. 从 URL 移除 token，初始化 WebSocket
 
 无 token 时访问 IM 会展示「请从业务系统进入」提示页（`/im/login`）。
 
@@ -238,7 +248,8 @@ curl -X POST http://localhost:8901/im/api/integration/login \
 ## 安全注意事项
 
 - `INTEGRATION_API_KEY` 仅业务服务端持有
-- `redirect_url` 中的 token 为短期 access JWT；enter 页落地后应从地址栏清除；页面打开期间由 IM 前端自动续期
+- `redirect_url` 中的 token 仅用于首屏换取浏览器会话；enter 页完成 `exchange` 后应立即从地址栏清除
+- refresh token 仅保存在 `HttpOnly` Cookie，不落地到 `localStorage`
 - 生产环境使用 HTTPS；WebSocket `CheckOrigin` 应限制为 `IM_FRONTEND_BASE_URL` 域名
 - 可选：限制 integration 接口来源 IP 或 mTLS
 

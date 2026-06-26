@@ -23,7 +23,6 @@ type Dependencies struct {
 	Config                *config.Config
 	JWTService            *jwtpkg.Service
 	JWTAuthMiddleware     gin.HandlerFunc
-	JWTRefreshMiddleware  gin.HandlerFunc
 	IntegrationMiddleware gin.HandlerFunc
 	MessageHandler        *handler.MessageHandler
 	ConversationHandler   *handler.ConversationHandler
@@ -43,7 +42,13 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 		}
 	}
 
-	jwtService, err := jwtpkg.InitService(cfg.JWT.Secret, cfg.JWT.Expire, cfg.JWT.MaxSession, cfg.JWT.Issuer)
+	jwtService, err := jwtpkg.InitService(
+		cfg.JWT.Secret,
+		cfg.JWT.Expire,
+		cfg.JWT.RefreshExpire,
+		cfg.JWT.MaxSession,
+		cfg.JWT.Issuer,
+	)
 	if err != nil {
 		log.Fatal("Failed to initialize JWT service:", err)
 	}
@@ -52,14 +57,21 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 	conversationRepo := repository.NewConversationRepository(db)
 	sessionRepo := repository.NewSessionRepository(db)
 	userRepo := repository.NewUserRepository(db)
+	authSessionRepo := repository.NewAuthSessionRepository(db)
 
 	sessionService := service.NewSessionService(sessionRepo)
 	conversationService := service.NewConversationService(conversationRepo, userRepo)
 	userService := service.NewUserService(userRepo)
+	authService := service.NewAuthService(jwtService, authSessionRepo, service.AuthCookieConfig{
+		Name:     cfg.JWT.RefreshCookieName,
+		Domain:   cfg.JWT.RefreshCookieDomain,
+		Secure:   cfg.JWT.RefreshCookieSecure,
+		SameSite: service.ParseSameSite(cfg.JWT.RefreshCookieSameSite),
+	})
 	integrationService := service.NewIntegrationService(
 		userService,
 		conversationService,
-		jwtService,
+		authService,
 		cfg.App.FrontendBaseURL,
 	)
 	uploadHandler := newUploadHandler(cfg)
@@ -83,13 +95,12 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 		Config:                cfg,
 		JWTService:            jwtService,
 		JWTAuthMiddleware:     middleware.JWTAuth(jwtService),
-		JWTRefreshMiddleware:  middleware.JWTRefreshAuth(jwtService),
 		IntegrationMiddleware: middleware.IntegrationAPIKey(cfg),
 		MessageHandler:        handler.NewMessageHandler(messageService, conversationService),
 		ConversationHandler:   handler.NewConversationHandler(conversationService),
 		SessionHandler:        handler.NewSessionHandler(sessionService),
 		UserHandler:           handler.NewUserHandler(userService),
-		AuthHandler:           handler.NewAuthHandler(jwtService),
+		AuthHandler:           handler.NewAuthHandler(authService),
 		IntegrationHandler:    handler.NewIntegrationHandler(integrationService),
 		UploadHandler:         uploadHandler,
 		WSManager:             wsManager,
@@ -131,7 +142,6 @@ func (d *Dependencies) SetupAPIRouter() *gin.Engine {
 		d.IntegrationHandler,
 		d.UploadHandler,
 		d.JWTAuthMiddleware,
-		d.JWTRefreshMiddleware,
 		d.IntegrationMiddleware,
 	)
 }

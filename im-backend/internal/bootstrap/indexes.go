@@ -34,6 +34,9 @@ func InitIndexes(cfg *config.Config) error {
 	if err := InitSessionIndexes(context.Background(), db.Database(cfg.MongoDB.Database)); err != nil {
 		return err
 	}
+	if err := InitAuthSessionIndexes(context.Background(), db.Database(cfg.MongoDB.Database)); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -167,4 +170,23 @@ func InitSessionIndexes(ctx context.Context, db *mongo.Database) error {
 	}
 
 	return nil
+}
+
+func InitAuthSessionIndexes(ctx context.Context, db *mongo.Database) error {
+	authSessionCollection := db.Collection(models.CollectionAuthSession)
+
+	return EnsureIndexes(ctx, authSessionCollection, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "id", Value: 1}},
+			Options: options.Index().SetUnique(true).SetName("unique_auth_session_id"),
+		},
+		{
+			Keys:    bson.D{{Key: "user_id", Value: 1}, {Key: "updated_at", Value: -1}},
+			Options: options.Index().SetName("idx_auth_session_user_updated"),
+		},
+		{
+			Keys:    bson.D{{Key: "expires_at", Value: 1}},
+			Options: options.Index().SetExpireAfterSeconds(0).SetName("ttl_auth_session_expiry"),
+		},
+	})
 }

@@ -4,6 +4,7 @@ import {config} from '../config'
 const instance = axios.create({
   baseURL: config.baseURL,
   timeout: 15000,
+  withCredentials: true,
   headers: { 'X-Custom-Header': 'x-rv' }
 })
 

@@ -32,10 +32,15 @@ type Config struct {
 		DB       int
 	}
 	JWT struct {
-		Secret     string
-		Expire     int
-		MaxSession int
-		Issuer     string
+		Secret                string
+		Expire                int
+		RefreshExpire         int
+		MaxSession            int
+		Issuer                string
+		RefreshCookieName     string
+		RefreshCookieDomain   string
+		RefreshCookieSecure   bool
+		RefreshCookieSameSite string
 	}
 	Integration struct {
 		APIKey string
@@ -69,8 +74,13 @@ func LoadConfig() (*Config, error) {
 
 	viper.SetDefault("JWT_SECRET", "")
 	viper.SetDefault("JWT_EXPIRE", 3600)
+	viper.SetDefault("JWT_REFRESH_EXPIRE", 86400)
 	viper.SetDefault("JWT_MAX_SESSION", 86400)
 	viper.SetDefault("JWT_ISSUER", "d-im")
+	viper.SetDefault("JWT_REFRESH_COOKIE_NAME", "d_im_refresh_token")
+	viper.SetDefault("JWT_REFRESH_COOKIE_DOMAIN", "")
+	viper.SetDefault("JWT_REFRESH_COOKIE_SECURE", false)
+	viper.SetDefault("JWT_REFRESH_COOKIE_SAMESITE", "Lax")
 
 	viper.SetDefault("INTEGRATION_API_KEY", "")
 	viper.SetDefault("IM_FRONTEND_BASE_URL", "http://localhost:5173")
@@ -108,8 +118,13 @@ func LoadConfig() (*Config, error) {
 
 	cfg.JWT.Secret = viper.GetString("JWT_SECRET")
 	cfg.JWT.Expire = viper.GetInt("JWT_EXPIRE")
+	cfg.JWT.RefreshExpire = viper.GetInt("JWT_REFRESH_EXPIRE")
 	cfg.JWT.MaxSession = viper.GetInt("JWT_MAX_SESSION")
 	cfg.JWT.Issuer = viper.GetString("JWT_ISSUER")
+	cfg.JWT.RefreshCookieName = viper.GetString("JWT_REFRESH_COOKIE_NAME")
+	cfg.JWT.RefreshCookieDomain = viper.GetString("JWT_REFRESH_COOKIE_DOMAIN")
+	cfg.JWT.RefreshCookieSecure = viper.GetBool("JWT_REFRESH_COOKIE_SECURE")
+	cfg.JWT.RefreshCookieSameSite = viper.GetString("JWT_REFRESH_COOKIE_SAMESITE")
 
 	cfg.Integration.APIKey = viper.GetString("INTEGRATION_API_KEY")
 	cfg.App.FrontendBaseURL = viper.GetString("IM_FRONTEND_BASE_URL")

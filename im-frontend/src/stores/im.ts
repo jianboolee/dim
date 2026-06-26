@@ -111,6 +111,21 @@ export const useIMStore = defineStore('im', () => {
         return await userStore.ensureValidToken({ logoutOnAuthError: true })
     }
 
+    const syncAccessToken = (token: string) => {
+        if (!token) return
+
+        if (!imSDK.value) {
+            return
+        }
+
+        imSDK.value.updateToken(token)
+        sdkToken.value = token
+
+        if (!isConnected.value && !connectingPromise.value && !manualDisconnect.value) {
+            void connectWithCurrentToken()
+        }
+    }
+
     const connectWithCurrentToken = async () => {
         if (!canUseConnection()) return
         if (manualDisconnect.value) return
@@ -166,20 +181,6 @@ export const useIMStore = defineStore('im', () => {
         void connectWithCurrentToken()
 
         return imSDK.value
-    }
-
-    const reconnectWithLatestToken = async () => {
-        if (!canUseConnection()) return
-        manualDisconnect.value = false
-        clearReconnectTimer()
-
-        if (imSDK.value) {
-            imSDK.value.stopHeartbeat()
-            imSDK.value.disconnect()
-        }
-
-        isConnected.value = false
-        await connectWithCurrentToken()
     }
 
     // 添加消息处理器
@@ -257,6 +258,6 @@ export const useIMStore = defineStore('im', () => {
         clearHandlers,
         reconnect,
         fetchUnreadCount,
-        reconnectWithLatestToken
+        syncAccessToken
     }
-}) 
+})

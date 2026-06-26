@@ -43,7 +43,7 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 
 	// 验证 token
 	claims := &jwtpkg.AuthTokenClaims{}
-	if err := h.jwtService.Parse(token, claims); err != nil {
+	if err := h.jwtService.ParseAccessToken(token, claims); err != nil {
 		log.Printf("Token validation error: %v", err)
 		response.Error(c, http.StatusUnauthorized, http.StatusUnauthorized, err.Error())
 		return
