@@ -153,6 +153,7 @@ function waitForRemoteAuthUpdate(timeoutMs = AUTH_REFRESH_LOCK_TTL_MS): Promise<
 export const useUserStore = defineStore('user', () => {
   const token = ref<string | null>(null)
   const userInfo = ref<UserInfo | null>(null)
+  const sessionExpired = ref(false)
   const unreadMessageStore = useUnreadMessageStore()
   const authTabId = getAuthTabId()
 
@@ -286,7 +287,7 @@ export const useUserStore = defineStore('user', () => {
         error.reason === 'auth' &&
         options.logoutOnAuthError !== false
       ) {
-        await logout({ revokeSession: false, broadcast: false })
+        sessionExpired.value = true
         return null
       }
       throw error
@@ -296,6 +297,11 @@ export const useUserStore = defineStore('user', () => {
   const ensureValidToken = async (
     options: EnsureValidTokenOptions = {},
   ): Promise<string | null> => {
+    // 会话已过期（Modal 展示中），不再尝试刷新，直接返回 null
+    if (sessionExpired.value) {
+      return null
+    }
+
     const currentToken = token.value
     if (!options.force && currentToken && !isTokenExpiringSoon(currentToken)) {
       return currentToken
@@ -312,7 +318,7 @@ export const useUserStore = defineStore('user', () => {
         error.reason === 'auth' &&
         options.logoutOnAuthError !== false
       ) {
-        await logout({ revokeSession: false, broadcast: false })
+        sessionExpired.value = true
         return null
       }
       return null
@@ -391,12 +397,19 @@ export const useUserStore = defineStore('user', () => {
     }
   })
 
+  const confirmSessionExpired = async () => {
+    sessionExpired.value = false
+    await logout({ revokeSession: false })
+  }
+
   return {
     token,
     userInfo,
+    sessionExpired,
     setToken,
     setUserInfo,
     logout,
+    confirmSessionExpired,
     refreshToken,
     ensureValidToken,
     fetchUser,

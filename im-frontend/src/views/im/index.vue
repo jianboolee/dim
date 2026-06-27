@@ -1,14 +1,20 @@
 <template>
   <RouterView />
+  <SessionExpiredModal
+    :visible="userStore.sessionExpired"
+    @confirm="handleSessionExpiredConfirm"
+  />
 </template>
 
 <script setup lang="ts">
 import { computed, onUnmounted, watch } from 'vue'
-import { RouterView } from 'vue-router'
+import { RouterView, useRouter } from 'vue-router'
 import { useIMStore } from '@/stores/im'
 import { useIMTabStore } from '@/stores/imTab'
 import { useUserStore } from '@/stores/user'
+import SessionExpiredModal from '@/components/common/SessionExpiredModal.vue'
 
+const router = useRouter()
 const userStore = useUserStore()
 const imStore = useIMStore()
 const imTabStore = useIMTabStore()
@@ -39,4 +45,9 @@ watch(
 onUnmounted(() => {
   imTabStore.reset()
 })
+
+const handleSessionExpiredConfirm = async () => {
+  await userStore.confirmSessionExpired()
+  router.replace({ name: 'im-login' })
+}
 </script>
