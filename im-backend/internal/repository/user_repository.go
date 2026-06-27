@@ -35,6 +35,9 @@ func (r *UserRepository) Upsert(ctx context.Context, user *models.User) error {
 	if user.Avatar != "" {
 		setFields["avatar"] = user.Avatar
 	}
+	if user.Type != "" {
+		setFields["type"] = user.Type
+	}
 
 	update := bson.M{
 		"$set": setFields,

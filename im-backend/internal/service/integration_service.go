@@ -45,8 +45,20 @@ func (s *IntegrationService) upsertIntegrationUser(ctx context.Context, input dt
 		ID:       input.ID,
 		Nickname: input.ResolveNickname(),
 		Avatar:   input.ResolveAvatar(),
+		Type:     resolveUserType(input.ID, input.Type),
 	}
 	return s.userService.UpsertUsers(ctx, user)
+}
+
+// resolveUserType 根据显式传入或 ID 前缀推断用户类型
+func resolveUserType(userID, explicitType string) models.UserType {
+	if t := models.UserType(strings.TrimSpace(explicitType)); t != "" {
+		return t
+	}
+	if strings.HasPrefix(userID, "system_") {
+		return models.UserTypeSystem
+	}
+	return ""
 }
 
 // CreateLoginSession 业务用户 SSO 进入 IM 会话列表
@@ -87,11 +99,13 @@ func (s *IntegrationService) CreateConversationSession(
 			ID:       req.FromUser.ID,
 			Nickname: req.FromUser.ResolveNickname(),
 			Avatar:   req.FromUser.ResolveAvatar(),
+			Type:     resolveUserType(req.FromUser.ID, req.FromUser.Type),
 		},
 		{
 			ID:       req.ToUser.ID,
 			Nickname: req.ToUser.ResolveNickname(),
 			Avatar:   req.ToUser.ResolveAvatar(),
+			Type:     resolveUserType(req.ToUser.ID, req.ToUser.Type),
 		},
 	}
 	if err := s.userService.UpsertUsers(ctx, users...); err != nil {

@@ -15,15 +15,17 @@ import (
 )
 
 type WSHandler struct {
-	wsManager  *service.WSManager
-	jwtService *jwtpkg.Service
-	upgrader   websocket.Upgrader
+	wsManager   *service.WSManager
+	jwtService  *jwtpkg.Service
+	userService *service.UserService
+	upgrader    websocket.Upgrader
 }
 
-func NewWSHandler(wsManager *service.WSManager, jwtService *jwtpkg.Service) *WSHandler {
+func NewWSHandler(wsManager *service.WSManager, jwtService *jwtpkg.Service, userService *service.UserService) *WSHandler {
 	return &WSHandler{
-		wsManager:  wsManager,
-		jwtService: jwtService,
+		wsManager:   wsManager,
+		jwtService:  jwtService,
+		userService: userService,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true // 在生产环境中应该更严格
@@ -59,6 +61,13 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 
 	// 使用解析出的用户ID
 	userID := claims.Subject
+
+	// 系统用户不允许建立 WebSocket 连接
+	if user, err := h.userService.GetUserInfo(c.Request.Context(), userID); err == nil && user.Type.IsSystemLike() {
+		log.Printf("system user %s attempted to connect via WebSocket, rejected", userID)
+		response.Error(c, http.StatusForbidden, http.StatusForbidden, "系统用户不支持实时连接")
+		return
+	}
 
 	logger.Debug("WebSocket connection established for user", zap.String("user_id", userID))
 

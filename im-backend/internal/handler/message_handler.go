@@ -137,6 +137,10 @@ func (h *MessageHandler) SendMessageToConversation(c *gin.Context) {
 			response.Forbidden(c, "Forbidden")
 			return
 		}
+		if errors.Is(err, service.ErrCannotReplyToSystemUser) {
+			response.Forbidden(c, "不能回复系统消息")
+			return
+		}
 		response.InternalServerError(c, err.Error())
 		return
 	}

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 	"d-im/pkg/logger"
 )
 
+var ErrCannotReplyToSystemUser = errors.New("cannot reply to system user")
+
 // MessageService 消息服务
 type MessageService struct {
 	repo                *repository.MessageRepository
@@ -24,6 +27,7 @@ type MessageService struct {
 	sessionService      *SessionService
 	wsManager           *WSManager
 	redisClient         *redis.Client
+	userRepo            *repository.UserRepository
 }
 
 // NewMessageService 创建消息服务
@@ -34,6 +38,7 @@ func NewMessageService(
 	sessionService *SessionService,
 	wsManager *WSManager,
 	redisClient *redis.Client,
+	userRepo *repository.UserRepository,
 ) *MessageService {
 	return &MessageService{
 		repo:                repo,
@@ -42,6 +47,7 @@ func NewMessageService(
 		sessionService:      sessionService,
 		wsManager:           wsManager,
 		redisClient:         redisClient,
+		userRepo:            userRepo,
 	}
 }
 
@@ -91,6 +97,13 @@ func (s *MessageService) SendMessageToConversation(
 	receiverID, err := resolvePrivateReceiverID(conversation, senderID)
 	if err != nil {
 		return nil, false, err
+	}
+
+	// 检查对方是否为系统用户（只读），普通用户不能回复系统消息
+	if s.userRepo != nil {
+		if peerUser, err := s.userRepo.GetByID(ctx, receiverID); err == nil && peerUser.Type == models.UserTypeSystem {
+			return nil, false, ErrCannotReplyToSystemUser
+		}
 	}
 
 	if clientMessageID != "" {

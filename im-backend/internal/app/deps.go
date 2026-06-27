@@ -85,10 +85,10 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 			PongWait:   cfg.WebSocket.PongTimeout,
 			WriteWait:  cfg.WebSocket.WriteTimeout,
 		})
-		messageService = service.NewMessageService(messageRepo, conversationRepo, conversationService, sessionService, wsManager, redisClient)
+		messageService = service.NewMessageService(messageRepo, conversationRepo, conversationService, sessionService, wsManager, redisClient, userRepo)
 		wsManager.SetMessageService(messageService)
 	} else {
-		messageService = service.NewMessageService(messageRepo, conversationRepo, conversationService, sessionService, nil, redisClient)
+		messageService = service.NewMessageService(messageRepo, conversationRepo, conversationService, sessionService, nil, redisClient, userRepo)
 	}
 
 	deps := &Dependencies{
@@ -107,7 +107,7 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 	}
 
 	if withWS && wsManager != nil {
-		deps.WSHandler = handler.NewWSHandler(wsManager, jwtService)
+		deps.WSHandler = handler.NewWSHandler(wsManager, jwtService, userService)
 	}
 
 	return deps

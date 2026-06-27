@@ -88,6 +88,7 @@ export enum MessageType {
       id: string;
       nickname?: string;
       avatar?: string;
+      type?: string;
     };
     image_url: string;
     user_states?: { [key: string]: ConversationUserState };

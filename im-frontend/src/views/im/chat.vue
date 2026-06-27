@@ -122,7 +122,11 @@
       </div>
     </div>
 
-    <div class="message-input-container">
+    <div v-if="peerUserType === 'system'" class="system-notice-bar">
+      <i class="ri-information-line"></i>
+      <span>系统消息，暂不支持回复</span>
+    </div>
+    <div v-else class="message-input-container">
       <div class="message-input">
         <div class="message-input-content">
           <MultilineInput
@@ -241,6 +245,9 @@ const peerUserId = computed(
     conversation.value?.to_user_info?.id ||
     conversation.value?.participants.find((id) => id !== currentUserId.value) ||
     '',
+)
+const peerUserType = computed(
+  () => conversation.value?.to_user_info?.type || userMap.value[peerUserId.value]?.type || '',
 )
 const conversationInfoParticipants = computed<UserInfo[]>(() => {
   const currentId = currentUserId.value
@@ -1581,5 +1588,22 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.system-notice-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px var(--spacing-base);
+  background: #f0f4ff;
+  border-top: 1px solid #dce3f5;
+  color: #5b6c94;
+  font-size: 13px;
+}
+
+.system-notice-bar i {
+  font-size: 18px;
+  line-height: 1;
+  color: #8ba0cb;
 }
 </style>

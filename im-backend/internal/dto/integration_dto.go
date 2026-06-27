@@ -7,6 +7,7 @@ type IntegrationUserInput struct {
 	Nickname  string `json:"nickname"`
 	Avatar    string `json:"avatar"`
 	AvatarURL string `json:"avatar_url"`
+	Type      string `json:"type"` // 可选：normal / system / bot，不传时根据 system_ 前缀自动推断
 }
 
 // ResolveAvatar 兼容 avatar / avatar_url 两种字段名

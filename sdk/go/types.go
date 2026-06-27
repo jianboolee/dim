@@ -7,6 +7,7 @@ type User struct {
 	Nickname  string `json:"nickname,omitempty"`
 	Avatar    string `json:"avatar,omitempty"`
 	AvatarURL string `json:"avatar_url,omitempty"`
+	Type      string `json:"type,omitempty"` // normal / system / bot
 }
 
 type ConversationUserState struct {
