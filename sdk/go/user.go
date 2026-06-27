@@ -110,3 +110,26 @@ func (c *UserClient) SendTextMessage(ctx context.Context, conversationID string,
 		Content: content,
 	})
 }
+
+// SendCardMessage 发送一张卡片消息。
+//
+// 卡片消息支持标题、描述、图片和链接地址，常用于商品推荐、活动推送等场景。
+// title 和 description 二选一即可，不填的传空字符串 ""。
+//
+// 示例：
+//
+//	msg, err := userClient.SendCardMessage(ctx, conversationID,
+//	    "限时特惠", "2021款宝马3系仅售18.8万", "https://img.example.com/car.jpg", "https://example.com/car/123",
+//	)
+func (c *UserClient) SendCardMessage(ctx context.Context, conversationID string, title, description, imageURL, linkURL string) (*Message, error) {
+	return c.SendMessage(ctx, conversationID, SendMessageRequest{
+		Type:    "card",
+		Content: title,
+		Payload: &Payload{
+			Title:       title,
+			Description: description,
+			ImageURL:    imageURL,
+			URL:         linkURL,
+		},
+	})
+}

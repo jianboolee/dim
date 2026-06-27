@@ -2,20 +2,6 @@ package demo
 
 import dim "d-im-go-sdk"
 
-const AvatarSuffix = "?x-oss-process=image/resize,m_fill,w_200,h_200"
-
-var USER_SYSTEM_NOTICE = dim.User{
-	ID:       "system_notice",
-	Nickname: "系统通知",
-	Avatar:   "https://oss.21rv.com/uploads/avatar/21.jpg" + AvatarSuffix,
-}
-
-var USER_SYSTEM_OPS = dim.User{
-	ID:       "system_ops",
-	Nickname: "系统运维",
-	Avatar:   "https://oss.21rv.com/uploads/avatar/23.jpg" + AvatarSuffix,
-}
-
 var USER_DEMO = dim.User{
 	ID:       "user_demo",
 	Nickname: "Demo",

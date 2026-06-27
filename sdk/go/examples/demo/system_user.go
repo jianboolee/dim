@@ -1,0 +1,123 @@
+// Package demo 提供 IM SDK 的示例代码。
+//
+// 本文件定义了系统默认用户（System User），用于业务系统向指定用户
+// 发送系统级消息（如通知、提醒、客服等场景）。
+// 系统用户与普通用户一样通过 integration 接口创建会话、发送消息，
+// 其 user ID 均以 "system_" 为前缀，便于前端识别与区分展示。
+//
+// 使用方法：
+//
+//	// 以系统通知身份向用户 Alice 发送文本消息
+//	integrationClient.CreateConversation(ctx, dim.CreateConversationRequest{
+//	    FromUser: demo.USER_SYSTEM_NOTICE,
+//	    ToUser:   demo.USER_A,
+//	})
+//
+//	// 以系统通知身份向用户 Alice 发送卡片消息
+//	session, _ := integrationClient.CreateConversation(ctx, dim.CreateConversationRequest{
+//	    FromUser: demo.USER_SYSTEM_ORDER,
+//	    ToUser:   demo.USER_A,
+//	})
+//	userClient := dim.NewUserClient(dim.Config{BaseURL: apiBase, Token: session.Token})
+//	userClient.SendCardMessage(ctx, session.ConversationID,
+//	    "订单已发货", "您的订单已由顺丰快递发出，运单号：SF1234567890",
+//	    "https://img.example.com/order.jpg", "https://example.com/order/123",
+//	)
+//
+// 系统用户 ID 列表及用途说明：
+//
+//	system_notice       系统通知 —— 通用系统级通知消息
+//	system_ops          系统运维 —— 运维公告、升级维护通知
+//	system_order        订单消息 —— 订单状态变更（已下单/已发货/已完成等）
+//	system_payment      支付消息 —— 支付成功、退款、分期审核等
+//	system_logistics    物流消息 —— 发货、运输中、签收等物流动态
+//	system_interaction  互动消息 —— 点赞、评论、关注等社交互动提醒
+//	system_service      客服消息 —— 工单处理、投诉反馈、咨询回复
+//	system_reminder     提醒通知 —— 预约提醒、到期提醒、活动截止等
+//	system_audit        审核消息 —— 内容审核结果、实名认证结果等
+//	system_report       数据报告 —— 周报、月报、销售数据等统计报告
+package demo
+
+import dim "d-im-go-sdk"
+
+const AvatarSuffix = "?x-oss-process=image/resize,m_fill,w_200,h_200"
+
+// ---- 通用系统 ----
+
+// USER_SYSTEM_NOTICE 系统通知，用于通用系统级通知消息
+var USER_SYSTEM_NOTICE = dim.User{
+	ID:       "system_notice",
+	Nickname: "系统通知",
+	Avatar:   "https://oss.21rv.com/uploads/avatar/21.jpg" + AvatarSuffix,
+}
+
+// USER_SYSTEM_OPS 系统运维，用于运维公告、升级维护通知等
+var USER_SYSTEM_OPS = dim.User{
+	ID:       "system_ops",
+	Nickname: "系统运维",
+	Avatar:   "https://oss.21rv.com/uploads/avatar/23.jpg" + AvatarSuffix,
+}
+
+// ---- 交易相关 ----
+
+// USER_SYSTEM_ORDER 订单消息，用于订单状态变更通知
+var USER_SYSTEM_ORDER = dim.User{
+	ID:       "system_order",
+	Nickname: "订单消息",
+	Avatar:   "https://oss.21rv.com/uploads/avatar/22.jpg" + AvatarSuffix,
+}
+
+// USER_SYSTEM_PAYMENT 支付消息，用于支付成功/失败、退款到账等
+var USER_SYSTEM_PAYMENT = dim.User{
+	ID:       "system_payment",
+	Nickname: "支付消息",
+	Avatar:   "https://oss.21rv.com/uploads/avatar/27.jpg" + AvatarSuffix,
+}
+
+// USER_SYSTEM_LOGISTICS 物流消息，用于发货、运输中、签收等物流动态
+var USER_SYSTEM_LOGISTICS = dim.User{
+	ID:       "system_logistics",
+	Nickname: "物流消息",
+	Avatar:   "https://oss.21rv.com/uploads/avatar/28.jpg" + AvatarSuffix,
+}
+
+// ---- 社交互动 ----
+
+// USER_SYSTEM_INTERACTION 互动消息，用于点赞、评论、关注等社交提醒
+var USER_SYSTEM_INTERACTION = dim.User{
+	ID:       "system_interaction",
+	Nickname: "互动消息",
+	Avatar:   "https://oss.21rv.com/uploads/avatar/24.jpg" + AvatarSuffix,
+}
+
+// ---- 运营服务 ----
+
+// USER_SYSTEM_SERVICE 客服消息，用于工单处理、投诉反馈、咨询回复等
+var USER_SYSTEM_SERVICE = dim.User{
+	ID:       "system_service",
+	Nickname: "客服消息",
+	Avatar:   "https://oss.21rv.com/uploads/avatar/29.jpg" + AvatarSuffix,
+}
+
+// USER_SYSTEM_REMINDER 提醒通知，用于预约提醒、到期提醒、活动截止等
+var USER_SYSTEM_REMINDER = dim.User{
+	ID:       "system_reminder",
+	Nickname: "提醒通知",
+	Avatar:   "https://oss.21rv.com/uploads/avatar/30.jpg" + AvatarSuffix,
+}
+
+// USER_SYSTEM_AUDIT 审核消息，用于内容审核、实名认证等审核结果通知
+var USER_SYSTEM_AUDIT = dim.User{
+	ID:       "system_audit",
+	Nickname: "审核消息",
+	Avatar:   "https://oss.21rv.com/uploads/avatar/25.jpg" + AvatarSuffix,
+}
+
+// ---- 数据分析 ----
+
+// USER_SYSTEM_REPORT 数据报告，用于周报、月报、销售数据统计等
+var USER_SYSTEM_REPORT = dim.User{
+	ID:       "system_report",
+	Nickname: "数据报告",
+	Avatar:   "https://oss.21rv.com/uploads/avatar/32.jpg" + AvatarSuffix,
+}
