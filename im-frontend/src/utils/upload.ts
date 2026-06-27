@@ -20,7 +20,7 @@ function normalizeUploadPayload(data: unknown): UploadedFile[] {
 
   if (data && typeof data === 'object' && 'code' in data) {
     const wrapped = data as ApiResponse<UploadedFile[] | UploadedFile>
-    if (wrapped.code !== 200 || wrapped.data == null) {
+    if (wrapped.code !== 0 || wrapped.data == null) {
       throw new Error(wrapped.message || '上传失败')
     }
     return Array.isArray(wrapped.data) ? wrapped.data : [wrapped.data]

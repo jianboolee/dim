@@ -20,6 +20,8 @@ let authChannel: BroadcastChannel | null = null
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
 let visibilityBound = false
 let authChannelBound = false
+const AUTH_REFRESH_LOCK_KEY = 'd-im-auth-refresh-lock'
+const AUTH_REFRESH_LOCK_TTL_MS = 15_000
 
 type AuthMessage =
   | { type: 'token-updated'; token: string }
@@ -55,10 +57,104 @@ function clearRefreshTimer() {
   }
 }
 
+function getAuthTabId() {
+  if (typeof sessionStorage === 'undefined') {
+    return 'server'
+  }
+
+  const existing = sessionStorage.getItem('d-im-auth-tab-id')
+  if (existing) {
+    return existing
+  }
+
+  const nextId =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  sessionStorage.setItem('d-im-auth-tab-id', nextId)
+  return nextId
+}
+
+function readRefreshLock() {
+  if (typeof localStorage === 'undefined') {
+    return null
+  }
+
+  const raw = localStorage.getItem(AUTH_REFRESH_LOCK_KEY)
+  if (!raw) {
+    return null
+  }
+
+  try {
+    return JSON.parse(raw) as { owner: string; expiresAt: number }
+  } catch {
+    return null
+  }
+}
+
+function acquireRefreshLock(owner: string) {
+  if (typeof localStorage === 'undefined') {
+    return true
+  }
+
+  const now = Date.now()
+  const current = readRefreshLock()
+  if (current && current.expiresAt > now && current.owner !== owner) {
+    return false
+  }
+
+  const next = JSON.stringify({
+    owner,
+    expiresAt: now + AUTH_REFRESH_LOCK_TTL_MS,
+  })
+  localStorage.setItem(AUTH_REFRESH_LOCK_KEY, next)
+
+  const confirmed = readRefreshLock()
+  return confirmed?.owner === owner
+}
+
+function releaseRefreshLock(owner: string) {
+  if (typeof localStorage === 'undefined') {
+    return
+  }
+
+  const current = readRefreshLock()
+  if (current?.owner === owner) {
+    localStorage.removeItem(AUTH_REFRESH_LOCK_KEY)
+  }
+}
+
+function waitForRemoteAuthUpdate(timeoutMs = AUTH_REFRESH_LOCK_TTL_MS): Promise<AuthMessage | null> {
+  const channel = createAuthChannel()
+  if (!channel) {
+    return Promise.resolve(null)
+  }
+
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => {
+      channel.removeEventListener('message', onMessage)
+      resolve(null)
+    }, timeoutMs)
+
+    const onMessage = (event: MessageEvent<AuthMessage>) => {
+      const message = event.data
+      if (!message || (message.type !== 'token-updated' && message.type !== 'logout')) {
+        return
+      }
+      window.clearTimeout(timer)
+      channel.removeEventListener('message', onMessage)
+      resolve(message)
+    }
+
+    channel.addEventListener('message', onMessage)
+  })
+}
+
 export const useUserStore = defineStore('user', () => {
   const token = ref<string | null>(null)
   const userInfo = ref<UserInfo | null>(null)
   const unreadMessageStore = useUnreadMessageStore()
+  const authTabId = getAuthTabId()
 
   const scheduleRefresh = (nextToken: string | null) => {
     clearRefreshTimer()
@@ -152,6 +248,19 @@ export const useUserStore = defineStore('user', () => {
       return refreshPromise
     }
 
+    if (!acquireRefreshLock(authTabId)) {
+      const remoteUpdate = await waitForRemoteAuthUpdate()
+      if (remoteUpdate?.type === 'token-updated' && token.value) {
+        return token.value
+      }
+      if (remoteUpdate?.type === 'logout') {
+        return null
+      }
+      if (!acquireRefreshLock(authTabId)) {
+        return token.value
+      }
+    }
+
     refreshPromise = (async () => {
       try {
         const result = await refreshAccessToken()
@@ -161,6 +270,7 @@ export const useUserStore = defineStore('user', () => {
         }
         return null
       } finally {
+        releaseRefreshLock(authTabId)
         refreshPromise = null
       }
     })()
@@ -268,9 +378,13 @@ export const useUserStore = defineStore('user', () => {
     throw new Error('无法获取用户信息')
   }
 
+  // 总未读消息数
   watch(token, (newToken, oldToken) => {
     if (newToken && !oldToken) {
-      unreadMessageStore.startHeartbeat()
+      // unreadMessageStore.startHeartbeat()
+      void unreadMessageStore.fetchUnreadCount().catch((error) => {
+        console.error('同步未读消息总数失败:', error)
+      })
     } else if (!newToken && oldToken) {
       unreadMessageStore.reset()
       unreadMessageStore.stopHeartbeat()

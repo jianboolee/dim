@@ -90,6 +90,7 @@ export const useUnreadMessageStore = defineStore('unreadMessage', () => {
   }
 
   const startHeartbeat = () => {
+    console.log('startHeartbeat')
     if (typeof document === 'undefined') {
       return
     }

@@ -97,7 +97,7 @@ Vite 开发代理（见 [im-frontend/vite.config.ts](../im-frontend/vite.config.
 
 ```json
 {
-  "code": 200,
+  "code": 0,
   "message": "success",
   "data": {
     "token": "eyJhbGciOiJIUzI1NiIs...",
@@ -149,7 +149,7 @@ curl -X POST http://localhost:8901/im/api/integration/conversations \
 
 ```json
 {
-  "code": 200,
+  "code": 0,
   "message": "success",
   "data": {
     "token": "eyJhbGciOiJIUzI1NiIs...",
@@ -201,7 +201,7 @@ curl -X POST http://localhost:8901/im/api/integration/login \
 
 ```json
 {
-  "code": 200,
+  "code": 0,
   "message": "success",
   "data": {
     "token": "eyJ...",
