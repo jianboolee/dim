@@ -13,6 +13,8 @@ import (
 	"d-im-go-sdk/examples/demo"
 )
 
+var PeerUser = demo.USER_B
+
 var (
 	firstNames = []string{
 		"James", "Emma", "Liam", "Olivia", "Noah",
@@ -106,9 +108,9 @@ func main() {
 func parseConfig() config {
 	apiBase := envOr("IM_API_BASE", "http://localhost:8901")
 	integrationKey := envOr("INTEGRATION_API_KEY", "")
-	peerUserID := envOr("PEER_USER_ID", demo.USER_A.ID)
-	peerNickname := envOr("PEER_USER_NICKNAME", demo.USER_A.Nickname)
-	peerAvatar := envOr("PEER_USER_AVATAR", demo.USER_A.Avatar)
+	peerUserID := envOr("PEER_USER_ID", PeerUser.ID)
+	peerNickname := envOr("PEER_USER_NICKNAME", PeerUser.Nickname)
+	peerAvatar := envOr("PEER_USER_AVATAR", PeerUser.Avatar)
 
 	var (
 		flagAPIBase    string

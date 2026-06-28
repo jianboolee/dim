@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"errors"
+	"regexp"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -184,6 +186,63 @@ func (r *ConversationRepository) SetParticipants(ctx context.Context, id primiti
 		},
 	})
 	return err
+}
+
+// SearchConversationIDs 根据参与者 ID 和/或群名关键词搜索匹配的会话 ID。
+//
+//   - participantIDs: 匹配其中任意一个参与者的私聊会话
+//   - groupKeyword:   按 display_name 模糊匹配群聊（为空则忽略）
+func (r *ConversationRepository) SearchConversationIDs(
+	ctx context.Context,
+	participantIDs []string,
+	groupKeyword string,
+	limit int64,
+) ([]primitive.ObjectID, error) {
+	if len(participantIDs) == 0 && groupKeyword == "" {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+
+	conditions := []bson.M{}
+	if len(participantIDs) > 0 {
+		conditions = append(conditions, bson.M{
+			"type":         models.ConversationTypePrivate,
+			"participants": bson.M{"$in": participantIDs},
+		})
+	}
+	if kw := strings.TrimSpace(groupKeyword); kw != "" {
+		conditions = append(conditions, bson.M{
+			"type":         models.ConversationTypeGroup,
+			"display_name": bson.M{"$regex": regexp.QuoteMeta(kw), "$options": "i"},
+		})
+	}
+
+	if len(conditions) == 0 {
+		return nil, nil
+	}
+
+	filter := bson.M{"$or": conditions}
+	opts := options.Find().SetLimit(limit).SetProjection(bson.M{"_id": 1})
+
+	cursor, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	ids := make([]primitive.ObjectID, 0)
+	for cursor.Next(ctx) {
+		var result struct {
+			ID primitive.ObjectID `bson:"_id"`
+		}
+		if err := cursor.Decode(&result); err != nil {
+			return nil, err
+		}
+		ids = append(ids, result.ID)
+	}
+	return ids, cursor.Err()
 }
 
 // DeleteConversation 删除会话

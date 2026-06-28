@@ -161,6 +161,41 @@ func (r *ConversationMemberRepository) ListByUser(
 	return members, cursor.Err()
 }
 
+// ListByUserAndConversationIDs 获取用户在指定会话列表中的成员记录,
+// 仅在搜索场景使用, 按 sort_at 倒序, 不做游标分页（搜索结果的匹配会话数有限）。
+func (r *ConversationMemberRepository) ListByUserAndConversationIDs(
+	ctx context.Context,
+	userID string,
+	conversationIDs []primitive.ObjectID,
+) ([]*models.ConversationMember, error) {
+	if len(conversationIDs) == 0 {
+		return nil, nil
+	}
+
+	filter := bson.M{
+		"user_id":         userID,
+		"status":          models.ConversationMemberStatusActive,
+		"conversation_id": bson.M{"$in": conversationIDs},
+	}
+	opts := options.Find().SetSort(bson.D{{Key: "sort_at", Value: -1}})
+
+	cursor, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var members []*models.ConversationMember
+	for cursor.Next(ctx) {
+		var member models.ConversationMember
+		if err := cursor.Decode(&member); err != nil {
+			return nil, err
+		}
+		members = append(members, &member)
+	}
+	return members, cursor.Err()
+}
+
 func (r *ConversationMemberRepository) SetStatus(ctx context.Context, conversationID primitive.ObjectID, userID string, status models.ConversationMemberStatus) error {
 	_, err := r.collection.UpdateOne(ctx, bson.M{"conversation_id": conversationID, "user_id": userID}, bson.M{
 		"$set": bson.M{

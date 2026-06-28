@@ -114,38 +114,9 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, senderID
 	keyword = strings.TrimSpace(keyword)
 	activeConversationID = strings.TrimSpace(activeConversationID)
 
-	conversationFilter := bson.M{}
+	// 搜索分支：先在 DB 层面搜到匹配的会话 ID，再取 member
 	if keyword != "" {
-		if s.userRepo == nil {
-			return emptyConversationList(), nil
-		}
-
-		users, err := s.userRepo.Search(ctx, keyword, maxConversationSearchUsers)
-		if err != nil {
-			return nil, fmt.Errorf("failed to search conversation users: %w", err)
-		}
-
-		peerIDs := make([]string, 0, len(users))
-		seenPeerIDs := map[string]struct{}{}
-		for _, user := range users {
-			if user.ID == "" || user.ID == senderID {
-				continue
-			}
-			if _, ok := seenPeerIDs[user.ID]; ok {
-				continue
-			}
-			seenPeerIDs[user.ID] = struct{}{}
-			peerIDs = append(peerIDs, user.ID)
-		}
-		pattern := regexp.QuoteMeta(keyword)
-		conditions := []bson.M{
-			{"display_name": bson.M{"$regex": pattern, "$options": "i"}},
-		}
-		if len(peerIDs) > 0 {
-			conditions = append(conditions, bson.M{"participants": bson.M{"$in": peerIDs}})
-		}
-
-		conversationFilter["$or"] = conditions
+		return s.searchUserConversations(ctx, senderID, limit, keyword)
 	}
 
 	var cursorSortAt time.Time
@@ -163,7 +134,7 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, senderID
 		cursorID = cursorObjectID
 	}
 
-	if activeConversationID != "" && cursorValue == "" && keyword == "" {
+	if activeConversationID != "" && cursorValue == "" {
 		activeID, err := primitive.ObjectIDFromHex(activeConversationID)
 		if err != nil {
 			return nil, fmt.Errorf("%w: invalid active conversation id", ErrInvalidConversationID)
@@ -195,9 +166,6 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, senderID
 		if conversation == nil {
 			continue
 		}
-		if len(conversationFilter) > 0 && !matchesConversationFilter(conversation, conversationFilter) {
-			continue
-		}
 		conversation.LastActivity = conversation.GetLastActivityWithMember(member)
 		conversations = append(conversations, conversation)
 	}
@@ -205,6 +173,96 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, senderID
 	hasMore := int64(len(conversations)) > limit
 	if hasMore {
 		conversations = conversations[:limit]
+	}
+
+	nextCursor := ""
+	if hasMore && len(conversations) > 0 {
+		last := conversations[len(conversations)-1]
+		if member := memberByConversationID[last.ID]; member != nil {
+			nextCursor = encodeConversationMemberCursor(member)
+		}
+	}
+
+	return &dto.ConversationListResponse{
+		Items:      s.toConversationDTOs(ctx, conversations, senderID, memberByConversationID),
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+	}, nil
+}
+
+// searchUserConversations 按关键词搜索当前用户的会话。
+//
+// 流程: user keyword → peerIDs → SearchConversationIDs → ListByUserAndConversationIDs → 拼装结果。
+// 注意搜索结果不依赖 conversation_member.sort_at 游标分页，匹配量有限。
+func (s *ConversationService) searchUserConversations(
+	ctx context.Context,
+	senderID string,
+	limit int64,
+	keyword string,
+) (*dto.ConversationListResponse, error) {
+	if s.userRepo == nil {
+		return emptyConversationList(), nil
+	}
+
+	// 1. 搜用户，收集 peerIDs
+	users, err := s.userRepo.Search(ctx, keyword, maxConversationSearchUsers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search conversation users: %w", err)
+	}
+	peerIDs := make([]string, 0, len(users))
+	seenPeerIDs := map[string]struct{}{}
+	for _, user := range users {
+		if user.ID == "" || user.ID == senderID {
+			continue
+		}
+		if _, ok := seenPeerIDs[user.ID]; ok {
+			continue
+		}
+		seenPeerIDs[user.ID] = struct{}{}
+		peerIDs = append(peerIDs, user.ID)
+	}
+
+	// 2. 按参与者 ID + 群名搜会话 ID
+	convIDs, err := s.repo.SearchConversationIDs(ctx, peerIDs, keyword, maxConversationSearchUsers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search conversation ids: %w", err)
+	}
+	if len(convIDs) == 0 {
+		return emptyConversationList(), nil
+	}
+
+	// 3. 取当前用户在这些会话中的 member 记录
+	memberPage, err := s.memberRepo.ListByUserAndConversationIDs(ctx, senderID, convIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get conversation members: %w", err)
+	}
+
+	// 4. 分页
+	hasMore := int64(len(memberPage)) > limit
+	if hasMore {
+		memberPage = memberPage[:limit]
+	}
+
+	// 5. 取会话详情
+	conversationIDs := make([]primitive.ObjectID, 0, len(memberPage))
+	memberByConversationID := map[primitive.ObjectID]*models.ConversationMember{}
+	for _, m := range memberPage {
+		conversationIDs = append(conversationIDs, m.ConversationID)
+		memberByConversationID[m.ConversationID] = m
+	}
+	conversationsByID, err := s.repo.GetConversationsByIDs(ctx, conversationIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get conversations: %w", err)
+	}
+
+	conversations := make([]*models.Conversation, 0, len(memberPage))
+	for _, m := range memberPage {
+		conv := conversationsByID[m.ConversationID]
+		if conv == nil {
+			continue
+		}
+		conv.LastActivity = conv.GetLastActivityWithMember(m)
+		conversations = append(conversations, conv)
 	}
 
 	nextCursor := ""
