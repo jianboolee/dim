@@ -56,6 +56,7 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 
 	messageRepo := repository.NewMessageRepository(db)
 	conversationRepo := repository.NewConversationRepository(db)
+	conversationMemberRepo := repository.NewConversationMemberRepository(db)
 	groupRepo := repository.NewGroupRepository(db)
 	groupMemberRepo := repository.NewGroupMemberRepository(db)
 	sessionRepo := repository.NewSessionRepository(db)
@@ -63,7 +64,7 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 	authSessionRepo := repository.NewAuthSessionRepository(db)
 
 	sessionService := service.NewSessionService(sessionRepo)
-	conversationService := service.NewConversationService(conversationRepo, userRepo, groupRepo, groupMemberRepo)
+	conversationService := service.NewConversationService(conversationRepo, conversationMemberRepo, userRepo, groupRepo, groupMemberRepo)
 	userService := service.NewUserService(userRepo)
 	authService := service.NewAuthService(jwtService, authSessionRepo, service.AuthCookieConfig{
 		Name:     cfg.JWT.RefreshCookieName,
@@ -88,12 +89,12 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 			PongWait:   cfg.WebSocket.PongTimeout,
 			WriteWait:  cfg.WebSocket.WriteTimeout,
 		})
-		messageService = service.NewMessageService(messageRepo, conversationRepo, conversationService, groupRepo, groupMemberRepo, sessionService, wsManager, redisClient, userRepo)
+		messageService = service.NewMessageService(messageRepo, conversationRepo, conversationMemberRepo, conversationService, groupRepo, groupMemberRepo, sessionService, wsManager, redisClient, userRepo)
 		wsManager.SetMessageService(messageService)
 	} else {
-		messageService = service.NewMessageService(messageRepo, conversationRepo, conversationService, groupRepo, groupMemberRepo, sessionService, nil, redisClient, userRepo)
+		messageService = service.NewMessageService(messageRepo, conversationRepo, conversationMemberRepo, conversationService, groupRepo, groupMemberRepo, sessionService, nil, redisClient, userRepo)
 	}
-	groupService := service.NewGroupService(groupRepo, groupMemberRepo, conversationRepo, userRepo, messageService)
+	groupService := service.NewGroupService(groupRepo, groupMemberRepo, conversationMemberRepo, conversationRepo, userRepo, messageService)
 
 	deps := &Dependencies{
 		Config:                cfg,

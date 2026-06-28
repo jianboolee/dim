@@ -55,6 +55,7 @@ export enum MessageType {
     id?: string;
     client_message_id?: string;
     conversation_id?: string;
+    seq?: number;
     from_id?: string;
     to_id: string;
     type: MessageType;
@@ -94,6 +95,17 @@ export enum MessageType {
     members?: GroupMemberBrief[];
   }
 
+  export interface ConversationMemberState {
+    status: string;
+    last_read_seq: number;
+    last_read_at?: string;
+    last_activated_at?: string;
+    unread_count: number;
+    mention_count?: number;
+    muted?: boolean;
+    pinned?: boolean;
+  }
+
   export interface Conversation {
     id: string;
     type: string;
@@ -105,6 +117,7 @@ export enum MessageType {
     group_info?: GroupSummary;
     peer_user_info?: UserInfo;
     to_user_info?: UserInfo;
+    member_state?: ConversationMemberState;
     image_url: string;
     user_states?: { [key: string]: ConversationUserState };
     created_at: string;
@@ -185,6 +198,7 @@ export enum MessageType {
       id,
       client_message_id: raw.client_message_id == null ? undefined : String(raw.client_message_id),
       conversation_id: raw.conversation_id == null ? undefined : String(raw.conversation_id),
+      seq: raw.seq == null ? undefined : Number(raw.seq),
       from_id: String(raw.sender_id ?? raw.from_id ?? ''),
       to_id: String(raw.receiver_id ?? raw.to_id ?? ''),
       type: (raw.type as MessageType) ?? MessageType.Text,
@@ -518,6 +532,15 @@ export enum MessageType {
       );
 
       return normalizeConversation(data);
+    }
+
+    async markConversationRead(conversationId: string): Promise<void> {
+      await apiRequest<void>(
+        this.baseURL,
+        `/im/api/conversations/${conversationId}/read`,
+        this.token,
+        { method: 'PUT' },
+      );
     }
   
     /**

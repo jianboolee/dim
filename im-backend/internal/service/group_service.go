@@ -29,26 +29,29 @@ var (
 )
 
 type GroupService struct {
-	groupRepo        *repository.GroupRepository
-	memberRepo       *repository.GroupMemberRepository
-	conversationRepo *repository.ConversationRepository
-	userRepo         *repository.UserRepository
-	messageService   *MessageService
+	groupRepo              *repository.GroupRepository
+	memberRepo             *repository.GroupMemberRepository
+	conversationMemberRepo *repository.ConversationMemberRepository
+	conversationRepo       *repository.ConversationRepository
+	userRepo               *repository.UserRepository
+	messageService         *MessageService
 }
 
 func NewGroupService(
 	groupRepo *repository.GroupRepository,
 	memberRepo *repository.GroupMemberRepository,
+	conversationMemberRepo *repository.ConversationMemberRepository,
 	conversationRepo *repository.ConversationRepository,
 	userRepo *repository.UserRepository,
 	messageService *MessageService,
 ) *GroupService {
 	return &GroupService{
-		groupRepo:        groupRepo,
-		memberRepo:       memberRepo,
-		conversationRepo: conversationRepo,
-		userRepo:         userRepo,
-		messageService:   messageService,
+		groupRepo:              groupRepo,
+		memberRepo:             memberRepo,
+		conversationMemberRepo: conversationMemberRepo,
+		conversationRepo:       conversationRepo,
+		userRepo:               userRepo,
+		messageService:         messageService,
 	}
 }
 
@@ -86,6 +89,10 @@ func (s *GroupService) CreateGroup(ctx context.Context, creatorID string, req dt
 		s.cleanupFailedGroupCreate(ctx, group, conversation.ID)
 		return nil, err
 	}
+	if err := s.upsertConversationMembers(ctx, conversation.ID, memberIDs, group.OwnerID); err != nil {
+		s.cleanupFailedGroupCreate(ctx, group, conversation.ID)
+		return nil, err
+	}
 	if err := s.syncGroupMembers(ctx, group); err != nil {
 		s.cleanupFailedGroupCreate(ctx, group, conversation.ID)
 		return nil, err
@@ -98,6 +105,7 @@ func (s *GroupService) CreateGroup(ctx context.Context, creatorID string, req dt
 func (s *GroupService) cleanupFailedGroupCreate(ctx context.Context, group *models.Group, conversationID primitive.ObjectID) {
 	if group != nil {
 		_ = s.memberRepo.DeleteByGroup(ctx, group.ID)
+		_ = s.conversationMemberRepo.DeleteByConversation(ctx, conversationID)
 		_ = s.groupRepo.Delete(ctx, group.ID)
 	}
 	_ = s.conversationRepo.DeleteConversation(ctx, conversationID)
@@ -217,6 +225,9 @@ func (s *GroupService) AddMembers(ctx context.Context, groupID primitive.ObjectI
 	if err := s.upsertMembers(ctx, group.ID, currentUserID, group.OwnerID, newIDs); err != nil {
 		return nil, err
 	}
+	if err := s.upsertConversationMembers(ctx, group.ConversationID, newIDs, group.OwnerID); err != nil {
+		return nil, err
+	}
 	if err := s.syncGroupMembers(ctx, group); err != nil {
 		return nil, err
 	}
@@ -248,6 +259,9 @@ func (s *GroupService) KickMember(ctx context.Context, groupID primitive.ObjectI
 	if err := s.memberRepo.UpdateStatus(ctx, group.ID, targetUserID, models.GroupMemberStatusKicked); err != nil {
 		return nil, err
 	}
+	if err := s.conversationMemberRepo.SetStatus(ctx, group.ConversationID, targetUserID, models.ConversationMemberStatusKicked); err != nil {
+		return nil, err
+	}
 	if err := s.syncGroupMembers(ctx, group); err != nil {
 		return nil, err
 	}
@@ -274,6 +288,9 @@ func (s *GroupService) LeaveGroup(ctx context.Context, groupID primitive.ObjectI
 		if err := s.memberRepo.SetAllActiveStatus(ctx, group.ID, models.GroupMemberStatusLeft); err != nil {
 			return err
 		}
+		if err := s.conversationMemberRepo.SetAllActiveStatus(ctx, group.ConversationID, models.ConversationMemberStatusLeft); err != nil {
+			return err
+		}
 		if err := s.groupRepo.SetMemberCount(ctx, group.ID, 0); err != nil {
 			return err
 		}
@@ -281,6 +298,9 @@ func (s *GroupService) LeaveGroup(ctx context.Context, groupID primitive.ObjectI
 	}
 
 	if err := s.memberRepo.UpdateStatus(ctx, group.ID, currentUserID, models.GroupMemberStatusLeft); err != nil {
+		return err
+	}
+	if err := s.conversationMemberRepo.SetStatus(ctx, group.ConversationID, currentUserID, models.ConversationMemberStatusLeft); err != nil {
 		return err
 	}
 	if err := s.syncGroupMembers(ctx, group); err != nil {
@@ -378,6 +398,23 @@ func (s *GroupService) upsertMembers(ctx context.Context, groupID primitive.Obje
 			Status:    models.GroupMemberStatusActive,
 			InvitedBy: invitedBy,
 		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *GroupService) upsertConversationMembers(ctx context.Context, conversationID primitive.ObjectID, userIDs []string, ownerID string) error {
+	if s.conversationMemberRepo == nil {
+		return nil
+	}
+	now := time.Now()
+	for _, userID := range userIDs {
+		role := string(models.GroupMemberRoleMember)
+		if userID == ownerID {
+			role = string(models.GroupMemberRoleOwner)
+		}
+		if _, err := s.conversationMemberRepo.UpsertActive(ctx, conversationID, userID, role, now); err != nil {
 			return err
 		}
 	}

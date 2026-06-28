@@ -23,6 +23,7 @@ var ErrCannotReplyToSystemUser = errors.New("cannot reply to system user")
 type MessageService struct {
 	repo                *repository.MessageRepository
 	conversationRepo    *repository.ConversationRepository
+	memberRepo          *repository.ConversationMemberRepository
 	conversationService *ConversationService
 	groupRepo           *repository.GroupRepository
 	groupMemberRepo     *repository.GroupMemberRepository
@@ -36,6 +37,7 @@ type MessageService struct {
 func NewMessageService(
 	repo *repository.MessageRepository,
 	conversationRepo *repository.ConversationRepository,
+	memberRepo *repository.ConversationMemberRepository,
 	conversationService *ConversationService,
 	groupRepo *repository.GroupRepository,
 	groupMemberRepo *repository.GroupMemberRepository,
@@ -47,6 +49,7 @@ func NewMessageService(
 	return &MessageService{
 		repo:                repo,
 		conversationRepo:    conversationRepo,
+		memberRepo:          memberRepo,
 		conversationService: conversationService,
 		groupRepo:           groupRepo,
 		groupMemberRepo:     groupMemberRepo,
@@ -91,8 +94,11 @@ func (s *MessageService) SendMessageToConversation(
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to get conversation: %w", err)
 	}
-	if !conversation.HasParticipant(senderID) {
-		return nil, false, ErrConversationAccessDenied
+	if _, err := s.memberRepo.GetActive(ctx, conversation.ID, senderID); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, false, ErrConversationAccessDenied
+		}
+		return nil, false, fmt.Errorf("failed to get conversation member: %w", err)
 	}
 
 	receiverID := ""
@@ -134,11 +140,17 @@ func (s *MessageService) SendMessageToConversation(
 		msgTypeValue = *msgType
 	}
 
+	seq, err := s.conversationRepo.NextMessageSeq(ctx, conversation.ID)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to allocate message seq: %w", err)
+	}
+
 	now := time.Now()
 	message := &models.Message{
 		ID:              primitive.NewObjectID(),
 		ClientMessageID: clientMessageID,
 		ConversationID:  conversation.ID,
+		Seq:             seq,
 		SenderID:        senderID,
 		ReceiverID:      receiverID,
 		Content:         content,
@@ -171,6 +183,9 @@ func (s *MessageService) SendMessageToConversation(
 	if err := s.conversationService.UpdateLastMessage(ctx, conversation.ID, result); err != nil {
 		return nil, false, fmt.Errorf("failed to update conversation last message: %w", err)
 	}
+	if err := s.memberRepo.IncrementUnreadForOthers(ctx, conversation.ID, senderID, result.Seq, result.ID, result.CreatedAt); err != nil {
+		return nil, false, fmt.Errorf("failed to update conversation unread state: %w", err)
+	}
 
 	return result, true, nil
 }
@@ -200,12 +215,6 @@ func (s *MessageService) ensureCanSendGroupMessage(ctx context.Context, conversa
 	if !group.IsActive() {
 		return ErrGroupDissolved
 	}
-	if _, err := s.groupMemberRepo.GetActive(ctx, group.ID, senderID); err != nil {
-		if err == mongo.ErrNoDocuments {
-			return ErrConversationAccessDenied
-		}
-		return err
-	}
 	return nil
 }
 
@@ -219,7 +228,7 @@ func (s *MessageService) FanoutMessage(ctx context.Context, message *models.Mess
 		return fmt.Errorf("failed to get conversation for fanout: %w", err)
 	}
 
-	recipientIDs, err := s.resolveFanoutRecipients(ctx, conversation)
+	recipientIDs, err := s.resolveFanoutRecipients(ctx, conversation.ID)
 	if err != nil {
 		return err
 	}
@@ -237,35 +246,23 @@ func (s *MessageService) FanoutMessage(ctx context.Context, message *models.Mess
 	return nil
 }
 
-func (s *MessageService) resolveFanoutRecipients(ctx context.Context, conversation *models.Conversation) ([]string, error) {
-	var ids []string
-	switch conversation.Type {
-	case models.ConversationTypePrivate, models.ConversationTypeSystem, models.ConversationTypeChannel:
-		ids = append(ids, conversation.Participants...)
-	case models.ConversationTypeGroup:
-		if conversation.GroupID == nil || s.groupMemberRepo == nil {
-			return nil, fmt.Errorf("invalid group conversation")
-		}
-		activeIDs, err := s.groupMemberRepo.ListActiveUserIDs(ctx, *conversation.GroupID)
-		if err != nil {
-			return nil, err
-		}
-		ids = append(ids, activeIDs...)
-	default:
-		return nil, fmt.Errorf("unsupported conversation type")
+func (s *MessageService) resolveFanoutRecipients(ctx context.Context, conversationID primitive.ObjectID) ([]string, error) {
+	members, err := s.memberRepo.ListActiveByConversation(ctx, conversationID)
+	if err != nil {
+		return nil, err
 	}
 
 	seen := map[string]struct{}{}
-	results := make([]string, 0, len(ids))
-	for _, id := range ids {
-		if id == "" {
+	results := make([]string, 0, len(members))
+	for _, member := range members {
+		if member.UserID == "" {
 			continue
 		}
-		if _, ok := seen[id]; ok {
+		if _, ok := seen[member.UserID]; ok {
 			continue
 		}
-		seen[id] = struct{}{}
-		results = append(results, id)
+		seen[member.UserID] = struct{}{}
+		results = append(results, member.UserID)
 	}
 	return results, nil
 }
@@ -277,10 +274,16 @@ func (s *MessageService) CreateSystemEvent(
 	content string,
 	payload *models.Payload,
 ) error {
+	seq, err := s.conversationRepo.NextMessageSeq(ctx, conversationID)
+	if err != nil {
+		return fmt.Errorf("failed to allocate system event seq: %w", err)
+	}
+
 	now := time.Now()
 	message := &models.Message{
 		ID:             primitive.NewObjectID(),
 		ConversationID: conversationID,
+		Seq:            seq,
 		SenderID:       operatorID,
 		Type:           models.MessageTypeSystemEvent,
 		Content:        content,
@@ -296,6 +299,9 @@ func (s *MessageService) CreateSystemEvent(
 	}
 	if err := s.conversationService.UpdateLastMessage(ctx, conversationID, result); err != nil {
 		return fmt.Errorf("failed to update conversation last message: %w", err)
+	}
+	if err := s.memberRepo.IncrementUnreadForOthers(ctx, conversationID, operatorID, result.Seq, result.ID, result.CreatedAt); err != nil {
+		return fmt.Errorf("failed to update system event unread state: %w", err)
 	}
 	return s.FanoutMessage(ctx, result)
 }
@@ -338,12 +344,11 @@ func (s *MessageService) pushToUser(ctx context.Context, receiverID string, mess
 
 // FindMessagesByConversationID 根据会话ID获取消息列表
 func (s *MessageService) FindMessagesByConversationID(ctx context.Context, conversationID primitive.ObjectID, currentUserID string, beforeID *primitive.ObjectID, afterID *primitive.ObjectID, limit int64) ([]models.Message, error) {
-	conversation, err := s.conversationRepo.GetConversation(ctx, conversationID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get conversation: %w", err)
-	}
-	if !conversation.HasParticipant(currentUserID) {
-		return nil, ErrConversationAccessDenied
+	if _, err := s.memberRepo.GetActive(ctx, conversationID, currentUserID); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrConversationAccessDenied
+		}
+		return nil, err
 	}
 
 	messages, err := s.repo.FindMessagesByConversationID(ctx, conversationID, beforeID, afterID, limit)

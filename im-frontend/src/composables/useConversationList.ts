@@ -12,6 +12,7 @@ export function useConversationList() {
     loadMoreSearchConversations: store.loadMoreSearchConversations,
     handleIncomingMessage: store.handleIncomingMessage,
     clearUnreadForPeer: store.clearUnreadForPeer,
+    clearUnreadForConversation: store.clearUnreadForConversation,
     upsertConversation: store.upsertConversation,
     ensureConversationInList: store.ensureConversationInList,
     requestScrollToConversation: store.requestScrollToConversation,

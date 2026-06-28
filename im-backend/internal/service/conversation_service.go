@@ -23,6 +23,7 @@ import (
 
 type ConversationService struct {
 	repo            *repository.ConversationRepository
+	memberRepo      *repository.ConversationMemberRepository
 	userRepo        *repository.UserRepository
 	groupRepo       *repository.GroupRepository
 	groupMemberRepo *repository.GroupMemberRepository
@@ -45,12 +46,14 @@ type conversationCursor struct {
 
 func NewConversationService(
 	repo *repository.ConversationRepository,
+	memberRepo *repository.ConversationMemberRepository,
 	userRepo *repository.UserRepository,
 	groupRepo *repository.GroupRepository,
 	groupMemberRepo *repository.GroupMemberRepository,
 ) *ConversationService {
 	return &ConversationService{
 		repo:            repo,
+		memberRepo:      memberRepo,
 		userRepo:        userRepo,
 		groupRepo:       groupRepo,
 		groupMemberRepo: groupMemberRepo,
@@ -59,12 +62,29 @@ func NewConversationService(
 
 // CreatePrivateConversation 创建或获取单聊会话
 func (s *ConversationService) CreatePrivateConversation(ctx context.Context, senderID, receiverID string) (*models.Conversation, error) {
-	return s.repo.UpsertConversationByParticipants(ctx, []string{senderID, receiverID})
+	return s.getOrCreatePrivateConversation(ctx, senderID, receiverID)
 }
 
 // GetOrCreatePrivateConversation 获取或创建单聊会话（参与者顺序无关）
 func (s *ConversationService) GetOrCreatePrivateConversation(ctx context.Context, userAID, userBID string) (*models.Conversation, error) {
-	return s.repo.UpsertConversationByParticipants(ctx, []string{userAID, userBID})
+	return s.getOrCreatePrivateConversation(ctx, userAID, userBID)
+}
+
+func (s *ConversationService) getOrCreatePrivateConversation(ctx context.Context, userAID, userBID string) (*models.Conversation, error) {
+	conversation, err := s.repo.UpsertConversationByParticipants(ctx, []string{userAID, userBID})
+	if err != nil {
+		return nil, err
+	}
+	if s.memberRepo != nil {
+		now := time.Now()
+		if _, err := s.memberRepo.UpsertActive(ctx, conversation.ID, userAID, "", now); err != nil {
+			return nil, err
+		}
+		if _, err := s.memberRepo.UpsertActive(ctx, conversation.ID, userBID, "", now); err != nil {
+			return nil, err
+		}
+	}
+	return conversation, nil
 }
 
 // GetConversation 获取会话详情
@@ -73,12 +93,19 @@ func (s *ConversationService) GetConversation(ctx context.Context, id primitive.
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversation: %w", err)
 	}
-	if !conversation.HasParticipant(currentUserID) {
+	member, err := s.memberRepo.GetActive(ctx, id, currentUserID)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrConversationAccessDenied
+		}
+		return nil, fmt.Errorf("failed to get conversation member: %w", err)
+	}
+	if member == nil || !member.IsActive() {
 		return nil, ErrConversationAccessDenied
 	}
 
-	conversation.GetLastActivity(currentUserID)
-	return s.toConversationDTO(ctx, conversation, currentUserID), nil
+	conversation.LastActivity = conversation.GetLastActivityWithMember(member)
+	return s.toConversationDTO(ctx, conversation, currentUserID, map[primitive.ObjectID]*models.ConversationMember{id: member}), nil
 }
 
 // GetUserConversations 获取用户的所有会话
@@ -87,7 +114,7 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, senderID
 	keyword = strings.TrimSpace(keyword)
 	activeConversationID = strings.TrimSpace(activeConversationID)
 
-	filter := bson.M{"participants": senderID}
+	conversationFilter := bson.M{}
 	if keyword != "" {
 		if s.userRepo == nil {
 			return emptyConversationList(), nil
@@ -118,10 +145,7 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, senderID
 			conditions = append(conditions, bson.M{"participants": bson.M{"$in": peerIDs}})
 		}
 
-		filter = bson.M{
-			"participants": senderID,
-			"$or":          conditions,
-		}
+		conversationFilter["$or"] = conditions
 	}
 
 	var cursorSortAt time.Time
@@ -149,9 +173,33 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, senderID
 		}
 	}
 
-	conversations, err := s.repo.ListUserConversations(ctx, senderID, filter, limit+1, cursorSortAt, cursorID)
+	memberPage, err := s.memberRepo.ListByUser(ctx, senderID, limit+1, cursorSortAt, cursorID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get conversation members: %w", err)
+	}
+	memberByConversationID := map[primitive.ObjectID]*models.ConversationMember{}
+	conversationIDs := make([]primitive.ObjectID, 0, len(memberPage))
+	for _, member := range memberPage {
+		memberByConversationID[member.ConversationID] = member
+		conversationIDs = append(conversationIDs, member.ConversationID)
+	}
+
+	conversationsByID, err := s.repo.GetConversationsByIDs(ctx, conversationIDs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversations: %w", err)
+	}
+
+	conversations := make([]*models.Conversation, 0, len(memberPage))
+	for _, member := range memberPage {
+		conversation := conversationsByID[member.ConversationID]
+		if conversation == nil {
+			continue
+		}
+		if len(conversationFilter) > 0 && !matchesConversationFilter(conversation, conversationFilter) {
+			continue
+		}
+		conversation.LastActivity = conversation.GetLastActivityWithMember(member)
+		conversations = append(conversations, conversation)
 	}
 
 	hasMore := int64(len(conversations)) > limit
@@ -159,20 +207,51 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, senderID
 		conversations = conversations[:limit]
 	}
 
-	for i := range conversations {
-		conversations[i].GetLastActivity(senderID)
-	}
-
 	nextCursor := ""
 	if hasMore && len(conversations) > 0 {
-		nextCursor = encodeConversationCursor(conversations[len(conversations)-1])
+		last := conversations[len(conversations)-1]
+		if member := memberByConversationID[last.ID]; member != nil {
+			nextCursor = encodeConversationMemberCursor(member)
+		}
 	}
 
 	return &dto.ConversationListResponse{
-		Items:      s.toConversationDTOs(ctx, conversations, senderID),
+		Items:      s.toConversationDTOs(ctx, conversations, senderID, memberByConversationID),
 		NextCursor: nextCursor,
 		HasMore:    hasMore,
 	}, nil
+}
+
+func matchesConversationFilter(conversation *models.Conversation, filter bson.M) bool {
+	conditions, ok := filter["$or"].([]bson.M)
+	if !ok || len(conditions) == 0 {
+		return true
+	}
+	for _, condition := range conditions {
+		if displayName, ok := condition["display_name"].(bson.M); ok {
+			pattern, _ := displayName["$regex"].(string)
+			if pattern != "" {
+				matched, _ := regexp.MatchString("(?i)"+pattern, conversation.DisplayName)
+				if matched {
+					return true
+				}
+			}
+		}
+		if participants, ok := condition["participants"].(bson.M); ok {
+			if ids, ok := participants["$in"].([]string); ok {
+				allowed := map[string]struct{}{}
+				for _, id := range ids {
+					allowed[id] = struct{}{}
+				}
+				for _, id := range conversation.Participants {
+					if _, ok := allowed[id]; ok {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
 }
 
 func emptyConversationList() *dto.ConversationListResponse {
@@ -207,27 +286,31 @@ func (s *ConversationService) UpdateLastMessage(ctx context.Context, conversatio
 
 // UpdateUnreadCount 更新未读消息数（扣减时不会低于 0）
 func (s *ConversationService) UpdateUnreadCount(ctx context.Context, conversationID primitive.ObjectID, userID string, increment int) error {
-	return s.repo.UpdateUnreadCount(ctx, conversationID, userID, increment)
+	return nil
 }
 
 // MarkConversationRead 标记当前用户已读该会话，清空会话级未读数。
 func (s *ConversationService) MarkConversationRead(ctx context.Context, conversationID primitive.ObjectID, userID string) error {
-	return s.repo.MarkConversationRead(ctx, conversationID, userID, time.Now())
+	conversation, err := s.repo.GetConversation(ctx, conversationID)
+	if err != nil {
+		return fmt.Errorf("failed to get conversation: %w", err)
+	}
+	if _, err := s.memberRepo.GetActive(ctx, conversationID, userID); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return ErrConversationAccessDenied
+		}
+		return err
+	}
+	return s.memberRepo.MarkRead(ctx, conversationID, userID, conversation.MessageSeq, primitive.NilObjectID, time.Now())
 }
 
 // GetConversations 获取会话列表
 func (s *ConversationService) GetConversations(ctx context.Context, userID string) ([]*dto.ConversationDTO, error) {
-	conversations, err := s.repo.ListUserConversations(ctx, userID, bson.M{"participants": userID}, 100, time.Time{}, primitive.NilObjectID)
+	response, err := s.GetUserConversations(ctx, userID, 100, "", "", "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversations: %w", err)
 	}
-
-	// 设置最后活动时间
-	for i := range conversations {
-		conversations[i].GetLastActivity(userID)
-	}
-
-	return s.toConversationDTOs(ctx, conversations, userID), nil
+	return response.Items, nil
 }
 
 func normalizeConversationLimit(limit int64) int64 {
@@ -244,6 +327,17 @@ func encodeConversationCursor(conversation *models.Conversation) string {
 	payload, err := json.Marshal(conversationCursor{
 		SortAt: conversation.LastActivity,
 		ID:     conversation.ID.Hex(),
+	})
+	if err != nil {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString(payload)
+}
+
+func encodeConversationMemberCursor(member *models.ConversationMember) string {
+	payload, err := json.Marshal(conversationCursor{
+		SortAt: member.SortAt,
+		ID:     member.ID.Hex(),
 	})
 	if err != nil {
 		return ""
@@ -268,15 +362,15 @@ func decodeConversationCursor(value string) (*conversationCursor, error) {
 	return &cursor, nil
 }
 
-func (s *ConversationService) toConversationDTO(ctx context.Context, conversation *models.Conversation, currentUserID string) *dto.ConversationDTO {
-	dtos := s.toConversationDTOs(ctx, []*models.Conversation{conversation}, currentUserID)
+func (s *ConversationService) toConversationDTO(ctx context.Context, conversation *models.Conversation, currentUserID string, membersByConversationID map[primitive.ObjectID]*models.ConversationMember) *dto.ConversationDTO {
+	dtos := s.toConversationDTOs(ctx, []*models.Conversation{conversation}, currentUserID, membersByConversationID)
 	if len(dtos) == 0 {
 		return nil
 	}
 	return dtos[0]
 }
 
-func (s *ConversationService) toConversationDTOs(ctx context.Context, conversations []*models.Conversation, currentUserID string) []*dto.ConversationDTO {
+func (s *ConversationService) toConversationDTOs(ctx context.Context, conversations []*models.Conversation, currentUserID string, membersByConversationID map[primitive.ObjectID]*models.ConversationMember) []*dto.ConversationDTO {
 	peerIDs := make([]string, 0, len(conversations))
 	groupIDs := make([]primitive.ObjectID, 0, len(conversations))
 	seen := map[string]struct{}{}
@@ -324,6 +418,18 @@ func (s *ConversationService) toConversationDTOs(ctx context.Context, conversati
 			LastActivity:  conversation.LastActivity,
 			CreatedAt:     conversation.CreatedAt,
 			UpdatedAt:     conversation.UpdatedAt,
+		}
+		if member := membersByConversationID[conversation.ID]; member != nil {
+			item.MemberState = &dto.ConversationMemberStateDTO{
+				Status:          member.Status,
+				LastReadSeq:     member.LastReadSeq,
+				LastReadAt:      member.LastReadAt,
+				LastActivatedAt: member.LastActivatedAt,
+				UnreadCount:     member.UnreadCount,
+				MentionCount:    member.MentionCount,
+				Muted:           member.Muted,
+				Pinned:          member.Pinned,
+			}
 		}
 
 		if conversation.Type == models.ConversationTypeGroup && conversation.GroupID != nil {
@@ -424,11 +530,15 @@ func (s *ConversationService) ActivateConversation(ctx context.Context, id primi
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversation: %w", err)
 	}
-	if !conversation.HasParticipant(currentUserID) {
-		return nil, ErrConversationAccessDenied
+
+	if _, err := s.memberRepo.GetActive(ctx, id, currentUserID); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrConversationAccessDenied
+		}
+		return nil, err
 	}
 
-	if err := s.repo.ActivateConversation(ctx, id, currentUserID, time.Now()); err != nil {
+	if err := s.memberRepo.Activate(ctx, id, currentUserID, time.Now()); err != nil {
 		return nil, fmt.Errorf("failed to activate conversation: %w", err)
 	}
 
@@ -436,14 +546,17 @@ func (s *ConversationService) ActivateConversation(ctx context.Context, id primi
 	if err != nil {
 		return nil, fmt.Errorf("failed to get activated conversation: %w", err)
 	}
-	conversation.GetLastActivity(currentUserID)
-
-	return s.toConversationDTO(ctx, conversation, currentUserID), nil
+	member, err := s.memberRepo.GetActive(ctx, id, currentUserID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get activated conversation member: %w", err)
+	}
+	conversation.LastActivity = conversation.GetLastActivityWithMember(member)
+	return s.toConversationDTO(ctx, conversation, currentUserID, map[primitive.ObjectID]*models.ConversationMember{id: member}), nil
 }
 
 // GetUnreadCount 获取未读消息数
 func (s *ConversationService) GetUnreadCount(ctx context.Context, userID string) (int64, error) {
-	return s.repo.GetUnreadCount(ctx, userID)
+	return s.memberRepo.SumUnreadByUser(ctx, userID)
 }
 
 // GetConversationByParticipants 根据参与者获取会话

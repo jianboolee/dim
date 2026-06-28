@@ -64,6 +64,7 @@ type Message struct {
 	ID              primitive.ObjectID `bson:"_id,omitempty" json:"id"`                                        // 消息 ID
 	ClientMessageID string             `bson:"client_message_id,omitempty" json:"client_message_id,omitempty"` // 客户端生成的幂等 ID
 	ConversationID  primitive.ObjectID `bson:"conversation_id" json:"conversation_id"`                         // 所属会话 ID
+	Seq             int64              `bson:"seq" json:"seq"`                                                 // 会话内单调递增序号
 	SenderID        string             `bson:"sender_id" json:"sender_id"`                                     // 发送者 ID
 	ReceiverID      string             `bson:"receiver_id,omitempty" json:"receiver_id,omitempty"`             // 私聊兼容字段；群聊按 conversation fanout
 	Type            MessageType        `bson:"type" json:"type"`                                               // 消息类型

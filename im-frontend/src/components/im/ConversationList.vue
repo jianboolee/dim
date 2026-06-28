@@ -137,6 +137,7 @@ const {
   loadMoreSearchConversations,
   handleIncomingMessage,
   clearUnreadForPeer,
+  clearUnreadForConversation,
   ensureConversationInList,
   requestScrollToConversation,
   pendingScrollRequest,
@@ -226,6 +227,7 @@ const selectConversation = async (item: { id: string; peerId: string; conversati
 
   if (props.searchMode && item.id === props.activeConversationId) {
     if (item.peerId) clearUnreadForPeer(item.peerId)
+    clearUnreadForConversation(item.id)
     requestScrollToConversation(item.id)
     emit('select', item.id)
     return
@@ -244,6 +246,7 @@ const selectConversation = async (item: { id: string; peerId: string; conversati
   }
 
   if (item.peerId) clearUnreadForPeer(item.peerId)
+  clearUnreadForConversation(item.id)
   emit('select', item.id)
 
   if (props.navigateMode === 'none') return

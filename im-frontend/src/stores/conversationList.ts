@@ -8,6 +8,7 @@ import {
   applyIncomingMessage,
   collectPeerUserIds,
   sortConversationsByActivity,
+  withClearedUnreadForConversation,
   withClearedUnreadForPeer,
 } from '@/utils/im/conversation'
 
@@ -282,6 +283,10 @@ export const useConversationListStore = defineStore('conversationList', () => {
     conversations.value = withClearedUnreadForPeer(conversations.value, peerId, userId)
   }
 
+  function clearUnreadForConversation(conversationId: string) {
+    conversations.value = withClearedUnreadForConversation(conversations.value, conversationId)
+  }
+
   async function ensureConversationInList(
     conversationId: string,
     options: { activateIfMissing?: boolean } = {},
@@ -378,6 +383,7 @@ export const useConversationListStore = defineStore('conversationList', () => {
     loadMoreSearchConversations,
     handleIncomingMessage,
     clearUnreadForPeer,
+    clearUnreadForConversation,
     upsertConversation,
     ensureConversationInList,
     requestScrollToConversation,

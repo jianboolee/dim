@@ -21,9 +21,21 @@ type ConversationDTO struct {
 	ToUserInfo    *UserInfoDto                            `bson:"-" json:"to_user_info,omitempty"` // Deprecated: use peer_user_info
 	ImageURL      string                                  `bson:"image_url" json:"image_url"`      // 会话图片
 	UserStates    map[string]models.ConversationUserState `bson:"user_states,omitempty" json:"user_states,omitempty"`
+	MemberState   *ConversationMemberStateDTO             `bson:"-" json:"member_state,omitempty"`
 	LastActivity  time.Time                               `json:"last_activity" bson:"-"`
 	CreatedAt     time.Time                               `bson:"created_at" json:"created_at"`
 	UpdatedAt     time.Time                               `bson:"updated_at" json:"updated_at"`
+}
+
+type ConversationMemberStateDTO struct {
+	Status          models.ConversationMemberStatus `json:"status"`
+	LastReadSeq     int64                           `json:"last_read_seq"`
+	LastReadAt      time.Time                       `json:"last_read_at,omitempty"`
+	LastActivatedAt time.Time                       `json:"last_activated_at,omitempty"`
+	UnreadCount     int64                           `json:"unread_count"`
+	MentionCount    int64                           `json:"mention_count"`
+	Muted           bool                            `json:"muted"`
+	Pinned          bool                            `json:"pinned"`
 }
 
 // ConversationQuery 会话查询参数

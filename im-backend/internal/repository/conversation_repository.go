@@ -85,6 +85,40 @@ func (r *ConversationRepository) GetConversation(ctx context.Context, id primiti
 	return &conversation, nil
 }
 
+func (r *ConversationRepository) GetConversationsByIDs(ctx context.Context, ids []primitive.ObjectID) (map[primitive.ObjectID]*models.Conversation, error) {
+	if len(ids) == 0 {
+		return map[primitive.ObjectID]*models.Conversation{}, nil
+	}
+	cursor, err := r.collection.Find(ctx, bson.M{"_id": bson.M{"$in": ids}})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	conversations := map[primitive.ObjectID]*models.Conversation{}
+	for cursor.Next(ctx) {
+		var conversation models.Conversation
+		if err := cursor.Decode(&conversation); err != nil {
+			return nil, err
+		}
+		conversations[conversation.ID] = &conversation
+	}
+	return conversations, cursor.Err()
+}
+
+func (r *ConversationRepository) NextMessageSeq(ctx context.Context, id primitive.ObjectID) (int64, error) {
+	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
+	var conversation models.Conversation
+	err := r.collection.FindOneAndUpdate(ctx, bson.M{"_id": id}, bson.M{
+		"$inc": bson.M{"message_seq": int64(1)},
+		"$set": bson.M{"updated_at": time.Now()},
+	}, opts).Decode(&conversation)
+	if err != nil {
+		return 0, err
+	}
+	return conversation.MessageSeq, nil
+}
+
 func (r *ConversationRepository) GetConversationByGroupID(ctx context.Context, groupID primitive.ObjectID) (*models.Conversation, error) {
 	var conversation models.Conversation
 	err := r.collection.FindOne(ctx, bson.M{"group_id": groupID}).Decode(&conversation)

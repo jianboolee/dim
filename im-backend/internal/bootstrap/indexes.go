@@ -31,6 +31,9 @@ func InitIndexes(cfg *config.Config) error {
 	if err := InitConversationIndexes(context.Background(), db.Database(cfg.MongoDB.Database)); err != nil {
 		return err
 	}
+	if err := InitConversationMemberIndexes(context.Background(), db.Database(cfg.MongoDB.Database)); err != nil {
+		return err
+	}
 	if err := InitGroupIndexes(context.Background(), db.Database(cfg.MongoDB.Database)); err != nil {
 		return err
 	}
@@ -89,6 +92,11 @@ func InitMessageIndexes(ctx context.Context, db *mongo.Database) error {
 			Keys: bson.D{{Key: "conversation_id", Value: 1}, {Key: "created_at", Value: -1}},
 			Options: options.Index().
 				SetName("idx_conversation_created_at"),
+		},
+		{
+			Keys: bson.D{{Key: "conversation_id", Value: 1}, {Key: "seq", Value: -1}},
+			Options: options.Index().
+				SetName("idx_conversation_seq_desc"),
 		},
 		{
 			Keys:    bson.D{{Key: "sender_id", Value: 1}},
@@ -165,6 +173,34 @@ func InitConversationIndexes(ctx context.Context, db *mongo.Database) error {
 		return fmt.Errorf("init conversation indexes failed: %w", err)
 	}
 	return nil
+}
+
+func InitConversationMemberIndexes(ctx context.Context, db *mongo.Database) error {
+	memberCollection := db.Collection(models.CollectionConversationMember)
+
+	return EnsureIndexes(ctx, memberCollection, []mongo.IndexModel{
+		{
+			Keys: bson.D{{Key: "conversation_id", Value: 1}, {Key: "user_id", Value: 1}},
+			Options: options.Index().
+				SetUnique(true).
+				SetName("unique_conversation_member"),
+		},
+		{
+			Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "status", Value: 1}, {Key: "sort_at", Value: -1}},
+			Options: options.Index().
+				SetName("idx_conversation_member_user_status_sort"),
+		},
+		{
+			Keys: bson.D{{Key: "conversation_id", Value: 1}, {Key: "status", Value: 1}},
+			Options: options.Index().
+				SetName("idx_conversation_member_conversation_status"),
+		},
+		{
+			Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "unread_count", Value: 1}},
+			Options: options.Index().
+				SetName("idx_conversation_member_user_unread"),
+		},
+	})
 }
 
 func InitGroupIndexes(ctx context.Context, db *mongo.Database) error {

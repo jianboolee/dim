@@ -227,6 +227,7 @@ const unreadMessageStore = useUnreadMessageStore()
 const {
   conversations,
   clearUnreadForPeer,
+  clearUnreadForConversation,
   handleIncomingMessage: updateConversationByMessage,
   ensureConversationInList,
   requestScrollToConversation,
@@ -727,9 +728,17 @@ const syncLatestMessages = async () => {
 }
 
 const syncUnreadState = async () => {
+  if (conversationId.value && imStore.imSDK) {
+    try {
+      await imStore.imSDK.markConversationRead(conversationId.value)
+    } catch (error) {
+      console.error('标记会话已读失败:', error)
+    }
+  }
   if (!isGroupConversation.value && peerUserId.value) {
     clearUnreadForPeer(peerUserId.value)
   }
+  clearUnreadForConversation(conversationId.value)
   unreadMessageStore.requestRefresh()
   await unreadMessageStore.fetchUnreadCount()
 }

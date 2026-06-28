@@ -28,6 +28,7 @@ type Conversation struct {
 	HashID       string                           `bson:"hash_id" json:"hash_id"` // 会话ID的哈希值, 根据参与者生成唯一、稳定的 ObjectID（顺序无关 + 去重）
 	Type         ConversationType                 `bson:"type" json:"type"`       // 会话类型
 	GroupID      *primitive.ObjectID              `bson:"group_id,omitempty" json:"group_id,omitempty"`
+	MessageSeq   int64                            `bson:"message_seq" json:"message_seq"`
 	Participants []string                         `bson:"participants" json:"participants"` // 参与者的用户ID列表
 	LastMessage  *LastMessageSnapshot             `bson:"last_message,omitempty" json:"last_message"`
 	ImageURL     string                           `bson:"image_url" json:"image_url"` // 会话图片
@@ -57,6 +58,17 @@ func (c *Conversation) GetLastActivatedAt(userID string) time.Time {
 		return state.LastActivatedAt
 	}
 	return time.Time{}
+}
+
+func (c *Conversation) GetLastActivityWithMember(member *ConversationMember) time.Time {
+	lastActivity := c.UpdatedAt
+	if c.LastMessage != nil {
+		lastActivity = c.LastMessage.CreatedAt
+	}
+	if member != nil && member.LastActivatedAt.After(lastActivity) {
+		lastActivity = member.LastActivatedAt
+	}
+	return lastActivity
 }
 
 func (c *Conversation) HasParticipant(userID string) bool {

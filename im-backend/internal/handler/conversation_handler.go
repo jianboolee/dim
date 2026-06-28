@@ -86,6 +86,27 @@ func (h *ConversationHandler) ActivateConversation(c *gin.Context) {
 	response.Success(c, "success", conversation)
 }
 
+func (h *ConversationHandler) MarkConversationRead(c *gin.Context) {
+	conversationID := c.Param("id")
+	objID, err := primitive.ObjectIDFromHex(conversationID)
+	if err != nil {
+		response.BadRequest(c, "Invalid conversation ID")
+		return
+	}
+
+	currentUserID := contextx.MustGetUserID(c)
+	if err := h.conversationService.MarkConversationRead(c.Request.Context(), objID, currentUserID); err != nil {
+		if errors.Is(err, service.ErrConversationAccessDenied) {
+			response.Forbidden(c, "Forbidden")
+			return
+		}
+		response.InternalServerError(c, "Failed to mark conversation as read")
+		return
+	}
+
+	response.Success(c, "success", gin.H{"success": true})
+}
+
 // GetUserConversations 获取用户的所有会话
 func (h *ConversationHandler) GetUserConversations(c *gin.Context) {
 	senderID := contextx.MustGetUserID(c)

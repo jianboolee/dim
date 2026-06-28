@@ -37,7 +37,11 @@ export function getConversationDisplayAvatar(conversation: Conversation): string
 
 export function getUnreadCount(conversation: Conversation, currentUserId: string): number {
   if (!currentUserId) return 0
-  return normalizeUnreadCount(conversation.user_states?.[currentUserId]?.unread_count ?? 0)
+  return normalizeUnreadCount(
+    conversation.member_state?.unread_count
+      ?? conversation.user_states?.[currentUserId]?.unread_count
+      ?? 0,
+  )
 }
 
 export function sortConversationsByActivity(conversations: Conversation[]): Conversation[] {
@@ -79,6 +83,11 @@ export function buildConversationFromMessage(message: Message, currentUserId: st
     user_states: message.to_id === currentUserId
       ? { [currentUserId]: { unread_count: 1 } }
       : {},
+    member_state: {
+      status: 'active',
+      last_read_seq: 0,
+      unread_count: message.to_id === currentUserId ? 1 : 0,
+    },
     created_at: timestamp,
     updated_at: timestamp,
     last_activity: timestamp,
@@ -121,6 +130,14 @@ export function applyIncomingMessage(
           },
         }
       : existing.user_states,
+    member_state: shouldIncrementUnread
+      ? {
+          ...existing.member_state,
+          status: existing.member_state?.status ?? 'active',
+          last_read_seq: existing.member_state?.last_read_seq ?? 0,
+          unread_count: getUnreadCount(existing, currentUserId) + 1,
+        }
+      : existing.member_state,
   }
 
   const next = [...conversations]
@@ -151,6 +168,35 @@ export function withClearedUnreadForPeer(
           ...conversation.user_states?.[currentUserId],
           unread_count: 0,
         },
+      },
+      member_state: {
+        ...conversation.member_state,
+        status: conversation.member_state?.status ?? 'active',
+        last_read_seq: conversation.member_state?.last_read_seq ?? 0,
+        unread_count: 0,
+      },
+    }
+  })
+}
+
+export function withClearedUnreadForConversation(
+  conversations: Conversation[],
+  conversationId: string,
+): Conversation[] {
+  if (!conversationId) return conversations
+
+  return conversations.map((conversation) => {
+    if (conversation.id !== conversationId) {
+      return conversation
+    }
+
+    return {
+      ...conversation,
+      member_state: {
+        ...conversation.member_state,
+        status: conversation.member_state?.status ?? 'active',
+        last_read_seq: conversation.member_state?.last_read_seq ?? 0,
+        unread_count: 0,
       },
     }
   })
