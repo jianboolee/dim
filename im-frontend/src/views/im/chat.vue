@@ -528,8 +528,6 @@ const sendMessage = async () => {
       MessageType.Text,
       content,
       undefined,
-      undefined,
-      undefined,
       clientMessageId,
     )
     if (response) {
