@@ -25,11 +25,13 @@ type ConversationUserState struct {
 // Conversation 表示一个会话
 type Conversation struct {
 	ID           primitive.ObjectID               `bson:"_id" json:"id"`
-	HashID       string                           `bson:"hash_id" json:"hash_id"`           // 会话ID的哈希值, 根据参与者生成唯一、稳定的 ObjectID（顺序无关 + 去重）
-	Type         ConversationType                 `bson:"type" json:"type"`                 // 会话类型
+	HashID       string                           `bson:"hash_id" json:"hash_id"` // 会话ID的哈希值, 根据参与者生成唯一、稳定的 ObjectID（顺序无关 + 去重）
+	Type         ConversationType                 `bson:"type" json:"type"`       // 会话类型
+	GroupID      *primitive.ObjectID              `bson:"group_id,omitempty" json:"group_id,omitempty"`
 	Participants []string                         `bson:"participants" json:"participants"` // 参与者的用户ID列表
 	LastMessage  *LastMessageSnapshot             `bson:"last_message,omitempty" json:"last_message"`
 	ImageURL     string                           `bson:"image_url" json:"image_url"` // 会话图片
+	DisplayName  string                           `bson:"display_name,omitempty" json:"display_name,omitempty"`
 	UserStates   map[string]ConversationUserState `bson:"user_states,omitempty" json:"user_states,omitempty"`
 	LastActivity time.Time                        `json:"last_activity" bson:"-"`
 	CreatedAt    time.Time                        `bson:"created_at" json:"created_at"`

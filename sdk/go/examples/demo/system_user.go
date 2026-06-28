@@ -120,8 +120,8 @@ var USER_SYSTEM_REMINDER = dim.User{
 var USER_SYSTEM_AUDIT = dim.User{
 	ID:       "system_audit",
 	Nickname: "审核消息",
-	Avatar:   "https://oss.21rv.com/uploads/avatar/25.jpg" + AvatarSuffix,
-	Type:     "system",
+	Avatar:   "https://oss.21rv.com/uploads/avatar/23.jpg" + AvatarSuffix,
+	Type:     "bot",
 }
 
 // ---- 数据分析 ----

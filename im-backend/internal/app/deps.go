@@ -26,6 +26,7 @@ type Dependencies struct {
 	IntegrationMiddleware gin.HandlerFunc
 	MessageHandler        *handler.MessageHandler
 	ConversationHandler   *handler.ConversationHandler
+	GroupHandler          *handler.GroupHandler
 	SessionHandler        *handler.SessionHandler
 	UserHandler           *handler.UserHandler
 	AuthHandler           *handler.AuthHandler
@@ -55,12 +56,14 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 
 	messageRepo := repository.NewMessageRepository(db)
 	conversationRepo := repository.NewConversationRepository(db)
+	groupRepo := repository.NewGroupRepository(db)
+	groupMemberRepo := repository.NewGroupMemberRepository(db)
 	sessionRepo := repository.NewSessionRepository(db)
 	userRepo := repository.NewUserRepository(db)
 	authSessionRepo := repository.NewAuthSessionRepository(db)
 
 	sessionService := service.NewSessionService(sessionRepo)
-	conversationService := service.NewConversationService(conversationRepo, userRepo)
+	conversationService := service.NewConversationService(conversationRepo, userRepo, groupRepo, groupMemberRepo)
 	userService := service.NewUserService(userRepo)
 	authService := service.NewAuthService(jwtService, authSessionRepo, service.AuthCookieConfig{
 		Name:     cfg.JWT.RefreshCookieName,
@@ -85,11 +88,12 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 			PongWait:   cfg.WebSocket.PongTimeout,
 			WriteWait:  cfg.WebSocket.WriteTimeout,
 		})
-		messageService = service.NewMessageService(messageRepo, conversationRepo, conversationService, sessionService, wsManager, redisClient, userRepo)
+		messageService = service.NewMessageService(messageRepo, conversationRepo, conversationService, groupRepo, groupMemberRepo, sessionService, wsManager, redisClient, userRepo)
 		wsManager.SetMessageService(messageService)
 	} else {
-		messageService = service.NewMessageService(messageRepo, conversationRepo, conversationService, sessionService, nil, redisClient, userRepo)
+		messageService = service.NewMessageService(messageRepo, conversationRepo, conversationService, groupRepo, groupMemberRepo, sessionService, nil, redisClient, userRepo)
 	}
+	groupService := service.NewGroupService(groupRepo, groupMemberRepo, conversationRepo, userRepo, messageService)
 
 	deps := &Dependencies{
 		Config:                cfg,
@@ -98,6 +102,7 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 		IntegrationMiddleware: middleware.IntegrationAPIKey(cfg),
 		MessageHandler:        handler.NewMessageHandler(messageService, conversationService),
 		ConversationHandler:   handler.NewConversationHandler(conversationService),
+		GroupHandler:          handler.NewGroupHandler(groupService),
 		SessionHandler:        handler.NewSessionHandler(sessionService),
 		UserHandler:           handler.NewUserHandler(userService),
 		AuthHandler:           handler.NewAuthHandler(authService),
@@ -136,6 +141,7 @@ func (d *Dependencies) SetupAPIRouter() *gin.Engine {
 		d.Config,
 		d.MessageHandler,
 		d.ConversationHandler,
+		d.GroupHandler,
 		d.SessionHandler,
 		d.UserHandler,
 		d.AuthHandler,

@@ -362,23 +362,7 @@ func (c *Client) ReadPump(manager *WSManager) {
 			continue
 		}
 
-		outMessage, err := json.Marshal(dbMessage)
-		if err != nil {
-			log.Printf("Failed to marshal message: %v", err)
-			continue
-		}
-
-		// 推送给接收方（本进程或经 Redis 由 WS 进程投递）
-		if err := manager.messageService.pushToUser(context.Background(), dbMessage.ReceiverID, outMessage); err != nil {
-			log.Printf("Failed to push message to receiver: %v", err)
-		}
-
-		// 回显给发送方，便于多端同步
-		if dbMessage.SenderID != dbMessage.ReceiverID {
-			if err := manager.messageService.pushToUser(context.Background(), dbMessage.SenderID, outMessage); err != nil {
-				log.Printf("Failed to push message to sender: %v", err)
-			}
-		}
+		_ = dbMessage
 	}
 }
 

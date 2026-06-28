@@ -257,7 +257,10 @@ export const useConversationListStore = defineStore('conversationList', () => {
   function handleIncomingMessage(message: Message, activeConversationId?: string) {
     const userId = currentUserId.value
     if (!userId) return
-    if (message.from_id !== userId && message.to_id !== userId) return
+    const knownConversation = message.conversation_id
+      ? conversations.value.some((conversation) => conversation.id === message.conversation_id)
+      : false
+    if (!knownConversation && message.from_id !== userId && message.to_id !== userId) return
     conversations.value = applyIncomingMessage(
       conversations.value,
       message,

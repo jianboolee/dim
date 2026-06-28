@@ -13,6 +13,28 @@ export function getPeerUserId(conversation: Conversation, currentUserId: string)
   return conversation.participants.find((id) => id !== currentUserId) ?? ''
 }
 
+export function isGroupConversation(conversation?: Conversation | null): boolean {
+  return conversation?.type === 'group'
+}
+
+export function getConversationDisplayName(conversation: Conversation, currentUserId: string): string {
+  if (conversation.display_name) return conversation.display_name
+  if (isGroupConversation(conversation)) return conversation.group_info?.name || '群聊'
+
+  const peerId = getPeerUserId(conversation, currentUserId)
+  return conversation.peer_user_info?.nickname
+    || conversation.to_user_info?.nickname
+    || (peerId ? `用户${peerId.slice(-4)}` : '未知用户')
+}
+
+export function getConversationDisplayAvatar(conversation: Conversation): string {
+  return conversation.display_avatar
+    || conversation.group_info?.avatar_url
+    || conversation.peer_user_info?.avatar
+    || conversation.to_user_info?.avatar
+    || ''
+}
+
 export function getUnreadCount(conversation: Conversation, currentUserId: string): number {
   if (!currentUserId) return 0
   return normalizeUnreadCount(conversation.user_states?.[currentUserId]?.unread_count ?? 0)
@@ -28,6 +50,7 @@ export function sortConversationsByActivity(conversations: Conversation[]): Conv
 
 function matchesMessage(conversation: Conversation, message: Message): boolean {
   if (message.conversation_id && conversation.id === message.conversation_id) return true
+  if (isGroupConversation(conversation)) return false
 
   const fromId = message.from_id
   if (!fromId) return false
@@ -48,8 +71,9 @@ export function buildConversationFromMessage(message: Message, currentUserId: st
 
   return {
     id: message.conversation_id ?? [fromId, message.to_id].sort().join(':'),
-    type: 'private',
-    participants: [fromId, message.to_id],
+    type: message.to_id ? 'private' : 'group',
+    participants: message.to_id ? [fromId, message.to_id] : [fromId, currentUserId],
+    display_name: message.to_id ? undefined : '群聊',
     last_message: toSnapshot(message),
     image_url: '',
     user_states: message.to_id === currentUserId
@@ -80,6 +104,7 @@ export function applyIncomingMessage(
 
   const existing = conversations[index]!
   const shouldIncrementUnread =
+    !isGroupConversation(existing) &&
     message.to_id === currentUserId && existing.id !== activeConversationId
 
   const updated: Conversation = {

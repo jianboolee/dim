@@ -24,6 +24,8 @@ type MessageService struct {
 	repo                *repository.MessageRepository
 	conversationRepo    *repository.ConversationRepository
 	conversationService *ConversationService
+	groupRepo           *repository.GroupRepository
+	groupMemberRepo     *repository.GroupMemberRepository
 	sessionService      *SessionService
 	wsManager           *WSManager
 	redisClient         *redis.Client
@@ -35,6 +37,8 @@ func NewMessageService(
 	repo *repository.MessageRepository,
 	conversationRepo *repository.ConversationRepository,
 	conversationService *ConversationService,
+	groupRepo *repository.GroupRepository,
+	groupMemberRepo *repository.GroupMemberRepository,
 	sessionService *SessionService,
 	wsManager *WSManager,
 	redisClient *redis.Client,
@@ -44,6 +48,8 @@ func NewMessageService(
 		repo:                repo,
 		conversationRepo:    conversationRepo,
 		conversationService: conversationService,
+		groupRepo:           groupRepo,
+		groupMemberRepo:     groupMemberRepo,
 		sessionService:      sessionService,
 		wsManager:           wsManager,
 		redisClient:         redisClient,
@@ -61,15 +67,10 @@ func (s *MessageService) SendMessageToConversationHTTP(ctx context.Context, send
 		return message, nil
 	}
 
-	// 异步推送不可使用 HTTP 请求 context（响应结束后会被 cancel）
 	go func(msg *models.Message) {
-		if err := s.SendMessageWithWs(context.Background(), msg.ReceiverID, msg); err != nil {
-			logger.Error("failed to push message via ws", zap.String("receiver_id", msg.ReceiverID), zap.Error(err))
-		}
-		if msg.SenderID != msg.ReceiverID {
-			if err := s.SendMessageWithWs(context.Background(), msg.SenderID, msg); err != nil {
-				logger.Error("failed to echo message via ws", zap.String("sender_id", msg.SenderID), zap.Error(err))
-			}
+		// 异步推送不可使用 HTTP 请求 context（响应结束后会被 cancel）
+		if err := s.FanoutMessage(context.Background(), msg); err != nil {
+			logger.Error("failed to fanout message via ws", zap.String("message_id", msg.ID.Hex()), zap.Error(err))
 		}
 	}(message)
 
@@ -94,16 +95,26 @@ func (s *MessageService) SendMessageToConversation(
 		return nil, false, ErrConversationAccessDenied
 	}
 
-	receiverID, err := resolvePrivateReceiverID(conversation, senderID)
-	if err != nil {
-		return nil, false, err
-	}
-
-	// 检查对方是否为系统用户（只读），普通用户不能回复系统消息
-	if s.userRepo != nil {
-		if peerUser, err := s.userRepo.GetByID(ctx, receiverID); err == nil && peerUser.Type == models.UserTypeSystem {
-			return nil, false, ErrCannotReplyToSystemUser
+	receiverID := ""
+	if conversation.Type == models.ConversationTypePrivate {
+		var err error
+		receiverID, err = resolvePrivateReceiverID(conversation, senderID)
+		if err != nil {
+			return nil, false, err
 		}
+
+		// 检查对方是否为系统用户（只读），普通用户不能回复系统消息
+		if s.userRepo != nil {
+			if peerUser, err := s.userRepo.GetByID(ctx, receiverID); err == nil && peerUser.Type == models.UserTypeSystem {
+				return nil, false, ErrCannotReplyToSystemUser
+			}
+		}
+	} else if conversation.Type == models.ConversationTypeGroup {
+		if err := s.ensureCanSendGroupMessage(ctx, conversation, senderID); err != nil {
+			return nil, false, err
+		}
+	} else {
+		return nil, false, fmt.Errorf("unsupported conversation type")
 	}
 
 	if clientMessageID != "" {
@@ -160,9 +171,6 @@ func (s *MessageService) SendMessageToConversation(
 	if err := s.conversationService.UpdateLastMessage(ctx, conversation.ID, result); err != nil {
 		return nil, false, fmt.Errorf("failed to update conversation last message: %w", err)
 	}
-	if err := s.conversationService.UpdateUnreadCount(ctx, conversation.ID, receiverID, 1); err != nil {
-		return nil, false, fmt.Errorf("failed to update conversation unread count: %w", err)
-	}
 
 	return result, true, nil
 }
@@ -179,6 +187,117 @@ func resolvePrivateReceiverID(conversation *models.Conversation, senderID string
 	}
 
 	return "", ErrConversationAccessDenied
+}
+
+func (s *MessageService) ensureCanSendGroupMessage(ctx context.Context, conversation *models.Conversation, senderID string) error {
+	if conversation.GroupID == nil || s.groupRepo == nil || s.groupMemberRepo == nil {
+		return fmt.Errorf("invalid group conversation")
+	}
+	group, err := s.groupRepo.Get(ctx, *conversation.GroupID)
+	if err != nil {
+		return fmt.Errorf("failed to get group: %w", err)
+	}
+	if !group.IsActive() {
+		return ErrGroupDissolved
+	}
+	if _, err := s.groupMemberRepo.GetActive(ctx, group.ID, senderID); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return ErrConversationAccessDenied
+		}
+		return err
+	}
+	return nil
+}
+
+func (s *MessageService) FanoutMessage(ctx context.Context, message *models.Message) error {
+	if message == nil {
+		return nil
+	}
+
+	conversation, err := s.conversationRepo.GetConversation(ctx, message.ConversationID)
+	if err != nil {
+		return fmt.Errorf("failed to get conversation for fanout: %w", err)
+	}
+
+	recipientIDs, err := s.resolveFanoutRecipients(ctx, conversation)
+	if err != nil {
+		return err
+	}
+
+	messageBytes, err := json.Marshal(message)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+
+	for _, userID := range recipientIDs {
+		if err := s.pushToUser(ctx, userID, messageBytes); err != nil {
+			logger.Error("failed to push message via ws", zap.String("receiver_id", userID), zap.Error(err))
+		}
+	}
+	return nil
+}
+
+func (s *MessageService) resolveFanoutRecipients(ctx context.Context, conversation *models.Conversation) ([]string, error) {
+	var ids []string
+	switch conversation.Type {
+	case models.ConversationTypePrivate, models.ConversationTypeSystem, models.ConversationTypeChannel:
+		ids = append(ids, conversation.Participants...)
+	case models.ConversationTypeGroup:
+		if conversation.GroupID == nil || s.groupMemberRepo == nil {
+			return nil, fmt.Errorf("invalid group conversation")
+		}
+		activeIDs, err := s.groupMemberRepo.ListActiveUserIDs(ctx, *conversation.GroupID)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, activeIDs...)
+	default:
+		return nil, fmt.Errorf("unsupported conversation type")
+	}
+
+	seen := map[string]struct{}{}
+	results := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		results = append(results, id)
+	}
+	return results, nil
+}
+
+func (s *MessageService) CreateSystemEvent(
+	ctx context.Context,
+	conversationID primitive.ObjectID,
+	operatorID string,
+	content string,
+	payload *models.Payload,
+) error {
+	now := time.Now()
+	message := &models.Message{
+		ID:             primitive.NewObjectID(),
+		ConversationID: conversationID,
+		SenderID:       operatorID,
+		Type:           models.MessageTypeSystemEvent,
+		Content:        content,
+		Payload:        payload,
+		Status:         models.MessageStatusSent,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+
+	result, err := s.repo.Save(ctx, message)
+	if err != nil {
+		return fmt.Errorf("failed to save system event: %w", err)
+	}
+	if err := s.conversationService.UpdateLastMessage(ctx, conversationID, result); err != nil {
+		return fmt.Errorf("failed to update conversation last message: %w", err)
+	}
+	return s.FanoutMessage(ctx, result)
 }
 
 // SendMessageWithWs 将消息推送给在线用户（本进程 WS 或经 Redis 转发到 WS 进程）
@@ -233,9 +352,6 @@ func (s *MessageService) FindMessagesByConversationID(ctx context.Context, conve
 	}
 	for i := range messages {
 		messages[i].DecodePayload()
-	}
-	if err := s.conversationService.MarkConversationRead(ctx, conversationID, currentUserID); err != nil {
-		return nil, fmt.Errorf("failed to mark conversation as read: %w", err)
 	}
 	return messages, nil
 }
@@ -316,9 +432,14 @@ func (s *MessageService) ProcessWebSocketMessage(
 		msgType = models.MessageTypeText
 	}
 
-	result, _, err := s.SendMessageToConversation(ctx, senderID, conversationID, raw.ClientMessageID, raw.Content, &msgType, raw.Payload)
+	result, created, err := s.SendMessageToConversation(ctx, senderID, conversationID, raw.ClientMessageID, raw.Content, &msgType, raw.Payload)
 	if err != nil {
 		return nil, err
+	}
+	if created {
+		if err := s.FanoutMessage(ctx, result); err != nil {
+			return nil, err
+		}
 	}
 
 	return result, nil

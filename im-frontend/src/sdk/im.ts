@@ -1,6 +1,7 @@
 // 消息类型枚举
 export enum MessageType {
     Text = 'text',
+    SystemEvent = 'system_event',
     Image = 'image',
     Video = 'video',
     Audio = 'audio',
@@ -40,6 +41,13 @@ export enum MessageType {
     image_url?: string
     price?: string
     meta?: Record<string, string>
+    event_type?: string
+    operator_id?: string
+    target_user_ids?: string[]
+    group_id?: string
+    group_name?: string
+    before_value?: string
+    after_value?: string
   }
 
   // 消息接口
@@ -64,17 +72,39 @@ export enum MessageType {
     unread_count?: number;
   }
 
+  export interface UserInfo {
+    id: string;
+    nickname?: string;
+    avatar?: string;
+    type?: string;
+  }
+
+  export interface GroupMemberBrief {
+    user_id: string;
+    role: string;
+    group_nickname?: string;
+    user_info?: UserInfo;
+  }
+
+  export interface GroupSummary {
+    id: string;
+    name: string;
+    avatar_url?: string;
+    member_count: number;
+    members?: GroupMemberBrief[];
+  }
+
   export interface Conversation {
     id: string;
     type: string;
     participants: string[];
     last_message: LastMessageSnapshot;
-    to_user_info?: {
-      id: string;
-      nickname?: string;
-      avatar?: string;
-      type?: string;
-    };
+    display_name?: string;
+    display_avatar?: string;
+    group_id?: string;
+    group_info?: GroupSummary;
+    peer_user_info?: UserInfo;
+    to_user_info?: UserInfo;
     image_url: string;
     user_states?: { [key: string]: ConversationUserState };
     created_at: string;

@@ -23,6 +23,16 @@
       >
         <div class="avatar">
           <img v-if="item.avatar" :src="item.avatar" alt="">
+          <div v-else-if="item.groupAvatarMembers.length > 0" class="group-avatar-grid">
+            <div
+              v-for="member in item.groupAvatarMembers"
+              :key="member.user_id"
+              class="group-avatar-cell"
+            >
+              <img v-if="member.user_info?.avatar" :src="member.user_info.avatar" alt="">
+              <span v-else>{{ (member.user_info?.nickname || member.user_id).slice(0, 1) }}</span>
+            </div>
+          </div>
           <PlaceholderImage
             v-else
             bgColor="#EFF1F8"
@@ -70,7 +80,13 @@ import {
   formatLastMessagePreview,
   formatUnreadBadge,
 } from '@/utils/im/format'
-import { getPeerUserId, getUnreadCount } from '@/utils/im/conversation'
+import {
+  getConversationDisplayAvatar,
+  getConversationDisplayName,
+  getPeerUserId,
+  getUnreadCount,
+  isGroupConversation,
+} from '@/utils/im/conversation'
 import PlaceholderImage from '@/components/common/PlaceholderImage.vue'
 import type { Conversation } from '@/sdk/im'
 
@@ -164,15 +180,19 @@ const conversationItems = computed(() => {
 
   return displayConversations.value.map((conversation) => {
     const peerId = getPeerUserId(conversation, uid)
-    const profile = conversation.to_user_info ?? userMap.value[peerId]
+    const profile = conversation.peer_user_info ?? conversation.to_user_info ?? userMap.value[peerId]
     const unreadCount = getUnreadCount(conversation, uid)
+    const groupMembers = isGroupConversation(conversation)
+      ? conversation.group_info?.members ?? []
+      : []
 
     return {
       id: conversation.id,
       peerId,
       conversation,
-      avatar: profile?.avatar,
-      displayName: profile?.nickname ?? (peerId ? `用户${peerId.slice(-4)}` : '未知用户'),
+      avatar: getConversationDisplayAvatar(conversation) || profile?.avatar,
+      groupAvatarMembers: groupMembers.slice(0, 4),
+      displayName: getConversationDisplayName(conversation, uid),
       lastMessagePreview: formatLastMessagePreview(conversation.last_message),
       time: formatConversationTime(
         conversation.last_message?.created_at ?? conversation.updated_at,
@@ -183,6 +203,15 @@ const conversationItems = computed(() => {
     }
   })
 })
+
+const mergeConversationUsers = (items: Conversation[]) => {
+  const users = items.flatMap((conversation) => [
+    conversation.peer_user_info,
+    conversation.to_user_info,
+    ...(conversation.group_info?.members ?? []).map((member) => member.user_info),
+  ])
+  mergeUsers(users)
+}
 
 const scrollToConversation = (conversationId: string) => {
   window.requestAnimationFrame(() => {
@@ -196,7 +225,7 @@ const selectConversation = async (item: { id: string; peerId: string; conversati
   if (!item.id) return
 
   if (props.searchMode && item.id === props.activeConversationId) {
-    clearUnreadForPeer(item.peerId)
+    if (item.peerId) clearUnreadForPeer(item.peerId)
     requestScrollToConversation(item.id)
     emit('select', item.id)
     return
@@ -214,7 +243,7 @@ const selectConversation = async (item: { id: string; peerId: string; conversati
     return
   }
 
-  clearUnreadForPeer(item.peerId)
+  if (item.peerId) clearUnreadForPeer(item.peerId)
   emit('select', item.id)
 
   if (props.navigateMode === 'none') return
@@ -239,22 +268,22 @@ const onIncomingMessage = async (message: Parameters<typeof handleIncomingMessag
 const refresh = async () => {
   if (isSearching.value) {
     await searchConversations(normalizedSearchKeyword.value)
-    mergeUsers(searchResults.value.map((conversation) => conversation.to_user_info))
+    mergeConversationUsers(searchResults.value)
     return
   }
   await loadConversations()
-  mergeUsers(conversations.value.map((conversation) => conversation.to_user_info))
+  mergeConversationUsers(conversations.value)
 }
 
 const loadMore = async () => {
   if (!displayHasMore.value || displayLoadingMore.value) return
   if (isSearching.value) {
     await loadMoreSearchConversations()
-    mergeUsers(searchResults.value.map((conversation) => conversation.to_user_info))
+    mergeConversationUsers(searchResults.value)
     return
   }
   await loadMoreConversations()
-  mergeUsers(conversations.value.map((conversation) => conversation.to_user_info))
+  mergeConversationUsers(conversations.value)
 }
 
 const handleScroll = (event: Event) => {
@@ -299,7 +328,7 @@ watch(
     }
     searchTimer = window.setTimeout(async () => {
       await searchConversations(keyword)
-      mergeUsers(searchResults.value.map((conversation) => conversation.to_user_info))
+      mergeConversationUsers(searchResults.value)
     }, keyword ? 300 : 0)
   },
 )
@@ -445,6 +474,37 @@ defineExpose({ refresh })
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
+}
+
+.group-avatar-grid {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 2px;
+  padding: 3px;
+  border-radius: 50%;
+  background: #eef2f7;
+  overflow: hidden;
+}
+
+.group-avatar-cell {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #dde5ef;
+  color: var(--text-color-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.group-avatar-cell img {
+  border-radius: 4px;
 }
 
 .unread-badge {

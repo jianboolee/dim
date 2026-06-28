@@ -73,7 +73,7 @@
         </button> -->
         <div class="nav-bar-center">
           <div class="user-info">
-            <h1 class="title">{{ targetUser?.nickname || '-' }}</h1>
+            <h1 class="title">{{ conversationTitle }}</h1>
           </div>
           <i v-if="!isConnected"  class="ri-loader-4-line nav-reconnect-icon" aria-label="连接中"></i>
         </div>
@@ -105,7 +105,7 @@
           >
             <div class="message-avatar">
               <img
-                :src="item.message.from_id === currentUserId ? userStore.userInfo?.avatar || '' : targetUser?.avatar || ''"
+                :src="getMessageAvatar(item.message)"
                 alt=""
               >
             </div>
@@ -170,6 +170,9 @@
     <ConversationInfoDrawer
       v-model="showConversationInfoDrawer"
       :participants="conversationInfoParticipants"
+      :is-group="isGroupConversation"
+      :group-id="conversation?.group_id"
+      @invite="handleInviteMembers"
       @search="handleSearchInConversation"
       @clear="handleClearConversationHistory"
     />
@@ -198,6 +201,11 @@ import ConversationSearchModal from '@/components/im/ConversationSearchModal.vue
 import ConversationInfoDrawer from '@/components/im/ConversationInfoDrawer.vue'
 import { usePageTitleNotification } from '@/composables/usePageTitleNotification'
 import { buildMessageTimeline } from '@/utils/im/timeline'
+import {
+  getConversationDisplayName,
+  getPeerUserId,
+  isGroupConversation as isGroupConversationModel,
+} from '@/utils/im/conversation'
 import { readImageDimensions, getFileFormat } from '@/utils/file'
 import { uploadIMFile } from '@/utils/upload'
 
@@ -217,7 +225,7 @@ const {
   ensureConversationInList,
   requestScrollToConversation,
 } = useConversationList()
-const { userMap, fetchUser, mergeUsers } = useUserProfiles()
+const { userMap, fetchUser, fetchUsers, mergeUsers } = useUserProfiles()
 
 const messageText = ref('')
 const messages = ref<ChatMessage[]>([])
@@ -240,22 +248,37 @@ const hasSelectedConversation = computed(() => Boolean(conversationId.value))
 const inputMinRows = computed(() => (isMobileViewport.value ? 1 : 2))
 const inputMaxRows = computed(() => (isMobileViewport.value ? 10 : 15))
 const timelineItems = computed(() => buildMessageTimeline(messages.value))
-const peerUserId = computed(
-  () =>
-    conversation.value?.to_user_info?.id ||
-    conversation.value?.participants.find((id) => id !== currentUserId.value) ||
-    '',
-)
+const isGroupConversation = computed(() => isGroupConversationModel(conversation.value))
+const peerUserId = computed(() => {
+  if (!conversation.value || isGroupConversation.value) return ''
+  return conversation.value.peer_user_info?.id
+    || conversation.value.to_user_info?.id
+    || getPeerUserId(conversation.value, currentUserId.value || '')
+})
 const peerUserType = computed(
-  () => conversation.value?.to_user_info?.type || userMap.value[peerUserId.value]?.type || '',
+  () => isGroupConversation.value
+    ? ''
+    : conversation.value?.peer_user_info?.type || conversation.value?.to_user_info?.type || userMap.value[peerUserId.value]?.type || '',
 )
+const conversationTitle = computed(() => (
+  conversation.value
+    ? getConversationDisplayName(conversation.value, currentUserId.value || '')
+    : '-'
+))
 const conversationInfoParticipants = computed<UserInfo[]>(() => {
   const currentId = currentUserId.value
+  if (isGroupConversation.value) {
+    return (conversation.value?.group_info?.members ?? [])
+      .map((member) => member.user_info ?? userMap.value[member.user_id] ?? { id: member.user_id })
+      .filter((user) => user.id)
+  }
+
   const participantIds = conversation.value?.participants.filter((id) => id && id !== currentId) ?? []
   const usersById = new Map<string, UserInfo>()
 
-  if (conversation.value?.to_user_info?.id && conversation.value.to_user_info.id !== currentId) {
-    usersById.set(conversation.value.to_user_info.id, conversation.value.to_user_info)
+  const peerInfo = conversation.value?.peer_user_info ?? conversation.value?.to_user_info
+  if (peerInfo?.id && peerInfo.id !== currentId) {
+    usersById.set(peerInfo.id, peerInfo)
   }
 
   if (targetUser.value?.id && targetUser.value.id !== currentId) {
@@ -269,8 +292,26 @@ const conversationInfoParticipants = computed<UserInfo[]>(() => {
   return [...usersById.values()]
 })
 
-const pageTitle = computed(() => targetUser.value?.nickname || '消息')
+const pageTitle = computed(() => conversationTitle.value || '消息')
 const { setBaseTitle } = usePageTitleNotification('消息')
+
+const mergeConversationUsers = (item: Conversation) => {
+  mergeUsers([
+    item.peer_user_info,
+    item.to_user_info,
+    ...(item.group_info?.members ?? []).map((member) => member.user_info),
+  ])
+}
+
+const getMessageAvatar = (message: ChatMessage) => {
+  if (message.from_id === currentUserId.value) {
+    return userStore.userInfo?.avatar || ''
+  }
+  if (isGroupConversation.value) {
+    return userMap.value[message.from_id || '']?.avatar || ''
+  }
+  return targetUser.value?.avatar || ''
+}
 
 watch(pageTitle, (title) => {
   setBaseTitle(title)
@@ -294,9 +335,11 @@ watch(
   (user) => {
     if (!user) return
     conversation.value = user
-    if (user.to_user_info) {
-      mergeUsers([user.to_user_info])
-      targetUser.value = user.to_user_info
+    mergeConversationUsers(user)
+    const peerInfo = user.peer_user_info ?? user.to_user_info
+    if (!isGroupConversationModel(user) && peerInfo) {
+      mergeUsers([peerInfo])
+      targetUser.value = peerInfo
     }
   },
 )
@@ -342,6 +385,10 @@ const handleSearchInConversation = () => {
 
 const handleClearConversationHistory = () => {
   showToast('清空聊天记录稍后开放')
+}
+
+const handleInviteMembers = () => {
+  showToast('邀请成员稍后开放')
 }
 
 const handleDocumentPointerDown = (event: PointerEvent) => {
@@ -485,18 +532,21 @@ const syncConversationByMessage = (message: ChatMessage, shouldScroll = false) =
 const handleNewMessage = async (message: ChatMessage) => {
   if (!isCurrentChatMessage(message)) return
 
+  if (isGroupConversation.value && message.from_id && message.from_id !== currentUserId.value) {
+    await fetchUser(message.from_id)
+  }
   mergeMessages([message])
   syncConversationByMessage(message, message.from_id === currentUserId.value)
   scrollToBottom(true, message.from_id === currentUserId.value)
 
-  if (message.from_id === peerUserId.value) {
+  if (!isGroupConversation.value && message.from_id === peerUserId.value) {
     await syncUnreadState()
   }
 }
 
 const sendMessage = async () => {
   if (!messageText.value.trim() || !currentUserId.value) return
-  if (!peerUserId.value) {
+  if (!isGroupConversation.value && !peerUserId.value) {
     showToast('无效的会话')
     return
   }
@@ -511,7 +561,7 @@ const sendMessage = async () => {
     client_message_id: clientMessageId,
     conversation_id: conversationId.value,
     from_id: currentUserId.value,
-    to_id: peerUserId.value,
+    to_id: isGroupConversation.value ? '' : peerUserId.value,
     type: MessageType.Text,
     content,
     status: 'sending',
@@ -577,6 +627,9 @@ const fetchHistoryMessages = async (loadMore = false) => {
     const newMessages = response.sort(
       (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime(),
     )
+    if (isGroupConversation.value) {
+      await fetchUsers(newMessages.map((message) => message.from_id).filter(Boolean) as string[])
+    }
 
     if (loadMore) {
       mergeMessages(newMessages)
@@ -641,6 +694,9 @@ const syncLatestMessages = async () => {
     }
 
     mergeMessages(incoming)
+    if (isGroupConversation.value) {
+      await fetchUsers(incoming.map((message) => message.from_id).filter(Boolean) as string[])
+    }
 
     await syncUnreadState()
     scrollToBottom(true, wasNearBottom)
@@ -650,7 +706,7 @@ const syncLatestMessages = async () => {
 }
 
 const syncUnreadState = async () => {
-  if (peerUserId.value) {
+  if (!isGroupConversation.value && peerUserId.value) {
     clearUnreadForPeer(peerUserId.value)
   }
   unreadMessageStore.requestRefresh()
@@ -658,9 +714,16 @@ const syncUnreadState = async () => {
 }
 
 const fetchTargetUser = async () => {
-  if (conversation.value?.to_user_info) {
-    mergeUsers([conversation.value.to_user_info])
-    targetUser.value = conversation.value.to_user_info
+  if (conversation.value && isGroupConversation.value) {
+    mergeConversationUsers(conversation.value)
+    targetUser.value = null
+    return
+  }
+
+  const peerInfo = conversation.value?.peer_user_info ?? conversation.value?.to_user_info
+  if (peerInfo) {
+    mergeUsers([peerInfo])
+    targetUser.value = peerInfo
     return
   }
 
@@ -671,10 +734,11 @@ const fetchTargetUser = async () => {
 
   const fromConversation = conversations.value.find(
     (item) => item.id === conversationId.value,
-  )?.to_user_info
-  if (fromConversation) {
-    mergeUsers([fromConversation])
-    targetUser.value = fromConversation
+  )
+  const fromConversationPeer = fromConversation?.peer_user_info ?? fromConversation?.to_user_info
+  if (fromConversationPeer) {
+    mergeUsers([fromConversationPeer])
+    targetUser.value = fromConversationPeer
     return
   }
 
@@ -691,9 +755,11 @@ const fetchConversation = async () => {
   const existing = conversations.value.find((item) => item.id === conversationId.value)
   if (existing) {
     conversation.value = existing
-    if (existing.to_user_info) {
-      mergeUsers([existing.to_user_info])
-      targetUser.value = existing.to_user_info
+    mergeConversationUsers(existing)
+    const peerInfo = existing.peer_user_info ?? existing.to_user_info
+    if (!isGroupConversationModel(existing) && peerInfo) {
+      mergeUsers([peerInfo])
+      targetUser.value = peerInfo
     }
   }
 
@@ -706,9 +772,11 @@ const fetchConversation = async () => {
   requestScrollToConversation(conversationId.value)
   if (!conversation.value) return
 
-  if (conversation.value.to_user_info) {
-    mergeUsers([conversation.value.to_user_info])
-    targetUser.value = conversation.value.to_user_info
+  mergeConversationUsers(conversation.value)
+  const peerInfo = conversation.value.peer_user_info ?? conversation.value.to_user_info
+  if (!isGroupConversation.value && peerInfo) {
+    mergeUsers([peerInfo])
+    targetUser.value = peerInfo
   }
 }
 
@@ -820,7 +888,7 @@ interface FilePreview {
 }
 
 const handleSelectFile = (file: File, type: string, preview: FilePreview) => {
-  if (!currentUserId.value || !peerUserId.value) return
+  if (!currentUserId.value || (!isGroupConversation.value && !peerUserId.value)) return
 
   const messageType = type as MessageType
   const clientMessageId = createClientMessageId()
@@ -830,7 +898,7 @@ const handleSelectFile = (file: File, type: string, preview: FilePreview) => {
     client_message_id: clientMessageId,
     conversation_id: conversationId.value,
     from_id: currentUserId.value,
-    to_id: peerUserId.value,
+    to_id: isGroupConversation.value ? '' : peerUserId.value,
     type: messageType,
     content: messageType === MessageType.Image ? '[图片]' : '[视频]',
     status: 'sending',
@@ -986,10 +1054,12 @@ const initChat = async () => {
 
   try {
     await fetchConversation()
-    if (!peerUserId.value) {
+    if (!isGroupConversation.value && !peerUserId.value) {
       throw new Error('invalid conversation participants')
     }
-    clearUnreadForPeer(peerUserId.value)
+    if (!isGroupConversation.value) {
+      clearUnreadForPeer(peerUserId.value)
+    }
     await Promise.all([fetchTargetUser(), waitForConnection()])
     await fetchHistoryMessages()
   } catch (error) {

@@ -16,6 +16,7 @@ func SetupAPI(
 	cfg *config.Config,
 	messageHandler *handler.MessageHandler,
 	conversationHandler *handler.ConversationHandler,
+	groupHandler *handler.GroupHandler,
 	sessionHandler *handler.SessionHandler,
 	userHandler *handler.UserHandler,
 	authHandler *handler.AuthHandler,
@@ -63,6 +64,16 @@ func SetupAPI(
 		api.POST("/conversations", conversationHandler.CreateConversation)
 		api.POST("/conversations/:id/activate", conversationHandler.ActivateConversation)
 		api.GET("/conversations/:id", conversationHandler.GetConversation)
+
+		api.POST("/groups", groupHandler.CreateGroup)
+		api.GET("/groups/:id", groupHandler.GetGroup)
+		api.PATCH("/groups/:id", groupHandler.UpdateGroup)
+		api.GET("/groups/:id/members", groupHandler.GetMembers)
+		api.POST("/groups/:id/members", groupHandler.AddMembers)
+		api.DELETE("/groups/:id/members/:user_id", groupHandler.KickMember)
+		api.POST("/groups/:id/leave", groupHandler.LeaveGroup)
+		api.POST("/groups/:id/admins", groupHandler.AddAdmin)
+		api.DELETE("/groups/:id/admins/:user_id", groupHandler.RemoveAdmin)
 
 		api.GET("/sessions/:user_id", sessionHandler.GetUserStatus)
 		api.POST("/sessions/keepalive", sessionHandler.KeepAlive)

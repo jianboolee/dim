@@ -36,13 +36,13 @@
 
 <script setup lang="ts">
 import { computed, inject, ref, type Ref } from 'vue'
-import type { Message } from '@/sdk/im'
+import type { ChatMessage } from '@/types/im'
 import MessageStatus from './MessageStatus.vue'
 import ImageView from '@/components/common/ImageView.vue'
 import { imagePreview } from '@/plugins/imagePreview'
 
 const props = defineProps<{
-  message: Message
+  message: ChatMessage
   isMine: boolean
 }>()
 

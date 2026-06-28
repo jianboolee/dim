@@ -47,10 +47,47 @@ func (r *ConversationRepository) CreateConversation(ctx context.Context, conv *m
 	return conv.ID, err
 }
 
+func (r *ConversationRepository) CreateGroupConversation(
+	ctx context.Context,
+	groupID primitive.ObjectID,
+	name string,
+	imageURL string,
+	participants []string,
+) (*models.Conversation, error) {
+	now := time.Now()
+	conv := &models.Conversation{
+		ID:           primitive.NewObjectID(),
+		Type:         models.ConversationTypeGroup,
+		GroupID:      &groupID,
+		Participants: participants,
+		DisplayName:  name,
+		ImageURL:     imageURL,
+		UserStates:   map[string]models.ConversationUserState{},
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	conv.NormalizeParticipants()
+
+	_, err := r.collection.InsertOne(ctx, conv)
+	if err != nil {
+		return nil, err
+	}
+	return conv, nil
+}
+
 // GetConversation 获取会话详情
 func (r *ConversationRepository) GetConversation(ctx context.Context, id primitive.ObjectID) (*models.Conversation, error) {
 	var conversation models.Conversation
 	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&conversation)
+	if err != nil {
+		return nil, err
+	}
+	return &conversation, nil
+}
+
+func (r *ConversationRepository) GetConversationByGroupID(ctx context.Context, groupID primitive.ObjectID) (*models.Conversation, error) {
+	var conversation models.Conversation
+	err := r.collection.FindOne(ctx, bson.M{"group_id": groupID}).Decode(&conversation)
 	if err != nil {
 		return nil, err
 	}
@@ -219,6 +256,17 @@ func (r *ConversationRepository) ActivateConversation(ctx context.Context, id pr
 	}
 
 	_, err := r.collection.UpdateOne(ctx, bson.M{"_id": id, "participants": userID}, update)
+	return err
+}
+
+func (r *ConversationRepository) SetParticipants(ctx context.Context, id primitive.ObjectID, participants []string) error {
+	normalized := utils.NormalizeParticipantIDs(participants)
+	_, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, bson.M{
+		"$set": bson.M{
+			"participants": normalized,
+			"updated_at":   time.Now(),
+		},
+	})
 	return err
 }
 

@@ -19,9 +19,10 @@ type MessageType string
 
 const (
 	// 系统
-	MessageTypeSystem MessageType = "system"
-	MessageTypePing   MessageType = "ping"
-	MessageTypePong   MessageType = "pong"
+	MessageTypeSystem      MessageType = "system"
+	MessageTypeSystemEvent MessageType = "system_event"
+	MessageTypePing        MessageType = "ping"
+	MessageTypePong        MessageType = "pong"
 
 	// 文本类
 	MessageTypeText  MessageType = "text"
@@ -46,13 +47,25 @@ const (
 	MessageTypeLike     MessageType = "like"
 )
 
+const (
+	SystemEventGroupCreated       = "group_created"
+	SystemEventMemberJoined       = "member_joined"
+	SystemEventMemberKicked       = "member_kicked"
+	SystemEventMemberLeft         = "member_left"
+	SystemEventGroupDissolved     = "group_dissolved"
+	SystemEventGroupNameUpdated   = "group_name_updated"
+	SystemEventGroupAvatarUpdated = "group_avatar_updated"
+	SystemEventAdminAdded         = "admin_added"
+	SystemEventAdminRemoved       = "admin_removed"
+)
+
 // Message 基础消息结构
 type Message struct {
 	ID              primitive.ObjectID `bson:"_id,omitempty" json:"id"`                                        // 消息 ID
 	ClientMessageID string             `bson:"client_message_id,omitempty" json:"client_message_id,omitempty"` // 客户端生成的幂等 ID
 	ConversationID  primitive.ObjectID `bson:"conversation_id" json:"conversation_id"`                         // 所属会话 ID
 	SenderID        string             `bson:"sender_id" json:"sender_id"`                                     // 发送者 ID
-	ReceiverID      string             `bson:"receiver_id" json:"receiver_id"`                                 // 接收者 ID
+	ReceiverID      string             `bson:"receiver_id,omitempty" json:"receiver_id,omitempty"`             // 私聊兼容字段；群聊按 conversation fanout
 	Type            MessageType        `bson:"type" json:"type"`                                               // 消息类型
 
 	// 内容与扩展字段
@@ -76,12 +89,19 @@ type Message struct {
 }
 
 type Payload struct {
-	Title       string            `bson:"title,omitempty" json:"title,omitempty"`
-	Description string            `bson:"description,omitempty" json:"description,omitempty"`
-	URL         string            `bson:"url,omitempty" json:"url,omitempty"`
-	ImageURL    string            `bson:"image_url,omitempty" json:"image_url,omitempty"`
-	Price       string            `bson:"price,omitempty" json:"price,omitempty"`
-	Meta        map[string]string `bson:"meta,omitempty" json:"meta,omitempty"`
+	Title         string            `bson:"title,omitempty" json:"title,omitempty"`
+	Description   string            `bson:"description,omitempty" json:"description,omitempty"`
+	URL           string            `bson:"url,omitempty" json:"url,omitempty"`
+	ImageURL      string            `bson:"image_url,omitempty" json:"image_url,omitempty"`
+	Price         string            `bson:"price,omitempty" json:"price,omitempty"`
+	Meta          map[string]string `bson:"meta,omitempty" json:"meta,omitempty"`
+	EventType     string            `bson:"event_type,omitempty" json:"event_type,omitempty"`
+	OperatorID    string            `bson:"operator_id,omitempty" json:"operator_id,omitempty"`
+	TargetUserIDs []string          `bson:"target_user_ids,omitempty" json:"target_user_ids,omitempty"`
+	GroupID       string            `bson:"group_id,omitempty" json:"group_id,omitempty"`
+	GroupName     string            `bson:"group_name,omitempty" json:"group_name,omitempty"`
+	BeforeValue   string            `bson:"before_value,omitempty" json:"before_value,omitempty"`
+	AfterValue    string            `bson:"after_value,omitempty" json:"after_value,omitempty"`
 }
 
 // 解析消息的Payload
@@ -89,7 +109,7 @@ type Payload struct {
 // GenerateDigest 根据消息类型和 Payload 生成展示用摘要，写入 Content 字段。
 func (m *Message) GenerateDigest() {
 	switch m.Type {
-	case MessageTypeText, MessageTypeQuote, MessageTypeSystem, MessageTypePost:
+	case MessageTypeText, MessageTypeQuote, MessageTypeSystem, MessageTypeSystemEvent, MessageTypePost:
 		// 文本类：保留原始 content
 		return
 	case MessageTypeImage:

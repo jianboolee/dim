@@ -31,6 +31,12 @@ func InitIndexes(cfg *config.Config) error {
 	if err := InitConversationIndexes(context.Background(), db.Database(cfg.MongoDB.Database)); err != nil {
 		return err
 	}
+	if err := InitGroupIndexes(context.Background(), db.Database(cfg.MongoDB.Database)); err != nil {
+		return err
+	}
+	if err := InitGroupMemberIndexes(context.Background(), db.Database(cfg.MongoDB.Database)); err != nil {
+		return err
+	}
 	if err := InitSessionIndexes(context.Background(), db.Database(cfg.MongoDB.Database)); err != nil {
 		return err
 	}
@@ -121,8 +127,18 @@ func InitConversationIndexes(ctx context.Context, db *mongo.Database) error {
 				SetName("idx_type_participants"),
 		},
 		{
-			Keys:    bson.D{{Key: "hash_id", Value: 1}},
-			Options: options.Index().SetUnique(true).SetName("unique_hash_id"),
+			Keys: bson.D{{Key: "hash_id", Value: 1}},
+			Options: options.Index().
+				SetUnique(true).
+				SetPartialFilterExpression(bson.M{"hash_id": bson.M{"$exists": true, "$gt": ""}}).
+				SetName("unique_hash_id"),
+		},
+		{
+			Keys: bson.D{{Key: "group_id", Value: 1}},
+			Options: options.Index().
+				SetUnique(true).
+				SetSparse(true).
+				SetName("unique_group_id"),
 		},
 		{
 			Keys: bson.D{{Key: "updated_at", Value: -1}},
@@ -149,6 +165,52 @@ func InitConversationIndexes(ctx context.Context, db *mongo.Database) error {
 		return fmt.Errorf("init conversation indexes failed: %w", err)
 	}
 	return nil
+}
+
+func InitGroupIndexes(ctx context.Context, db *mongo.Database) error {
+	groupCollection := db.Collection(models.CollectionGroup)
+
+	return EnsureIndexes(ctx, groupCollection, []mongo.IndexModel{
+		{
+			Keys: bson.D{{Key: "conversation_id", Value: 1}},
+			Options: options.Index().
+				SetUnique(true).
+				SetName("unique_group_conversation_id"),
+		},
+		{
+			Keys: bson.D{{Key: "owner_id", Value: 1}},
+			Options: options.Index().
+				SetName("idx_group_owner_id"),
+		},
+		{
+			Keys: bson.D{{Key: "status", Value: 1}},
+			Options: options.Index().
+				SetName("idx_group_status"),
+		},
+	})
+}
+
+func InitGroupMemberIndexes(ctx context.Context, db *mongo.Database) error {
+	groupMemberCollection := db.Collection(models.CollectionGroupMember)
+
+	return EnsureIndexes(ctx, groupMemberCollection, []mongo.IndexModel{
+		{
+			Keys: bson.D{{Key: "group_id", Value: 1}, {Key: "user_id", Value: 1}},
+			Options: options.Index().
+				SetUnique(true).
+				SetName("unique_group_member"),
+		},
+		{
+			Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "status", Value: 1}},
+			Options: options.Index().
+				SetName("idx_group_member_user_status"),
+		},
+		{
+			Keys: bson.D{{Key: "group_id", Value: 1}, {Key: "role", Value: 1}, {Key: "status", Value: 1}},
+			Options: options.Index().
+				SetName("idx_group_member_role_status"),
+		},
+	})
 }
 
 // InitIndexes 初始化索引, 给 last_seen 字段创建 TTL 索引, 设置自动过期时间

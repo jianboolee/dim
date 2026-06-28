@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -21,8 +22,10 @@ import (
 )
 
 type ConversationService struct {
-	repo     *repository.ConversationRepository
-	userRepo *repository.UserRepository
+	repo            *repository.ConversationRepository
+	userRepo        *repository.UserRepository
+	groupRepo       *repository.GroupRepository
+	groupMemberRepo *repository.GroupMemberRepository
 }
 
 const (
@@ -40,10 +43,17 @@ type conversationCursor struct {
 	ID     string    `json:"id"`
 }
 
-func NewConversationService(repo *repository.ConversationRepository, userRepo *repository.UserRepository) *ConversationService {
+func NewConversationService(
+	repo *repository.ConversationRepository,
+	userRepo *repository.UserRepository,
+	groupRepo *repository.GroupRepository,
+	groupMemberRepo *repository.GroupMemberRepository,
+) *ConversationService {
 	return &ConversationService{
-		repo:     repo,
-		userRepo: userRepo,
+		repo:            repo,
+		userRepo:        userRepo,
+		groupRepo:       groupRepo,
+		groupMemberRepo: groupMemberRepo,
 	}
 }
 
@@ -100,11 +110,18 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, senderID
 			seenPeerIDs[user.ID] = struct{}{}
 			peerIDs = append(peerIDs, user.ID)
 		}
-		if len(peerIDs) == 0 {
-			return emptyConversationList(), nil
+		pattern := regexp.QuoteMeta(keyword)
+		conditions := []bson.M{
+			{"display_name": bson.M{"$regex": pattern, "$options": "i"}},
+		}
+		if len(peerIDs) > 0 {
+			conditions = append(conditions, bson.M{"participants": bson.M{"$in": peerIDs}})
 		}
 
-		filter["participants"] = bson.M{"$all": []string{senderID}, "$in": peerIDs}
+		filter = bson.M{
+			"participants": senderID,
+			"$or":          conditions,
+		}
 	}
 
 	var cursorSortAt time.Time
@@ -261,9 +278,13 @@ func (s *ConversationService) toConversationDTO(ctx context.Context, conversatio
 
 func (s *ConversationService) toConversationDTOs(ctx context.Context, conversations []*models.Conversation, currentUserID string) []*dto.ConversationDTO {
 	peerIDs := make([]string, 0, len(conversations))
+	groupIDs := make([]primitive.ObjectID, 0, len(conversations))
 	seen := map[string]struct{}{}
 
 	for _, conversation := range conversations {
+		if conversation.Type == models.ConversationTypeGroup && conversation.GroupID != nil {
+			groupIDs = append(groupIDs, *conversation.GroupID)
+		}
 		for _, participantID := range conversation.Participants {
 			if participantID == currentUserID {
 				continue
@@ -286,31 +307,113 @@ func (s *ConversationService) toConversationDTOs(ctx context.Context, conversati
 		}
 	}
 
+	groupInfoByID := s.loadGroupSummaries(ctx, groupIDs)
+
 	results := make([]*dto.ConversationDTO, 0, len(conversations))
 	for _, conversation := range conversations {
 		item := &dto.ConversationDTO{
-			ID:           conversation.ID,
-			Type:         conversation.Type,
-			Participants: conversation.Participants,
-			LastMessage:  conversation.LastMessage,
-			ImageURL:     conversation.ImageURL,
-			UserStates:   conversation.UserStates,
-			LastActivity: conversation.LastActivity,
-			CreatedAt:    conversation.CreatedAt,
-			UpdatedAt:    conversation.UpdatedAt,
+			ID:            conversation.ID,
+			Type:          conversation.Type,
+			Participants:  conversation.Participants,
+			LastMessage:   conversation.LastMessage,
+			DisplayName:   conversation.DisplayName,
+			DisplayAvatar: conversation.ImageURL,
+			GroupID:       conversation.GroupID,
+			ImageURL:      conversation.ImageURL,
+			UserStates:    conversation.UserStates,
+			LastActivity:  conversation.LastActivity,
+			CreatedAt:     conversation.CreatedAt,
+			UpdatedAt:     conversation.UpdatedAt,
 		}
 
-		for _, participantID := range conversation.Participants {
-			if participantID == currentUserID {
-				continue
+		if conversation.Type == models.ConversationTypeGroup && conversation.GroupID != nil {
+			if groupInfo := groupInfoByID[conversation.GroupID.Hex()]; groupInfo != nil {
+				item.GroupInfo = groupInfo
+				item.DisplayName = groupInfo.Name
+				item.DisplayAvatar = groupInfo.AvatarURL
 			}
-			if user := usersByID[participantID]; user != nil {
-				item.ToUserInfo = dto.ConvertToUserInfoDto(user)
+		} else {
+			for _, participantID := range conversation.Participants {
+				if participantID == currentUserID {
+					continue
+				}
+				if user := usersByID[participantID]; user != nil {
+					item.PeerUserInfo = dto.ConvertToUserInfoDto(user)
+					item.ToUserInfo = item.PeerUserInfo
+					item.DisplayName = item.PeerUserInfo.Nickname
+					item.DisplayAvatar = item.PeerUserInfo.Avatar
+				}
+				break
 			}
-			break
 		}
 
 		results = append(results, item)
+	}
+
+	return results
+}
+
+func (s *ConversationService) loadGroupSummaries(ctx context.Context, groupIDs []primitive.ObjectID) map[string]*dto.GroupSummaryDTO {
+	results := map[string]*dto.GroupSummaryDTO{}
+	if s.groupRepo == nil || s.groupMemberRepo == nil || len(groupIDs) == 0 {
+		return results
+	}
+
+	for _, groupID := range groupIDs {
+		if _, exists := results[groupID.Hex()]; exists {
+			continue
+		}
+
+		group, err := s.groupRepo.Get(ctx, groupID)
+		if err != nil {
+			logger.Error("Get group summary", zap.String("group_id", groupID.Hex()), zap.Error(err))
+			continue
+		}
+
+		members, err := s.groupMemberRepo.ListActiveByGroup(ctx, groupID)
+		if err != nil {
+			logger.Error("List group members for summary", zap.String("group_id", groupID.Hex()), zap.Error(err))
+			continue
+		}
+
+		briefMembers := make([]dto.GroupMemberBriefDTO, 0, min(len(members), 4))
+		userIDs := make([]string, 0, min(len(members), 4))
+		for i, member := range members {
+			if i >= 4 {
+				break
+			}
+			userIDs = append(userIDs, member.UserID)
+		}
+
+		usersByID := map[string]*models.User{}
+		if s.userRepo != nil && len(userIDs) > 0 {
+			if users, err := s.userRepo.FindByIDs(ctx, userIDs); err == nil {
+				usersByID = users
+			}
+		}
+
+		for i, member := range members {
+			if i >= 4 {
+				break
+			}
+			brief := dto.GroupMemberBriefDTO{
+				UserID:        member.UserID,
+				Role:          member.Role,
+				GroupNickname: member.GroupNickname,
+			}
+			if user := usersByID[member.UserID]; user != nil {
+				brief.UserInfo = dto.ConvertToUserInfoDto(user)
+			}
+			briefMembers = append(briefMembers, brief)
+		}
+
+		results[groupID.Hex()] = &dto.GroupSummaryDTO{
+			ID:          group.ID,
+			Name:        group.Name,
+			AvatarURL:   group.AvatarURL,
+			MemberCount: group.MemberCount,
+			Members:     briefMembers,
+		}
 	}
 
 	return results

@@ -9,16 +9,21 @@ import (
 
 // Conversation 表示一个会话
 type ConversationDTO struct {
-	ID           primitive.ObjectID                      `bson:"_id,omitempty" json:"id"`
-	Type         models.ConversationType                 `bson:"type" json:"type"`
-	Participants []string                                `bson:"participants" json:"participants"` // 参与者的用户ID列表
-	LastMessage  *models.LastMessageSnapshot             `bson:"last_message,omitempty" json:"last_message,omitempty"`
-	ToUserInfo   *UserInfoDto                            `bson:"-" json:"to_user_info,omitempty"` // 对方的用户信息
-	ImageURL     string                                  `bson:"image_url" json:"image_url"`      // 会话图片
-	UserStates   map[string]models.ConversationUserState `bson:"user_states,omitempty" json:"user_states,omitempty"`
-	LastActivity time.Time                               `json:"last_activity" bson:"-"`
-	CreatedAt    time.Time                               `bson:"created_at" json:"created_at"`
-	UpdatedAt    time.Time                               `bson:"updated_at" json:"updated_at"`
+	ID            primitive.ObjectID                      `bson:"_id,omitempty" json:"id"`
+	Type          models.ConversationType                 `bson:"type" json:"type"`
+	Participants  []string                                `bson:"participants" json:"participants"` // 参与者的用户ID列表
+	LastMessage   *models.LastMessageSnapshot             `bson:"last_message,omitempty" json:"last_message,omitempty"`
+	DisplayName   string                                  `bson:"-" json:"display_name"`
+	DisplayAvatar string                                  `bson:"-" json:"display_avatar,omitempty"`
+	GroupID       *primitive.ObjectID                     `bson:"group_id,omitempty" json:"group_id,omitempty"`
+	GroupInfo     *GroupSummaryDTO                        `bson:"-" json:"group_info,omitempty"`
+	PeerUserInfo  *UserInfoDto                            `bson:"-" json:"peer_user_info,omitempty"`
+	ToUserInfo    *UserInfoDto                            `bson:"-" json:"to_user_info,omitempty"` // Deprecated: use peer_user_info
+	ImageURL      string                                  `bson:"image_url" json:"image_url"`      // 会话图片
+	UserStates    map[string]models.ConversationUserState `bson:"user_states,omitempty" json:"user_states,omitempty"`
+	LastActivity  time.Time                               `json:"last_activity" bson:"-"`
+	CreatedAt     time.Time                               `bson:"created_at" json:"created_at"`
+	UpdatedAt     time.Time                               `bson:"updated_at" json:"updated_at"`
 }
 
 // ConversationQuery 会话查询参数

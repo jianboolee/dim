@@ -23,6 +23,10 @@
             </header> -->
 
             <section class="drawer-section participants-section">
+              <div v-if="isGroup && groupId" class="group-meta-row">
+                <span>群 ID</span>
+                <strong>{{ groupId }}</strong>
+              </div>
               <div class="participant-list">
                 <div
                   v-for="user in displayParticipants"
@@ -36,6 +40,10 @@
             </section>
 
             <section class="drawer-section action-section">
+              <button v-if="isGroup" type="button" class="drawer-row action-row" @click="handleInvite">
+                <span>邀请成员</span>
+                <i class="ri-add-line"></i>
+              </button>
               <button type="button" class="drawer-row action-row" @click="handleSearch">
                 <span>查找聊天内容</span>
                 <i class="ri-arrow-right-s-line"></i>
@@ -88,12 +96,15 @@ import type { UserInfo } from '@/types/user'
 const props = defineProps<{
   modelValue: boolean
   participants: UserInfo[]
+  isGroup?: boolean
+  groupId?: string
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   search: []
   clear: []
+  invite: []
 }>()
 
 const pinned = ref(false)
@@ -107,6 +118,10 @@ const close = () => {
 
 const handleSearch = () => {
   emit('search')
+}
+
+const handleInvite = () => {
+  emit('invite')
 }
 
 const handleClear = () => {
@@ -195,6 +210,25 @@ onUnmounted(() => {
 
 .participants-section {
   padding: 18px 16px 16px;
+}
+
+.group-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  color: var(--text-color-secondary);
+  font-size: 12px;
+}
+
+.group-meta-row strong {
+  min-width: 0;
+  color: var(--text-color-dark);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .participant-list {

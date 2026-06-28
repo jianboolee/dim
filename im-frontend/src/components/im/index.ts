@@ -20,6 +20,7 @@ export {
 
 export const MessageComponents: Partial<Record<MessageType, Component>> = {
   [MessageType.Text]: TextMessage,
+  [MessageType.SystemEvent]: TextMessage,
   [MessageType.Image]: ImageMessage,
   [MessageType.Audio]: AudioMessage,
   [MessageType.Video]: VideoMessage,

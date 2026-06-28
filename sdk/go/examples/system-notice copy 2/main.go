@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -13,7 +14,13 @@ import (
 	"d-im-go-sdk/examples/demo"
 )
 
-var LOGIN_USER = demo.USER_AUDIT
+var FromUser = demo.USER_SYSTEM_NOTICE
+var ToUser = demo.USER_JIANBO
+
+type output struct {
+	ConversationID string      `json:"conversation_id"`
+	Message        dim.Message `json:"message"`
+}
 
 func main() {
 	apiBase := envOr("IM_API_BASE", "http://localhost:8901")
@@ -27,17 +34,30 @@ func main() {
 		log.Fatal("INTEGRATION_API_KEY is required (flag -key or env)")
 	}
 
+	apiBase = strings.TrimRight(apiBase, "/")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	integrationClient := dim.NewIntegrationClient(dim.Config{
-		BaseURL: strings.TrimRight(apiBase, "/"),
+		BaseURL: apiBase,
 		APIKey:  integrationKey,
 	})
 
-	session, err := integrationClient.Login(ctx, dim.LoginRequest{
-		User: LOGIN_USER,
+	session, err := integrationClient.CreateConversation(ctx, dim.CreateConversationRequest{
+		FromUser: FromUser,
+		ToUser:   ToUser,
 	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	userClient := dim.NewUserClient(dim.Config{
+		BaseURL: apiBase,
+		Token:   session.Token,
+	})
+
+	content := fmt.Sprintf("你好，欢迎使用消息系统，当前时间是: %s", time.Now().Format("2006-01-02 15:04:05"))
+	message, err := userClient.SendTextMessage(ctx, session.ConversationID, content)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -45,7 +65,10 @@ func main() {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(session); err != nil {
+	if err := encoder.Encode(output{
+		ConversationID: session.ConversationID,
+		Message:        *message,
+	}); err != nil {
 		log.Fatal(err)
 	}
 }
