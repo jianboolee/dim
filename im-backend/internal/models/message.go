@@ -76,21 +76,45 @@ type Message struct {
 }
 
 type Payload struct {
-	Title       string             `bson:"title" json:"title"`
-	Description string             `bson:"description" json:"description"`
-	URL         string             `bson:"url" json:"url"`
-	ImageURL    *string            `bson:"image_url" json:"image_url"`
-	Width       *int               `bson:"width" json:"width"`
-	Height      *int               `bson:"height" json:"height"`
-	Duration    *int               `bson:"duration" json:"duration"`
-	Size        *int               `bson:"size" json:"size"`
-	Price       *float64           `bson:"price" json:"price"`
-	Currency    *string            `bson:"currency" json:"currency"`
-	ExtInt      *int               `bson:"ext_int" json:"ext_int"`
-	ExtFloat    *float64           `bson:"ext_float" json:"ext_float"`
-	ExtString   *string            `bson:"ext_string" json:"ext_string"`
-	ExtArray    *[]string          `bson:"ext_array" json:"ext_array"`
-	ExtMap      *map[string]string `bson:"ext_map" json:"ext_map"`
+	Title       string            `bson:"title,omitempty" json:"title,omitempty"`
+	Description string            `bson:"description,omitempty" json:"description,omitempty"`
+	URL         string            `bson:"url,omitempty" json:"url,omitempty"`
+	ImageURL    string            `bson:"image_url,omitempty" json:"image_url,omitempty"`
+	Price       string            `bson:"price,omitempty" json:"price,omitempty"`
+	Meta        map[string]string `bson:"meta,omitempty" json:"meta,omitempty"`
+}
+
+// GenerateDigest 根据消息类型和 Payload 生成展示用摘要，写入 Content 字段。
+func (m *Message) GenerateDigest() {
+	switch m.Type {
+	case MessageTypeText, MessageTypeQuote, MessageTypeSystem, MessageTypePost:
+		// 文本类：保留原始 content
+		return
+	case MessageTypeImage:
+		m.Content = "[图片]"
+	case MessageTypeVideo:
+		m.Content = "[视频]"
+	case MessageTypeAudio:
+		m.Content = "[语音]"
+	case MessageTypeFile:
+		m.Content = "[文件]"
+	case MessageTypeEmoji:
+		m.Content = "[表情]"
+	case MessageTypeCard:
+		if m.Payload != nil && m.Payload.Title != "" {
+			m.Content = "[卡片] " + m.Payload.Title
+		} else {
+			m.Content = "[卡片]"
+		}
+	case MessageTypeLink:
+		if m.Payload != nil && m.Payload.Title != "" {
+			m.Content = "[链接] " + m.Payload.Title
+		} else {
+			m.Content = "[链接]"
+		}
+	default:
+		m.Content = "[消息]"
+	}
 }
 
 // 解析消息的Payload

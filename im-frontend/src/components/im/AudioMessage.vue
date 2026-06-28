@@ -7,8 +7,8 @@
       <div class="audio-wave" :class="{ 'wave-animate': isPlaying }">
         <i v-for="n in 4" :key="n" class="wave-bar"></i>
       </div>
-      <span class="duration" v-if="message.media_info?.duration">
-        {{ formatDuration(message.media_info.duration) }}
+      <span class="duration" v-if="message.payload?.meta?.duration">
+        {{ formatDuration(Number(message.payload.meta.duration)) }}
       </span>
     </div>
     <MessageStatus 
@@ -49,8 +49,8 @@ const togglePlay = () => {
     audio.pause()
     isPlaying.value = false
   } else {
-    if (props.message.media_info?.url) {
-      audio.src = props.message.media_info.url
+    if (props.message.payload?.url) {
+      audio.src = props.message.payload.url
       audio.play()
       isPlaying.value = true
     }

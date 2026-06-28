@@ -187,8 +187,8 @@ import { useUnreadMessageStore } from '@/stores/unreadMessage'
 import { useConversationList } from '@/composables/useConversationList'
 import { useUserProfiles } from '@/composables/useUserProfiles'
 import { MessageType } from '@/sdk/im'
-import type { MediaInfo } from '@/sdk/im'
-import type { ChatMessage, Conversation } from '@/types/im'
+import type { Payload } from '@/sdk/im'
+import type { ChatMessage, Conversation, UploadState } from '@/types/im'
 import type { UserInfo } from '@/types/user'
 import { MessageComponents } from '@/components/im'
 import MessageMoreOptions from '@/components/im/MessageMoreOptions.vue'
@@ -361,8 +361,8 @@ const initialized = ref(false)
 
 const chatImages = computed(() =>
   messages.value
-    .filter((msg) => msg.type === MessageType.Image && msg.media_info?.url)
-    .map((msg) => msg.media_info!.url),
+    .filter((msg) => msg.type === MessageType.Image && msg.payload?.url)
+    .map((msg) => msg.payload!.url!),
 )
 
 provide('chatImages', chatImages)
@@ -720,7 +720,7 @@ const retryMessage = async (message: ChatMessage) => {
   const current = messages.value[messageIndex]
   if (!current) return
 
-  if (current.type === MessageType.Image && current.media_info?.local_file) {
+  if (current.type === MessageType.Image && current.uploadState?.localFile) {
     await retryUploadImageMessage(current, messageIndex)
     return
   }
@@ -735,9 +735,7 @@ const retryMessage = async (message: ChatMessage) => {
       conversationId.value,
       message.type ?? MessageType.Text,
       message.content,
-      message.media_info,
-      message.card_info,
-      message.link_info,
+      message.payload,
       clientMessageId,
     )
     if (response) {
@@ -755,7 +753,7 @@ const retryMessage = async (message: ChatMessage) => {
 }
 
 const retryUploadImageMessage = async (message: ChatMessage, messageIndex: number) => {
-  const file = message.media_info?.local_file
+  const file = message.uploadState?.localFile
   if (!file) {
     showToast('图片文件已失效，请重新选择')
     return
@@ -767,36 +765,33 @@ const retryUploadImageMessage = async (message: ChatMessage, messageIndex: numbe
   const clientMessageId = current.client_message_id ?? createClientMessageId()
   current.status = 'sending'
   current.client_message_id = clientMessageId
-  current.media_info = {
-    ...current.media_info!,
-    uploading: true,
-    upload_failed: false,
-  }
+  current.uploadState = { localFile: file, uploading: true }
   messages.value = [...messages.value]
 
   try {
     const uploaded = await uploadIMFile(file)
     const dimensions = await readImageDimensions(file)
     const format = uploaded.format ?? getFileFormat(file)
-    const mediaInfo: MediaInfo = {
-      url: uploaded.url,
-      size: uploaded.size,
-      width: uploaded.width ?? dimensions.width,
-      height: uploaded.height ?? dimensions.height,
-      format,
-    }
+    const w = uploaded.width ?? dimensions.width
+    const h = uploaded.height ?? dimensions.height
 
     const response = await imStore.imSDK?.sendMessage(
       conversationId.value,
       MessageType.Image,
       '',
-      mediaInfo,
-      undefined,
-      undefined,
+      {
+        url: uploaded.url,
+        meta: {
+          width: String(w),
+          height: String(h),
+          size: String(uploaded.size),
+          format,
+        },
+      } as Payload,
       clientMessageId,
     )
     if (response) {
-      const previewUrl = current.media_info?.url
+      const previewUrl = current.payload?.url
       confirmPendingMessage(current.id!, response)
       syncConversationByMessage(response, true)
       if (previewUrl?.startsWith('blob:')) {
@@ -806,18 +801,26 @@ const retryUploadImageMessage = async (message: ChatMessage, messageIndex: numbe
   } catch (error) {
     console.error('重新上传图片失败:', error)
     const latest = messages.value.find((msg) => msg.id === current.id)
-    if (latest?.media_info) {
+    if (latest) {
       latest.status = 'failed'
-      latest.media_info.uploading = false
-      latest.media_info.upload_failed = true
-      latest.media_info.local_file = file
+      latest.uploadState = { localFile: file, uploading: false, uploadFailed: true }
       messages.value = [...messages.value]
     }
     showToast('上传失败，点击重试')
   }
 }
 
-const handleSelectFile = (file: File, type: string, fileInfo: MediaInfo & { uploading?: boolean }) => {
+// 文件上传预览信息（纯前端本地结构）
+interface FilePreview {
+  url: string        // 预览 blob URL
+  size: number
+  width?: number
+  height?: number
+  format?: string
+  uploading?: boolean
+}
+
+const handleSelectFile = (file: File, type: string, preview: FilePreview) => {
   if (!currentUserId.value || !peerUserId.value) return
 
   const messageType = type as MessageType
@@ -834,7 +837,8 @@ const handleSelectFile = (file: File, type: string, fileInfo: MediaInfo & { uplo
     status: 'sending',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-    media_info: { ...fileInfo, uploading: true, local_file: file },
+    payload: { url: preview.url },
+    uploadState: { uploading: true, localFile: file },
   }
 
   pendingUploadMessageIds.set(file, tempMessageId)
@@ -842,14 +846,14 @@ const handleSelectFile = (file: File, type: string, fileInfo: MediaInfo & { uplo
   scrollToBottom(true, true)
 }
 
-const handleUploadSuccess = async (file: File, type: string, fileInfo: MediaInfo) => {
+const handleUploadSuccess = async (file: File, type: string, uploaded: { url: string; size: number; width?: number; height?: number; format?: string }) => {
   const messageType = type as MessageType
   const pendingMessageId = pendingUploadMessageIds.get(file)
   const messageIndex = messages.value.findIndex(
     (msg) =>
       msg.status === 'sending' &&
       msg.type === messageType &&
-      msg.media_info?.uploading &&
+      msg.uploadState?.uploading &&
       (!pendingMessageId || msg.id === pendingMessageId),
   )
   if (messageIndex === -1) return
@@ -857,16 +861,22 @@ const handleUploadSuccess = async (file: File, type: string, fileInfo: MediaInfo
   const current = messages.value[messageIndex]
   if (!current) return
 
-  const previewUrl = current.media_info?.url
+  const previewUrl = current.payload?.url
 
   try {
     const response = await imStore.imSDK?.sendMessage(
       conversationId.value,
       messageType,
       '',
-      fileInfo,
-      undefined,
-      undefined,
+      {
+        url: uploaded.url,
+        meta: {
+          width: uploaded.width != null ? String(uploaded.width) : undefined,
+          height: uploaded.height != null ? String(uploaded.height) : undefined,
+          size: String(uploaded.size),
+          format: uploaded.format,
+        },
+      } as Payload,
       current.client_message_id,
     )
     if (response) {
@@ -881,10 +891,7 @@ const handleUploadSuccess = async (file: File, type: string, fileInfo: MediaInfo
     console.error('发送媒体消息失败:', error)
     if (messages.value[messageIndex]) {
       messages.value[messageIndex].status = 'failed'
-      if (messages.value[messageIndex].media_info) {
-        messages.value[messageIndex].media_info.uploading = false
-        messages.value[messageIndex].media_info.local_file = file
-      }
+      messages.value[messageIndex].uploadState = { localFile: file, uploading: false, uploadFailed: true }
       messages.value = [...messages.value]
     }
     pendingUploadMessageIds.delete(file)
@@ -899,7 +906,7 @@ const handleUploadError = (file: File, type: string) => {
     (msg) =>
       msg.status === 'sending' &&
       msg.type === messageType &&
-      msg.media_info?.uploading &&
+      msg.uploadState?.uploading &&
       (!pendingMessageId || msg.id === pendingMessageId),
   )
   if (messageIndex === -1) return
@@ -908,12 +915,7 @@ const handleUploadError = (file: File, type: string) => {
   if (!current) return
 
   current.status = 'failed'
-  current.media_info = {
-    ...current.media_info!,
-    uploading: false,
-    upload_failed: true,
-    local_file: file,
-  }
+  current.uploadState = { localFile: file, uploading: false, uploadFailed: true }
   messages.value = [...messages.value]
   pendingUploadMessageIds.delete(file)
 }

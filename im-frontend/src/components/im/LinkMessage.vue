@@ -1,19 +1,19 @@
-<!-- 卡片消息组件 -->
+<!-- 链接消息组件 -->
 <template>
     <div class="message-content message-card">
       <div class="message-arrow"></div>
-      <a :href="message.link_info?.url" target="_blank" class="card-link">
+      <a :href="message.payload?.url" target="_blank" class="card-link">
         <div class="card-info">
-          <div class="card-title">{{ message.link_info?.title || '链接' }}</div>
-          <div class="card-desc">{{ message.link_info?.description || message.content }}</div>
+          <div class="card-title">{{ message.payload?.title || '链接' }}</div>
+          <div class="card-desc">{{ message.payload?.description || message.content }}</div>
         </div>
         <div class="card-thumb">
           <template v-if="!imageError">
           <img 
-            v-if="message.link_info?.image_url"
-            :src="message.link_info?.image_url" 
+            v-if="message.payload?.image_url"
+            :src="message.payload.image_url" 
             alt="链接"
-            @error="handleImageError(message)"
+            @error="imageError = true"
           >
           <PlaceholderImage 
             v-else
@@ -57,13 +57,6 @@
   }>()
   
   const imageError = ref(false)
-  // 图片加载失败处理
-  const handleImageError = (message: Message) => {
-    imageError.value = true
-    if (message.link_info?.image_url) {
-      message.link_info.image_url = ''  // 清空图片，触发显示占位图
-    }
-  }
   
   </script>
   

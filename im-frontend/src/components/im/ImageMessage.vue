@@ -5,7 +5,7 @@
     <div class="image-container" :style="containerStyle">
       <div class="image-wrapper">
         <ImageView
-          :src="message.media_info?.url || ''"
+          :src="message.payload?.url || ''"
           :alt="message.content"
           placeholderText="图片"
           :width="containerStyle.width"
@@ -17,7 +17,7 @@
         />
         
         <!-- 上传中状态 -->
-        <div v-if="message.media_info?.uploading" class="upload-overlay">
+        <div v-if="message.uploadState?.uploading" class="upload-overlay">
           <div class="upload-indicator">
             <div class="upload-spinner"></div>
             <span>上传中</span>
@@ -64,10 +64,18 @@ const handleImageLoad = (event: Event) => {
   actualHeight.value = img.naturalHeight
 }
 
+// 从 meta 中获取预设尺寸（可选）
+const getMetaDimensions = () => {
+  const meta = props.message.payload?.meta
+  if (!meta) return null
+  const w = Number(meta.width)
+  const h = Number(meta.height)
+  if (w > 0 && h > 0) return { width: w, height: h }
+  return null
+}
+
 // 获取有效的宽高数据
 const getValidDimensions = () => {
-  const mediaInfo = props.message.media_info
-  
   // 优先使用加载后的实际尺寸
   if (actualWidth.value && actualHeight.value) {
     return {
@@ -76,13 +84,9 @@ const getValidDimensions = () => {
     }
   }
   
-  // 其次使用 media_info 中的尺寸
-  if (mediaInfo?.width && mediaInfo?.height) {
-    return {
-      width: mediaInfo.width,
-      height: mediaInfo.height
-    }
-  }
+  // 其次使用 meta 中的预设尺寸
+  const metaDims = getMetaDimensions()
+  if (metaDims) return metaDims
   
   // 最后使用默认尺寸 (4:3)
   return {
@@ -118,9 +122,9 @@ const containerStyle = computed(() => {
 
 // 预览图片
 const preview = () => {
-  if (!props.message.media_info?.url) return
+  if (!props.message.payload?.url) return
   // 找到当前图片在列表中的索引
-  const index = chatImages.value.findIndex((url: string) => url === props.message.media_info?.url)
+  const index = chatImages.value.findIndex((url: string) => url === props.message.payload?.url)
   if (index === -1) return
   
   imagePreview.preview({

@@ -1,15 +1,7 @@
 import dayjs from 'dayjs'
-import { MessageType, type Message } from '@/sdk/im'
+import type { Message } from '@/sdk/im'
 
 const EMPTY_TIME = '0001-01-01T00:00:00Z'
-
-const LAST_MESSAGE_LABELS: Partial<Record<MessageType, string>> = {
-  [MessageType.Image]: '[图片]',
-  [MessageType.Video]: '[视频]',
-  [MessageType.Audio]: '[语音]',
-  [MessageType.Link]: '[链接]',
-  [MessageType.Card]: '[卡片]',
-}
 
 /** 会话列表时间展示：今天显示时分，昨天显示「昨天」，同年显示月日 */
 export function formatConversationTime(time?: string): string {
@@ -24,14 +16,9 @@ export function formatConversationTime(time?: string): string {
   return date.format('YYYY-MM-DD')
 }
 
-/** 会话列表最后一条消息预览文案 */
+/** 会话列表最后一条消息预览文案 — 后端 Content 已是摘要，直接使用 */
 export function formatLastMessagePreview(message?: Message): string {
   if (!message) return ''
-
-  if (message.type && message.type !== MessageType.Text) {
-    return LAST_MESSAGE_LABELS[message.type] ?? `[${message.type}]`
-  }
-
   return message.content || ''
 }
 

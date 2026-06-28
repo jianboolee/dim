@@ -1,12 +1,10 @@
-import type { Message, MediaInfo } from '@/sdk/im'
+import type { Message, Payload } from '@/sdk/im'
 
 export type {
   Message,
+  Payload,
   MessageType,
   MessageStatus,
-  MediaInfo,
-  CardInfo,
-  LinkInfo,
   Conversation,
   ConversationPage,
 } from '@/sdk/im'
@@ -14,11 +12,15 @@ export type {
 /** 聊天 UI 层扩展的消息状态 */
 export type ChatMessageStatus = 'sending' | 'failed' | 'sent' | 'delivered'
 
-export type ChatMessage = Omit<Message, 'status' | 'media_info'> & {
+/** 纯前端本地上传状态，不在 Payload 中传输 */
+export interface UploadState {
+  uploading?: boolean
+  localFile?: File
+  uploadFailed?: boolean
+}
+
+export type ChatMessage = Omit<Message, 'status'> & {
   status?: ChatMessageStatus
-  media_info?: MediaInfo & {
-    uploading?: boolean
-    local_file?: File
-    upload_failed?: boolean
-  }
+  /** 本地上传状态，仅前端使用 */
+  uploadState?: UploadState
 }

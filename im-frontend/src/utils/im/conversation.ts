@@ -1,4 +1,4 @@
-import { MessageType, type Conversation, type Message } from '@/sdk/im'
+import type { Conversation, Message } from '@/sdk/im'
 import { normalizeUnreadCount } from '@/utils/im/format'
 
 export function getPeerUserId(conversation: Conversation, currentUserId: string): string {
@@ -19,8 +19,8 @@ export function sortConversationsByActivity(conversations: Conversation[]): Conv
 }
 
 function previewImageFromMessage(message: Message): string {
-  if (message.type === MessageType.Card) return message.card_info?.image_url ?? ''
-  if (message.type === MessageType.Image) return message.media_info?.url ?? ''
+  if (message.payload?.image_url) return message.payload.image_url
+  if (message.payload?.url) return message.payload.url
   return ''
 }
 

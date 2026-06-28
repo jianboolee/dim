@@ -21,7 +21,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { showToast } from '@/plugins/toast'
-import { MessageType, type MediaInfo } from '@/sdk/im'
+import { MessageType } from '@/sdk/im'
 import { readImageDimensions, getFileFormat } from '@/utils/file'
 import { uploadIMFile } from '@/utils/upload'
 
@@ -29,11 +29,20 @@ const IMAGE_MAX_SIZE = 10 * 1024 * 1024
 const IMAGE_MAX_COUNT = 9
 const IMAGE_ALLOWED_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp'])
 
-type PendingMediaInfo = MediaInfo & { uploading?: boolean }
+/** 文件上传结果 */
+interface UploadResult {
+  url: string
+  size: number
+  width?: number
+  height?: number
+  format?: string
+}
+
+type PendingUploadInfo = UploadResult & { uploading?: boolean }
 
 const emit = defineEmits<{
-  'select-file': [file: File, type: MessageType, fileInfo: PendingMediaInfo]
-  'upload-success': [file: File, type: MessageType, fileInfo: MediaInfo]
+  'select-file': [file: File, type: MessageType, info: PendingUploadInfo]
+  'upload-success': [file: File, type: MessageType, info: UploadResult]
   'upload-error': [file: File, type: MessageType]
 }>()
 
@@ -90,7 +99,7 @@ async function uploadImage(file: File) {
     const uploaded = await uploadIMFile(file)
     const dimensions = await readImageDimensions(file)
 
-    const mediaInfo: MediaInfo = {
+    const result: UploadResult = {
       url: uploaded.url,
       size: uploaded.size,
       width: uploaded.width ?? dimensions.width,
@@ -98,7 +107,7 @@ async function uploadImage(file: File) {
       format: uploaded.format ?? format,
     }
 
-    emit('upload-success', file, MessageType.Image, mediaInfo)
+    emit('upload-success', file, MessageType.Image, result)
   } catch (error) {
     console.error('图片上传失败:', error)
     showToast('上传失败')

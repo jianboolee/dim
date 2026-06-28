@@ -44,17 +44,12 @@ type Message struct {
 }
 
 type Payload struct {
-	URL         string  `json:"url,omitempty"`
-	Title       string  `json:"title,omitempty"`
-	Description string  `json:"description,omitempty"`
-	ImageURL    string  `json:"image_url,omitempty"`
-	Size        int64   `json:"size,omitempty"`
-	Duration    int64   `json:"duration,omitempty"`
-	Width       int64   `json:"width,omitempty"`
-	Height      int64   `json:"height,omitempty"`
-	ExtString   string  `json:"ext_string,omitempty"`
-	Price       float64 `json:"price,omitempty"`
-	Currency    string  `json:"currency,omitempty"`
+	Title       string            `json:"title,omitempty"`
+	Description string            `json:"description,omitempty"`
+	URL         string            `json:"url,omitempty"`
+	ImageURL    string            `json:"image_url,omitempty"`
+	Price       string            `json:"price,omitempty"`
+	Meta        map[string]string `json:"meta,omitempty"`
 }
 
 type ConversationPage struct {

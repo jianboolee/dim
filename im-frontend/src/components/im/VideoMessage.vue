@@ -7,15 +7,15 @@
         ref="videoRef"
         class="video-js vjs-default-skin"
         preload="none"
-        :poster="message.media_info?.thumbnail"
+        :poster="message.payload?.image_url"
         playsinline
         webkit-playsinline
       >
         <source 
-          v-for="(type, index) in getVideoSources(message.media_info)" 
+          v-for="(src, index) in getVideoSources(message.payload)" 
           :key="index"
-          :src="type.src"
-          :type="type.type"
+          :src="src.src"
+          :type="src.type"
         />
         <p class="vjs-no-js">
           您的设备不支持视频播放
@@ -23,8 +23,8 @@
       </video>
       <div class="video-overlay" v-if="!isPlaying">
         <i class="bi bi-play-circle-fill"></i>
-        <span class="duration" v-if="message.media_info?.duration">
-          {{ formatDuration(message.media_info.duration) }}
+        <span class="duration" v-if="message.payload?.meta?.duration">
+          {{ formatDuration(Number(message.payload.meta.duration)) }}
         </span>
       </div>
       <div v-if="loading" class="loading-overlay">
@@ -145,12 +145,12 @@ const formatDuration = (seconds: number) => {
 }
 
 // 获取视频源
-const getVideoSources = (mediaInfo: any) => {
-  if (!mediaInfo?.url) return []
+const getVideoSources = (payload: Message['payload']) => {
+  if (!payload?.url) return []
   
-  const url = mediaInfo.url
-  const format = mediaInfo.format?.toLowerCase()
-  const sources = []
+  const url = payload.url
+  const format = payload.meta?.format?.toLowerCase()
+  const sources: { src: string; type: string }[] = []
   
   // 添加原始格式
   if (format) {
@@ -201,7 +201,7 @@ onMounted(() => {
       pictureInPictureToggle: false
     },
     techOrder: ['html5'],
-    sources: getVideoSources(props.message.media_info)
+    sources: getVideoSources(props.message.payload)
   })
 
   // 监听播放器事件
@@ -241,7 +241,9 @@ onUnmounted(() => {
 
 // 计算视频宽高比
 const getAspectRatio = computed(() => {
-  const { width, height } = props.message.media_info || {}
+  const meta = props.message.payload?.meta
+  const width = meta?.width ? Number(meta.width) : 0
+  const height = meta?.height ? Number(meta.height) : 0
   if (width && height) {
     // 如果是横屏视频
     if (width > height) {

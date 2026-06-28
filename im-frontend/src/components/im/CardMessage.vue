@@ -2,14 +2,14 @@
 <template>
   <div class="message-content message-card">
     <div class="message-arrow"></div>
-    <div @click="handleCardClick(message)" class="card-link">
+    <div @click="handleCardClick" class="card-link">
       <div class="card-thumb">
         <template v-if="!imageError">
           <img 
-            v-if="message.card_info?.image_url"
-            :src="message.card_info?.image_url" 
+            v-if="message.payload?.image_url"
+            :src="message.payload.image_url" 
             alt=""
-            @error="handleImageError(message)"
+            @error="imageError = true"
           >
           <PlaceholderImage 
             v-else
@@ -26,11 +26,10 @@
         />
       </div>
       <div class="card-info">
-        <div class="card-title">{{ message.card_info?.title || '' }}</div>
-        <div class="card-desc">{{ message.card_info?.description }}</div>
-        <div class="card-price" v-if="message.card_info?.price">
-          <span class="currency">{{ message.card_info?.currency === 'CNY' ? '¥' : message.card_info?.currency }}</span>
-          <span class="amount">{{ formatPrice(message.card_info?.price) }}</span>
+        <div class="card-title">{{ message.payload?.title || '' }}</div>
+        <div class="card-desc">{{ message.payload?.description }}</div>
+        <div class="card-price" v-if="message.payload?.price">
+          <span class="amount">{{ message.payload.price }}</span>
         </div>
       </div>
     </div>
@@ -51,7 +50,7 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
-defineProps<{
+const props = defineProps<{
   message: Message
   isMine: boolean
 }>()
@@ -62,25 +61,9 @@ defineEmits<{
 
 const imageError = ref(false)
 
-// 图片加载失败处理
-const handleImageError = (message: Message) => {
-  imageError.value = true
-  if (message.card_info?.image_url) {
-    message.card_info.image_url = ''  // 清空图片，触发显示占位图
-  }
-}
-
-// 格式化价格
-const formatPrice = (price: number) => {
-  return price.toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })
-}
-
-const handleCardClick = (message: Message) => {
-  if (message.card_info?.path) {
-    router.push(message.card_info?.path)
+const handleCardClick = () => {
+  if (props.message.payload?.url) {
+    router.push(props.message.payload.url)
   }
 }
 </script>

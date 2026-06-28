@@ -132,11 +132,14 @@ func (s *MessageService) SendMessageToConversation(
 		ReceiverID:      receiverID,
 		Content:         content,
 		Type:            msgTypeValue,
-		Payload:         payload, // 这里需要传递指针
+		Payload:         payload,
 		Status:          models.MessageStatusSent,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
+
+	// 非文本消息由后端统一生成摘要
+	message.GenerateDigest()
 
 	logger.Debug(zap.NewDevelopmentEncoderConfig().MessageKey, zap.Any("message", message))
 

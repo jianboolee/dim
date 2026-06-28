@@ -13,16 +13,18 @@
 //	    ToUser:   demo.USER_A,
 //	})
 //
-//	// 以系统通知身份向用户 Alice 发送卡片消息
+//	// 以系统订单身份向用户 Alice 发送卡片消息
 //	session, _ := integrationClient.CreateConversation(ctx, dim.CreateConversationRequest{
 //	    FromUser: demo.USER_SYSTEM_ORDER,
 //	    ToUser:   demo.USER_A,
 //	})
 //	userClient := dim.NewUserClient(dim.Config{BaseURL: apiBase, Token: session.Token})
-//	userClient.SendCardMessage(ctx, session.ConversationID,
-//	    "订单已发货", "您的订单已由顺丰快递发出，运单号：SF1234567890",
-//	    "https://img.example.com/order.jpg", "https://example.com/order/123",
-//	)
+//	userClient.SendCardMessage(ctx, session.ConversationID, dim.Payload{
+//	    Title:       "订单已发货",
+//	    Description: "您的订单已由顺丰快递发出，运单号：SF1234567890",
+//	    ImageURL:    "https://img.example.com/order.jpg",
+//	    URL:         "https://example.com/order/123",
+//	})
 //
 // 系统用户 ID 列表及用途说明：
 //

@@ -25,36 +25,16 @@ export enum MessageType {
     token: string;
   }
   
-  // 媒体信息接口
-  export interface MediaInfo {
-    url: string;
-    size: number;
-    duration?: number;
-    width?: number;
-    height?: number;
-    format: string;
-    thumbnail?: string;
-    uploading?: boolean;
+  // 消息 Payload — 统一结构体，后端 Content 字段已是展示用摘要
+  export interface Payload {
+    title?: string
+    description?: string
+    url?: string
+    image_url?: string
+    price?: string
+    meta?: Record<string, string>
   }
-  
-  // 卡片信息接口
-  export interface CardInfo {
-    title: string;
-    description: string;
-    path: string;
-    image_url: string;
-    price: number;
-    currency: string;
-  }
-  
-  // 链接信息接口
-  export interface LinkInfo {
-    title: string;
-    description: string;
-    url: string;
-    image_url: string;
-  }
-  
+
   // 消息接口
   export interface Message {
     id?: string;
@@ -65,9 +45,7 @@ export enum MessageType {
     type: MessageType;
     content: string;
     status?: MessageStatus;
-    media_info?: MediaInfo;
-    card_info?: CardInfo;
-    link_info?: LinkInfo;
+    payload?: Payload;
     created_at?: string;
     updated_at?: string;
   }
@@ -152,7 +130,6 @@ export enum MessageType {
   }
 
   function normalizeMessage(raw: Record<string, unknown>): Message {
-    const payload = raw.payload as Record<string, unknown> | undefined
     let id: string | undefined
     if (raw.id != null) {
       if (typeof raw.id === 'string') {
@@ -164,6 +141,9 @@ export enum MessageType {
       }
     }
 
+    // Payload 透传，后端已统一结构
+    const payload = raw.payload as Payload | undefined
+
     return {
       id,
       client_message_id: raw.client_message_id == null ? undefined : String(raw.client_message_id),
@@ -173,99 +153,23 @@ export enum MessageType {
       type: (raw.type as MessageType) ?? MessageType.Text,
       content: String(raw.content ?? ''),
       status: raw.status as MessageStatus | undefined,
-      media_info: raw.media_info as MediaInfo | undefined ?? payloadToMediaInfo(payload),
-      card_info: raw.card_info as CardInfo | undefined ?? payloadToCardInfo(payload),
-      link_info: raw.link_info as LinkInfo | undefined ?? payloadToLinkInfo(payload),
+      payload,
       created_at: raw.created_at as string | undefined,
       updated_at: raw.updated_at as string | undefined,
     };
   }
 
-  function payloadToMediaInfo(payload?: Record<string, unknown>): MediaInfo | undefined {
-    if (!payload?.url) return undefined
-
+  function buildPayload(type: MessageType, payload?: Partial<Payload>): Payload | undefined {
+    if (!payload) return undefined
+    // 简单透传，调用方按需构造
     return {
-      url: String(payload.url),
-      size: Number(payload.size ?? 0),
-      duration: payload.duration == null ? undefined : Number(payload.duration),
-      width: payload.width == null ? undefined : Number(payload.width),
-      height: payload.height == null ? undefined : Number(payload.height),
-      format: String(payload.ext_string ?? ''),
+      title: payload.title,
+      description: payload.description,
+      url: payload.url,
+      image_url: payload.image_url,
+      price: payload.price,
+      meta: payload.meta,
     }
-  }
-
-  function payloadToCardInfo(payload?: Record<string, unknown>): CardInfo | undefined {
-    if (!payload?.title && !payload?.url) return undefined
-
-    return {
-      title: String(payload.title ?? ''),
-      description: String(payload.description ?? ''),
-      path: String(payload.url ?? ''),
-      image_url: String(payload.image_url ?? ''),
-      price: Number(payload.price ?? 0),
-      currency: String(payload.currency ?? ''),
-    }
-  }
-
-  function payloadToLinkInfo(payload?: Record<string, unknown>): LinkInfo | undefined {
-    if (!payload?.url) return undefined
-
-    return {
-      title: String(payload.title ?? ''),
-      description: String(payload.description ?? ''),
-      url: String(payload.url),
-      image_url: String(payload.image_url ?? ''),
-    }
-  }
-
-  function mediaInfoToPayload(mediaInfo?: MediaInfo): Record<string, unknown> | undefined {
-    if (!mediaInfo) return undefined
-
-    return {
-      url: mediaInfo.url,
-      size: mediaInfo.size,
-      duration: mediaInfo.duration,
-      width: mediaInfo.width,
-      height: mediaInfo.height,
-      ext_string: mediaInfo.format,
-    }
-  }
-
-  function cardInfoToPayload(cardInfo?: CardInfo): Record<string, unknown> | undefined {
-    if (!cardInfo) return undefined
-
-    return {
-      title: cardInfo.title,
-      description: cardInfo.description,
-      url: cardInfo.path,
-      image_url: cardInfo.image_url,
-      price: cardInfo.price,
-      currency: cardInfo.currency,
-    }
-  }
-
-  function linkInfoToPayload(linkInfo?: LinkInfo): Record<string, unknown> | undefined {
-    if (!linkInfo) return undefined
-
-    return {
-      title: linkInfo.title,
-      description: linkInfo.description,
-      url: linkInfo.url,
-      image_url: linkInfo.image_url,
-    }
-  }
-
-  function buildPayload(type: MessageType, mediaInfo?: MediaInfo, cardInfo?: CardInfo, linkInfo?: LinkInfo) {
-    if ([MessageType.Image, MessageType.Video, MessageType.Audio].includes(type)) {
-      return mediaInfoToPayload(mediaInfo)
-    }
-    if (type === MessageType.Card) {
-      return cardInfoToPayload(cardInfo)
-    }
-    if (type === MessageType.Link) {
-      return linkInfoToPayload(linkInfo)
-    }
-    return undefined
   }
 
   function normalizeConversation(raw: Record<string, unknown>): Conversation {
@@ -437,9 +341,7 @@ export enum MessageType {
       conversationId: string,
       type: MessageType = MessageType.Text,
       content: string = '',
-      mediaInfo?: MediaInfo,
-      cardInfo?: CardInfo,
-      linkInfo?: LinkInfo,
+      payload?: Partial<Payload>,
       clientMessageId?: string
     ): Promise<void> {
       return new Promise((resolve, reject) => {
@@ -449,43 +351,14 @@ export enum MessageType {
         }
   
         try {
-          const message: Message = {
+          const message = {
             client_message_id: clientMessageId,
             conversation_id: conversationId,
             to_id: '',
             type,
-            content
+            content,
+            payload: buildPayload(type, payload),
           };
-  
-          // 根据消息类型添加必要的信息
-          if (type === MessageType.Text && !content) {
-            reject(new Error('Content is required for text message'));
-            return;
-          }
-  
-          if ([MessageType.Image, MessageType.Video, MessageType.Audio].includes(type)) {
-            if (!mediaInfo?.url) {
-              reject(new Error('MediaInfo with URL is required for media message'));
-              return;
-            }
-            message.media_info = mediaInfo;
-          }
-  
-          if (type === MessageType.Card) {
-            if (!cardInfo?.path) {
-              reject(new Error('CardInfo with path is required for card message'));
-              return;
-            }
-            message.card_info = cardInfo;
-          }
-  
-          if (type === MessageType.Link) {
-            if (!linkInfo?.url) {
-              reject(new Error('LinkInfo with URL is required for link message'));
-              return;
-            }
-            message.link_info = linkInfo;
-          }
   
           this.ws.send(JSON.stringify(message));
           resolve();
@@ -502,45 +375,10 @@ export enum MessageType {
       conversationId: string,
       type: MessageType = MessageType.Text,
       content: string = '',
-      mediaInfo?: MediaInfo,
-      cardInfo?: CardInfo,
-      linkInfo?: LinkInfo,
+      payload?: Partial<Payload>,
       clientMessageId?: string
     ): Promise<Message> {
-      const message: Message = {
-        client_message_id: clientMessageId,
-        conversation_id: conversationId,
-        to_id: '',
-        type,
-        content
-      };
-  
-      if (type === MessageType.Text && !content) {
-        throw new Error('Content is required for text message');
-      }
-  
-      if ([MessageType.Image, MessageType.Video, MessageType.Audio].includes(type)) {
-        if (!mediaInfo?.url) {
-          throw new Error('MediaInfo with URL is required for media message');
-        }
-        message.media_info = mediaInfo;
-      }
-  
-      if (type === MessageType.Card) {
-        if (!cardInfo?.path) {
-          throw new Error('CardInfo with path is required for card message');
-        }
-        message.card_info = cardInfo;
-      }
-  
-      if (type === MessageType.Link) {
-        if (!linkInfo?.url) {
-          throw new Error('LinkInfo with URL is required for link message');
-        }
-        message.link_info = linkInfo;
-      }
-
-      const payload = buildPayload(type, mediaInfo, cardInfo, linkInfo);
+      const bodyPayload = buildPayload(type, payload);
   
       const response = await fetch(`${this.baseURL}/im/api/conversations/${conversationId}/messages`, {
         method: 'POST',
@@ -552,7 +390,7 @@ export enum MessageType {
           client_message_id: clientMessageId,
           type,
           content,
-          payload,
+          payload: bodyPayload,
         })
       });
 
@@ -772,21 +610,13 @@ export enum MessageType {
      */
     async sendImageMessage(
       conversationId: string,
-      content: string,
       url: string,
-      width: number,
-      height: number,
-      size: number,
-      format: string
+      meta?: Record<string, string>
     ): Promise<Message> {
-      const mediaInfo: MediaInfo = {
+      return this.sendMessage(conversationId, MessageType.Image, '', {
         url,
-        width,
-        height,
-        size,
-        format
-      };
-      return this.sendMessage(conversationId, MessageType.Image, content, mediaInfo);
+        meta,
+      });
     }
   
     /**
@@ -794,23 +624,13 @@ export enum MessageType {
      */
     async sendVideoMessage(
       conversationId: string,
-      content: string,
       url: string,
-      duration: number,
-      width: number,
-      height: number,
-      size: number,
-      format: string
+      meta?: Record<string, string>
     ): Promise<Message> {
-      const mediaInfo: MediaInfo = {
+      return this.sendMessage(conversationId, MessageType.Video, '', {
         url,
-        duration,
-        width,
-        height,
-        size,
-        format
-      };
-      return this.sendMessage(conversationId, MessageType.Video, content, mediaInfo);
+        meta,
+      });
     }
   
     /**
@@ -818,19 +638,13 @@ export enum MessageType {
      */
     async sendAudioMessage(
       conversationId: string,
-      content: string,
       url: string,
-      duration: number,
-      size: number,
-      format: string
+      meta?: Record<string, string>
     ): Promise<Message> {
-      const mediaInfo: MediaInfo = {
+      return this.sendMessage(conversationId, MessageType.Audio, '', {
         url,
-        duration,
-        size,
-        format
-      };
-      return this.sendMessage(conversationId, MessageType.Audio, content, mediaInfo);
+        meta,
+      });
     }
   
     /**
@@ -838,24 +652,19 @@ export enum MessageType {
      */
     async sendCardMessage(
       conversationId: string,
-      content: string,
       title: string,
-      description: string,
-      path: string,
-      imageUrl: string,
-      price: number = 0,
-      currency: string = 'CNY'
+      description?: string,
+      url?: string,
+      imageUrl?: string,
+      price?: string
     ): Promise<Message> {
-      const cardInfo: CardInfo = {
+      return this.sendMessage(conversationId, MessageType.Card, '', {
         title,
         description,
-        path,
+        url,
         image_url: imageUrl,
         price,
-        currency
-      };
-      
-      return this.sendMessage(conversationId, MessageType.Card, content, undefined, cardInfo);
+      });
     }
   
     /**
@@ -863,20 +672,17 @@ export enum MessageType {
      */
     async sendLinkMessage(
       conversationId: string,
-      content: string,
       title: string,
-      description: string,
       url: string,
-      imageUrl: string
+      description?: string,
+      imageUrl?: string
     ): Promise<Message> {
-      const linkInfo: LinkInfo = {
+      return this.sendMessage(conversationId, MessageType.Link, '', {
         title,
         description,
         url,
-        image_url: imageUrl
-      };
-      
-      return this.sendMessage(conversationId, MessageType.Link, content, undefined, undefined, linkInfo);
+        image_url: imageUrl,
+      });
     }
   }
   
