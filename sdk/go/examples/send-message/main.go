@@ -14,8 +14,8 @@ import (
 	"d-im-go-sdk/examples/demo"
 )
 
-var User = demo.USER_A
-var PeerUser = demo.USER_JIANBO
+var User = demo.USER_F
+var PeerUser = demo.USER_B
 
 type output struct {
 	ConversationID string      `json:"conversation_id"`

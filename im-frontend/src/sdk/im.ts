@@ -62,6 +62,8 @@ export enum MessageType {
     payload?: Payload;
     created_at?: string;
     updated_at?: string;
+    /** 服务端通过 WS 推送的权威未读数（仅 WS 消息携带，不从 API 返回） */
+    _ws_unread_count?: number;
   }
   
   export interface UserInfo {
@@ -329,6 +331,19 @@ export enum MessageType {
         
         ws.onmessage = (event: MessageEvent) => {
           const raw = JSON.parse(event.data);
+          // 服务端 WS 推送使用信封格式 { message: {...}, unread_count: N }
+          // 兼容旧格式（直接推送 message）和 Ping/Pong
+          if (raw && typeof raw === 'object' && 'message' in raw) {
+            const message = normalizeMessage(raw.message as Record<string, unknown>);
+            if (typeof raw.unread_count === 'number') {
+              message._ws_unread_count = raw.unread_count;
+            }
+            if (message.type === MessageType.Ping || message.type === MessageType.Pong) {
+              return;
+            }
+            this._notifyMessageHandlers(message);
+            return;
+          }
           if (raw?.type === MessageType.Ping || raw?.type === MessageType.Pong) {
             return;
           }

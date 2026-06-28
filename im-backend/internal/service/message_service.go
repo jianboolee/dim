@@ -220,24 +220,38 @@ func (s *MessageService) FanoutMessage(ctx context.Context, message *models.Mess
 		return nil
 	}
 
-	conversation, err := s.conversationRepo.GetConversation(ctx, message.ConversationID)
+	_, err := s.conversationRepo.GetConversation(ctx, message.ConversationID)
 	if err != nil {
 		return fmt.Errorf("failed to get conversation for fanout: %w", err)
 	}
 
-	recipientIDs, err := s.resolveFanoutRecipients(ctx, conversation.ID)
+	members, err := s.memberRepo.ListActiveByConversation(ctx, message.ConversationID)
 	if err != nil {
 		return err
 	}
 
-	messageBytes, err := json.Marshal(message)
-	if err != nil {
-		return fmt.Errorf("failed to marshal message: %w", err)
-	}
+	// 按成员推送，服务端携带该成员在当前会话的权威未读数
+	seen := map[string]struct{}{}
+	for _, member := range members {
+		if member.UserID == "" {
+			continue
+		}
+		if _, ok := seen[member.UserID]; ok {
+			continue
+		}
+		seen[member.UserID] = struct{}{}
 
-	for _, userID := range recipientIDs {
-		if err := s.pushToUser(ctx, userID, messageBytes); err != nil {
-			logger.Error("failed to push message via ws", zap.String("user_id", userID), zap.Error(err))
+		payload := WSPushPayload{
+			Message:     message,
+			UnreadCount: member.UnreadCount,
+		}
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil {
+			logger.Error("failed to marshal ws push payload", zap.String("user_id", member.UserID), zap.Error(err))
+			continue
+		}
+		if err := s.pushToUser(ctx, member.UserID, payloadBytes); err != nil {
+			logger.Error("failed to push message via ws", zap.String("user_id", member.UserID), zap.Error(err))
 		}
 	}
 	return nil

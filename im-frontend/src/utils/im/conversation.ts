@@ -71,7 +71,9 @@ export function buildConversationFromMessage(message: Message, currentUserId: st
     member_state: {
       status: 'active',
       last_read_seq: 0,
-      unread_count: message.from_id === currentUserId ? 0 : 1,
+      unread_count: message._ws_unread_count != null
+        ? (message.from_id === currentUserId ? 0 : message._ws_unread_count)
+        : (message.from_id === currentUserId ? 0 : 1),
     },
     created_at: timestamp,
     updated_at: timestamp,
@@ -103,20 +105,26 @@ export function applyIncomingMessage(
   }
 
   const existing = conversations[index]!
-  const shouldIncrementUnread =
-    message.from_id !== currentUserId && existing.id !== activeConversationId
+  const isFromOther = message.from_id !== currentUserId
+  const isNotActive = existing.id !== activeConversationId
+  const shouldUpdateUnread = isFromOther && isNotActive
+
+  // 若服务端推送了权威未读数，直接使用；否则本地递增
+  const nextUnreadCount = message._ws_unread_count != null
+    ? message._ws_unread_count
+    : getUnreadCount(existing, currentUserId) + 1
 
   const updated: Conversation = {
     ...existing,
     last_message: toSnapshot(message),
     updated_at: message.created_at ?? existing.updated_at,
     last_activity: maxTime(message.created_at, existing.last_activity, existing.updated_at),
-    member_state: shouldIncrementUnread
+    member_state: shouldUpdateUnread
       ? {
           ...existing.member_state,
           status: existing.member_state?.status ?? 'active',
           last_read_seq: existing.member_state?.last_read_seq ?? 0,
-          unread_count: getUnreadCount(existing, currentUserId) + 1,
+          unread_count: nextUnreadCount,
         }
       : existing.member_state,
   }
