@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -56,9 +55,23 @@ func main() {
 		Token:   session.Token,
 	})
 
-	content := fmt.Sprintf("你好啊~, 当前时间是: %s", time.Now().Format("2006-01-02 15:04:05"))
+	// var payload = dim.Payload{
+	// 	Title:       "租车订单已提交，等待商家确认",
+	// 	Description: "您的租车订单已成功提交，请耐心等待商家确认。商家确认后我们将第一时间通知您。",
+	// 	ImageURL:    "https://oss.21rv.com/uploads/im/images/20260628/bqks3c09hnp9lms7z264xahx533m7fhr.jpg?x-oss-process=image/resize,w_960,m_lfit",
+	// 	URL:         "https://www.21rv.com/order/detail",
+	// 	Price:       "待确认",
+	// }
 
-	message, err := userClient.SendTextMessage(ctx, session.ConversationID, content)
+	var payload = dim.Payload{
+		Title:       "[租车]商家已确认",
+		Description: "您的租车订单商家已确认。",
+		ImageURL:    "https://oss.21rv.com/uploads/im/images/20260629/qsj3rve45p0rqcckj0x7byyinywolyw2.jpg?x-oss-process=image/resize,w_960,m_lfit",
+		URL:         "https://www.21rv.com/order/detail",
+		Price:       "￥899元/天起",
+	}
+
+	message, err := userClient.SendCardMessage(ctx, session.ConversationID, payload)
 	if err != nil {
 		log.Fatal(err)
 	}
