@@ -180,8 +180,8 @@ func (s *ConversationService) UpdateLastMessage(ctx context.Context, conversatio
 		},
 	}
 
-	// 如果消息带有图片，更新会话预览图
-	if message.Payload != nil && message.Payload.ImageURL != "" {
+	// 仅卡片消息更新会话预览图
+	if message.Type == models.MessageTypeCard && message.Payload != nil && message.Payload.ImageURL != "" {
 		update["$set"].(bson.M)["image_url"] = message.Payload.ImageURL
 	}
 

@@ -26,12 +26,6 @@ export function sortConversationsByActivity(conversations: Conversation[]): Conv
   })
 }
 
-function previewImageFromMessage(message: Message): string {
-  if (message.payload?.image_url) return message.payload.image_url
-  if (message.payload?.url) return message.payload.url
-  return ''
-}
-
 function matchesMessage(conversation: Conversation, message: Message): boolean {
   if (message.conversation_id && conversation.id === message.conversation_id) return true
 
@@ -57,7 +51,7 @@ export function buildConversationFromMessage(message: Message, currentUserId: st
     type: 'private',
     participants: [fromId, message.to_id],
     last_message: toSnapshot(message),
-    image_url: previewImageFromMessage(message),
+    image_url: '',
     user_states: message.to_id === currentUserId
       ? { [currentUserId]: { unread_count: 1 } }
       : {},
@@ -85,7 +79,6 @@ export function applyIncomingMessage(
   }
 
   const existing = conversations[index]!
-  const previewImage = previewImageFromMessage(message)
   const shouldIncrementUnread =
     message.to_id === currentUserId && existing.id !== activeConversationId
 
@@ -94,7 +87,6 @@ export function applyIncomingMessage(
     last_message: toSnapshot(message),
     updated_at: message.created_at ?? existing.updated_at,
     last_activity: maxTime(message.created_at, existing.last_activity, existing.updated_at),
-    image_url: previewImage || existing.image_url,
     user_states: shouldIncrementUnread
       ? {
           ...existing.user_states,
