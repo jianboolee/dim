@@ -12,7 +12,7 @@ type ConversationDTO struct {
 	ID           primitive.ObjectID                      `bson:"_id,omitempty" json:"id"`
 	Type         models.ConversationType                 `bson:"type" json:"type"`
 	Participants []string                                `bson:"participants" json:"participants"` // 参与者的用户ID列表
-	LastMessage  *models.Message                         `bson:"last_message,omitempty" json:"last_message,omitempty"`
+	LastMessage  *models.LastMessageSnapshot             `bson:"last_message,omitempty" json:"last_message,omitempty"`
 	ToUserInfo   *UserInfoDto                            `bson:"-" json:"to_user_info,omitempty"` // 对方的用户信息
 	ImageURL     string                                  `bson:"image_url" json:"image_url"`      // 会话图片
 	UserStates   map[string]models.ConversationUserState `bson:"user_states,omitempty" json:"user_states,omitempty"`

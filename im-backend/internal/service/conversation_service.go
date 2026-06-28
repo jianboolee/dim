@@ -165,11 +165,17 @@ func emptyConversationList() *dto.ConversationListResponse {
 	}
 }
 
-// UpdateLastMessage 更新会话的最后一条消息
+// UpdateLastMessage 更新会话的最后一条消息快照
 func (s *ConversationService) UpdateLastMessage(ctx context.Context, conversationID primitive.ObjectID, message *models.Message) error {
+	snapshot := &models.LastMessageSnapshot{
+		Content:   message.Content,
+		Type:      string(message.Type),
+		CreatedAt: message.CreatedAt,
+	}
+
 	update := bson.M{
 		"$set": bson.M{
-			"last_message": message,
+			"last_message": snapshot,
 			"updated_at":   time.Now(),
 		},
 	}

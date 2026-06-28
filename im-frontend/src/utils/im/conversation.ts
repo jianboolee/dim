@@ -1,5 +1,13 @@
-import type { Conversation, Message } from '@/sdk/im'
+import type { Conversation, Message, LastMessageSnapshot } from '@/sdk/im'
 import { normalizeUnreadCount } from '@/utils/im/format'
+
+function toSnapshot(message: Message): LastMessageSnapshot {
+  return {
+    content: message.content,
+    type: message.type,
+    created_at: message.created_at ?? new Date().toISOString(),
+  }
+}
 
 export function getPeerUserId(conversation: Conversation, currentUserId: string): string {
   return conversation.participants.find((id) => id !== currentUserId) ?? ''
@@ -48,7 +56,7 @@ export function buildConversationFromMessage(message: Message, currentUserId: st
     id: message.conversation_id ?? [fromId, message.to_id].sort().join(':'),
     type: 'private',
     participants: [fromId, message.to_id],
-    last_message: message,
+    last_message: toSnapshot(message),
     image_url: previewImageFromMessage(message),
     user_states: message.to_id === currentUserId
       ? { [currentUserId]: { unread_count: 1 } }
@@ -83,7 +91,7 @@ export function applyIncomingMessage(
 
   const updated: Conversation = {
     ...existing,
-    last_message: message,
+    last_message: toSnapshot(message),
     updated_at: message.created_at ?? existing.updated_at,
     last_activity: maxTime(message.created_at, existing.last_activity, existing.updated_at),
     image_url: previewImage || existing.image_url,

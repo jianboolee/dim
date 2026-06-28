@@ -84,6 +84,8 @@ type Payload struct {
 	Meta        map[string]string `bson:"meta,omitempty" json:"meta,omitempty"`
 }
 
+// 解析消息的Payload
+
 // GenerateDigest 根据消息类型和 Payload 生成展示用摘要，写入 Content 字段。
 func (m *Message) GenerateDigest() {
 	switch m.Type {
@@ -102,7 +104,7 @@ func (m *Message) GenerateDigest() {
 		m.Content = "[表情]"
 	case MessageTypeCard:
 		if m.Payload != nil && m.Payload.Title != "" {
-			m.Content = "[卡片] " + m.Payload.Title
+			m.Content = m.Payload.Title
 		} else {
 			m.Content = "[卡片]"
 		}
@@ -115,6 +117,13 @@ func (m *Message) GenerateDigest() {
 	default:
 		m.Content = "[消息]"
 	}
+}
+
+// LastMessageSnapshot 会话列表用的最后一条消息快照，仅保留展示必要字段。
+type LastMessageSnapshot struct {
+	Content   string    `bson:"content" json:"content"`
+	Type      string    `bson:"type" json:"type"`
+	CreatedAt time.Time `bson:"created_at" json:"created_at"`
 }
 
 // 解析消息的Payload

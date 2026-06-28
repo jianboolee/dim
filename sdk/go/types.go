@@ -20,7 +20,7 @@ type Conversation struct {
 	ID           string                           `json:"id"`
 	Type         string                           `json:"type"`
 	Participants []string                         `json:"participants"`
-	LastMessage  *Message                         `json:"last_message,omitempty"`
+	LastMessage  *LastMessageSnapshot             `json:"last_message,omitempty"`
 	ToUserInfo   *User                            `json:"to_user_info,omitempty"`
 	ImageURL     string                           `json:"image_url,omitempty"`
 	UserStates   map[string]ConversationUserState `json:"user_states,omitempty"`
@@ -41,6 +41,12 @@ type Message struct {
 	Payload         *Payload  `json:"payload,omitempty"`
 	CreatedAt       time.Time `json:"created_at,omitempty"`
 	UpdatedAt       time.Time `json:"updated_at,omitempty"`
+}
+
+type LastMessageSnapshot struct {
+	Content   string    `json:"content"`
+	Type      string    `json:"type"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Payload struct {

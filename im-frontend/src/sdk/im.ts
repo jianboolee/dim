@@ -25,6 +25,13 @@ export enum MessageType {
     token: string;
   }
   
+  // 会话列表最后一条消息快照
+  export interface LastMessageSnapshot {
+    content: string
+    type: string
+    created_at: string
+  }
+
   // 消息 Payload — 统一结构体，后端 Content 字段已是展示用摘要
   export interface Payload {
     title?: string
@@ -61,7 +68,7 @@ export enum MessageType {
     id: string;
     type: string;
     participants: string[];
-    last_message: Message;
+    last_message: LastMessageSnapshot;
     to_user_info?: {
       id: string;
       nickname?: string;
