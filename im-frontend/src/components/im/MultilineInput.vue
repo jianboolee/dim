@@ -1,5 +1,14 @@
 <template>
   <div class="multiline-input">
+    <!-- honeypot: 骗走 Chrome 自动填充，避免填进聊天输入框 -->
+    <input
+      type="text"
+      autocomplete="off"
+      readonly
+      tabindex="-1"
+      aria-hidden="true"
+      class="autofill-honeypot"
+    />
     <textarea
       ref="textareaRef"
       :value="modelValue"
@@ -11,7 +20,6 @@
       @blur="handleBlur"
       :placeholder="placeholder"
       :rows="minRows"
-      name="im-message-compose"
       autocomplete="off"
       autocorrect="off"
       autocapitalize="off"
@@ -157,6 +165,15 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* honeypot: 隐藏的输入框，专门骗走 Chrome 自动填充 */
+.autofill-honeypot {
+  position: absolute;
+  opacity: 0;
+  height: 0;
+  width: 0;
+  pointer-events: none;
+}
+
 .multiline-input {
   width: 100%;
   min-width: 0;
