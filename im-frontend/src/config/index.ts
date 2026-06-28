@@ -45,6 +45,6 @@ export const config = {
   baseURL: import.meta.env.VITE_IM_API_BASE ?? '/',
   api: {
     users: '/im/api/users',
-    uploads: '/im/api/uploads',
+    uploads: '/im/api/uploads/image',
   },
 }

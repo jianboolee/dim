@@ -54,7 +54,8 @@ func SetupAPI(
 
 		api.GET("/messages/unread/count", messageHandler.GetUnreadCount)
 		api.PUT("/messages/:id/read", messageHandler.MarkMessageAsRead)
-		api.POST("/uploads", uploadHandler.UploadImages)
+		api.POST("/uploads/image", uploadHandler.UploadImage)
+		api.POST("/uploads/images", uploadHandler.UploadImages)
 
 		api.GET("/conversations", conversationHandler.GetUserConversations)
 		api.GET("/conversations/:id/messages", messageHandler.GetMessagesByConversationID)

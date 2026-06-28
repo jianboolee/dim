@@ -467,8 +467,9 @@ const mergeMessages = (incoming: ChatMessage[]) => {
 const confirmPendingMessage = (pendingId: string, confirmed: ChatMessage) => {
   if (!confirmed.client_message_id && !confirmed.id) {
     messages.value = messages.value.filter((msg) => msg.id !== pendingId)
+    return
   }
-  mergeMessages([{ ...confirmed, status: 'sent' }])
+  mergeMessages([{ ...confirmed, status: 'sent', uploadState: undefined }])
 }
 
 const syncConversationByMessage = (message: ChatMessage, shouldScroll = false) => {
