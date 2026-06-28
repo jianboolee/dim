@@ -14,8 +14,8 @@ import (
 	"d-im-go-sdk/examples/demo"
 )
 
-var FromUser = demo.USER_SYSTEM_AUDIT
-var ToUser = demo.USER_AUDITOR
+var User = demo.USER_SYSTEM_AUDIT
+var PeerUser = demo.USER_AUDITOR
 
 type output struct {
 	ConversationID string      `json:"conversation_id"`
@@ -43,9 +43,9 @@ func main() {
 		APIKey:  integrationKey,
 	})
 
-	session, err := integrationClient.CreateConversation(ctx, dim.CreateConversationRequest{
-		FromUser: FromUser,
-		ToUser:   ToUser,
+	session, err := integrationClient.CreateConversation(ctx, dim.IntegrationPrivateConversationRequest{
+		User:     User,
+		PeerUser: PeerUser,
 	})
 	if err != nil {
 		log.Fatal(err)

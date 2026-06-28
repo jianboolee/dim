@@ -129,48 +129,24 @@ ws.onmessage = (event) => {
 
 // 发送消息
 ws.send(JSON.stringify({
-    to: "接收者用户ID",
+    conversation_id: "会话ID",
+    type: "text",
     content: "你好！"
 }));
 ```
 
+## 当前 IM API 约定
 
-- GET /api/im/messages - 获取消息列表
-- POST /api/im/messages - 发送消息
-- GET /api/im/messages/unread - 获取未读消息数
-- POST /api/im/messages/:id/read - 标记消息已读
-- POST /api/im/conversations - 创建会话
-- GET /api/im/conversations - 获取会话列表
-- GET /api/im/conversations/:id - 获取会话详情
--GET /api/ws?token=your_token_here - WebSocket 连接（保持独立的路径）
-
-# 获取与用户 676d078703d5e6992a32f7b0 的聊天记录
-curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-     "http://localhost:8080/api/im/messages?to_id=676d078703d5e6992a32f7b0"
-
-# 获取特定时间范围的聊天记录
-curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-     "http://localhost:8080/api/im/messages?to_id=676d078703d5e6992a32f7b0&start_time=2024-01-01T00:00:00Z&end_time=2024-01-16T00:00:00Z"
-
-# 使用分页获取更多消息
-curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-     "http://localhost:8080/api/im/messages?to_id=676d078703d5e6992a32f7b0&limit=20&skip=0"
-
-返回结果示例
-
-```
-[
-  {
-    "id": "消息ID",
-    "from_id": "发送者ID",
-    "to_id": "接收者ID",
-    "content": "消息内容",
-    "status": "消息状态",
-    "created_at": "创建时间",
-    "updated_at": "更新时间"
-  }
-]
-```
+- `POST /im/api/integration/login`：业务系统登录 IM，进入会话列表。
+- `POST /im/api/integration/conversations`：业务系统创建或进入单聊，请求体使用 `user` 和 `peer_user`。
+- `POST /im/api/conversations`：登录用户创建或获取单聊，请求体使用 `peer_id`。
+- `POST /im/api/groups`：创建群聊，可传 `member_ids`。
+- `GET /im/api/conversations`：获取当前用户会话列表。
+- `GET /im/api/conversations/:id/messages`：按 `conversation_id` 获取消息。
+- `POST /im/api/conversations/:id/messages`：按 `conversation_id` 发送消息。
+- `PUT /im/api/conversations/:id/read`：会话级已读，清空当前用户在该会话的未读数。
+- `GET /im/api/messages/unread/count`：获取当前用户总未读数。
+- `/im/ws?token=your_token_here`：WebSocket 连接。
 
 
 ## 会话（Conversation）
@@ -193,16 +169,14 @@ curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
 4. `last_message`: 最后一条消息的完整信息
    - `id`: 消息的唯一标识符
    - `from_id`: 发送者的用户 ID
-   - `to_id`: 接收者的用户 ID
    - `content`: 消息内容
    - `status`: 消息状态（sent=已发送，delivered=已送达，read=已读）
    - `created_at`: 消息创建时间
    - `updated_at`: 消息最后更新时间
 
-5. `unread_count`: 未读消息数量
-   - 这里显示有 3 条未读消息
-   - 当用户标记消息为已读时，这个数字会减少
-   - 当收到新消息时，这个数字会增加
+5. `member_state.unread_count`: 当前用户在该会话的未读消息数量
+   - 收到非当前会话的新消息时增加
+   - 调用会话级已读接口后清零
 
 6. `last_activity`: 最后活动时间
    - 基于最后一条消息的时间

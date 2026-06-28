@@ -22,9 +22,9 @@ func (u IntegrationUserInput) ResolveNickname() string {
 	return strings.TrimSpace(u.Nickname)
 }
 
-type IntegrationCreateConversationRequest struct {
-	FromUser IntegrationUserInput `json:"from_user" binding:"required"`
-	ToUser   IntegrationUserInput `json:"to_user" binding:"required"`
+type IntegrationPrivateConversationRequest struct {
+	User     IntegrationUserInput `json:"user" binding:"required"`
+	PeerUser IntegrationUserInput `json:"peer_user" binding:"required"`
 }
 
 type IntegrationCreateConversationResponse struct {

@@ -23,7 +23,6 @@ export function getConversationDisplayName(conversation: Conversation, currentUs
 
   const peerId = getPeerUserId(conversation, currentUserId)
   return conversation.peer_user_info?.nickname
-    || conversation.to_user_info?.nickname
     || (peerId ? `用户${peerId.slice(-4)}` : '未知用户')
 }
 
@@ -31,17 +30,12 @@ export function getConversationDisplayAvatar(conversation: Conversation): string
   return conversation.display_avatar
     || conversation.group_info?.avatar_url
     || conversation.peer_user_info?.avatar
-    || conversation.to_user_info?.avatar
     || ''
 }
 
 export function getUnreadCount(conversation: Conversation, currentUserId: string): number {
   if (!currentUserId) return 0
-  return normalizeUnreadCount(
-    conversation.member_state?.unread_count
-      ?? conversation.user_states?.[currentUserId]?.unread_count
-      ?? 0,
-  )
+  return normalizeUnreadCount(conversation.member_state?.unread_count ?? 0)
 }
 
 export function sortConversationsByActivity(conversations: Conversation[]): Conversation[] {
@@ -53,12 +47,7 @@ export function sortConversationsByActivity(conversations: Conversation[]): Conv
 }
 
 function matchesMessage(conversation: Conversation, message: Message): boolean {
-  if (message.conversation_id && conversation.id === message.conversation_id) return true
-  if (isGroupConversation(conversation)) return false
-
-  const fromId = message.from_id
-  if (!fromId) return false
-  return conversation.participants.includes(fromId) && conversation.participants.includes(message.to_id)
+  return Boolean(message.conversation_id && conversation.id === message.conversation_id)
 }
 
 function maxTime(...values: Array<string | undefined>): string {
@@ -74,19 +63,15 @@ export function buildConversationFromMessage(message: Message, currentUserId: st
   const timestamp = message.created_at ?? new Date().toISOString()
 
   return {
-    id: message.conversation_id ?? [fromId, message.to_id].sort().join(':'),
-    type: message.to_id ? 'private' : 'group',
-    participants: message.to_id ? [fromId, message.to_id] : [fromId, currentUserId],
-    display_name: message.to_id ? undefined : '群聊',
+    id: message.conversation_id ?? '',
+    type: 'private',
+    participants: [fromId, currentUserId].filter(Boolean),
     last_message: toSnapshot(message),
     image_url: '',
-    user_states: message.to_id === currentUserId
-      ? { [currentUserId]: { unread_count: 1 } }
-      : {},
     member_state: {
       status: 'active',
       last_read_seq: 0,
-      unread_count: message.to_id === currentUserId ? 1 : 0,
+      unread_count: message.from_id === currentUserId ? 0 : 1,
     },
     created_at: timestamp,
     updated_at: timestamp,
@@ -104,9 +89,9 @@ export function applyIncomingMessage(
   const index = conversations.findIndex((conversation) => matchesMessage(conversation, message))
 
   if (index === -1) {
+    if (!message.conversation_id) return conversations
     const created = buildConversationFromMessage(message, currentUserId)
     if (activeConversationId && created.id === activeConversationId && message.from_id !== currentUserId) {
-      created.user_states = { [currentUserId]: { unread_count: 0 } }
       created.member_state = {
         ...created.member_state,
         status: created.member_state?.status ?? 'active',
@@ -126,15 +111,6 @@ export function applyIncomingMessage(
     last_message: toSnapshot(message),
     updated_at: message.created_at ?? existing.updated_at,
     last_activity: maxTime(message.created_at, existing.last_activity, existing.updated_at),
-    user_states: shouldIncrementUnread
-      ? {
-          ...existing.user_states,
-          [currentUserId]: {
-            ...existing.user_states?.[currentUserId],
-            unread_count: getUnreadCount(existing, currentUserId) + 1,
-          },
-        }
-      : existing.user_states,
     member_state: shouldIncrementUnread
       ? {
           ...existing.member_state,
@@ -167,13 +143,6 @@ export function withClearedUnreadForPeer(
 
     return {
       ...conversation,
-      user_states: {
-        ...conversation.user_states,
-        [currentUserId]: {
-          ...conversation.user_states?.[currentUserId],
-          unread_count: 0,
-        },
-      },
       member_state: {
         ...conversation.member_state,
         status: conversation.member_state?.status ?? 'active',

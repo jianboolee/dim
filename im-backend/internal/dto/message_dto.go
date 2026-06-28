@@ -4,7 +4,7 @@ import (
 	"d-im/internal/models"
 )
 
-// SendMessageRequest 发送会话消息请求；会话 ID 来自 URL，接收方由后端根据会话参与者推导。
+// SendMessageRequest 发送会话消息请求；会话 ID 来自 URL，成员权限由后端根据 conversation_members 判断。
 type SendMessageRequest struct {
 	ClientMessageID string              `json:"client_message_id,omitempty"`
 	Content         string              `json:"content"`

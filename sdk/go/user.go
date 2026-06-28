@@ -29,6 +29,15 @@ func NewUserClient(cfg Config) *UserClient {
 	return &UserClient{client: newClient(cfg)}
 }
 
+func (c *UserClient) CreatePrivateConversation(ctx context.Context, peerID string) (*Conversation, error) {
+	var out Conversation
+	req := CreatePrivateConversationRequest{PeerID: peerID}
+	if err := c.client.do(ctx, http.MethodPost, "/im/api/conversations", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 func (c *UserClient) GetConversation(ctx context.Context, conversationID string) (*Conversation, error) {
 	var out Conversation
 	if err := c.client.do(ctx, http.MethodGet, "/im/api/conversations/"+url.PathEscape(conversationID), nil, &out); err != nil {

@@ -54,7 +54,6 @@ func SetupAPI(
 		api.GET("/users/:id", userHandler.GetUser)
 
 		api.GET("/messages/unread/count", messageHandler.GetUnreadCount)
-		api.PUT("/messages/:id/read", messageHandler.MarkMessageAsRead)
 		api.POST("/uploads/image", uploadHandler.UploadImage)
 		api.POST("/uploads/images", uploadHandler.UploadImages)
 

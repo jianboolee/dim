@@ -17,7 +17,7 @@ func NewIntegrationHandler(integrationService *service.IntegrationService) *Inte
 }
 
 func (h *IntegrationHandler) CreateConversation(c *gin.Context) {
-	var req dto.IntegrationCreateConversationRequest
+	var req dto.IntegrationPrivateConversationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "invalid request body")
 		return

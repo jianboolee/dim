@@ -206,10 +206,10 @@ func (m *WSManager) startRedisSubscriber() {
 					log.Printf("Failed to unmarshal ws push event: %v", err)
 					continue
 				}
-				if m.TryDeliver(event.ReceiverID, []byte(event.Message)) {
-					log.Printf("Delivered message to %s via redis push", event.ReceiverID)
+				if m.TryDeliver(event.UserID, []byte(event.Message)) {
+					log.Printf("Delivered message to %s via redis push", event.UserID)
 				} else {
-					log.Printf("No connected client for %s (redis push)", event.ReceiverID)
+					log.Printf("No connected client for %s (redis push)", event.UserID)
 				}
 			case <-m.stop:
 				return

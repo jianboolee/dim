@@ -1,14 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -19,32 +16,8 @@ import (
 
 var AuditBot = demo.USER_SYSTEM_AUDIT
 
-type createGroupRequest struct {
-	Name      string   `json:"name"`
-	AvatarURL string   `json:"avatar_url,omitempty"`
-	MemberIDs []string `json:"member_ids,omitempty"`
-}
-
-type groupDetailResponse struct {
-	Group groupDTO `json:"group"`
-}
-
-type groupDTO struct {
-	ID             string `json:"id"`
-	ConversationID string `json:"conversation_id"`
-	Name           string `json:"name"`
-	MemberCount    int    `json:"member_count"`
-	Status         string `json:"status"`
-}
-
-type apiResponse[T any] struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	Data    T      `json:"data"`
-}
-
 type output struct {
-	Group          groupDTO    `json:"group"`
+	Group          *dim.Group  `json:"group"`
 	ConversationID string      `json:"conversation_id"`
 	Message        dim.Message `json:"message"`
 }
@@ -84,7 +57,12 @@ func main() {
 		log.Fatalf("upsert user B: %v", err)
 	}
 
-	group, err := createAuditGroup(ctx, apiBase, botSession.Token, createGroupRequest{
+	userClient := dim.NewUserClient(dim.Config{
+		BaseURL: apiBase,
+		Token:   botSession.Token,
+	})
+
+	group, err := userClient.CreateGroup(ctx, dim.CreateGroupRequest{
 		Name: groupName,
 		MemberIDs: []string{
 			demo.USER_A.ID,
@@ -94,11 +72,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	userClient := dim.NewUserClient(dim.Config{
-		BaseURL: apiBase,
-		Token:   botSession.Token,
-	})
+	if group.Group == nil {
+		log.Fatal("create group response missing group")
+	}
 
 	message, err := userClient.SendTextMessage(ctx, group.Group.ConversationID, auditMessageContent())
 	if err != nil {
@@ -115,44 +91,6 @@ func main() {
 	}); err != nil {
 		log.Fatal(err)
 	}
-}
-
-func createAuditGroup(ctx context.Context, apiBase, token string, reqBody createGroupRequest) (*groupDetailResponse, error) {
-	payload, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiBase+"/im/api/groups", bytes.NewReader(payload))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-
-	raw, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
-	}
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, fmt.Errorf("create group status %d: %s", res.StatusCode, strings.TrimSpace(string(raw)))
-	}
-
-	var wrapped apiResponse[groupDetailResponse]
-	if err := json.Unmarshal(raw, &wrapped); err != nil {
-		return nil, fmt.Errorf("decode create group response: %w", err)
-	}
-	if wrapped.Code != 0 {
-		return nil, fmt.Errorf("create group code %d: %s", wrapped.Code, wrapped.Message)
-	}
-	return &wrapped.Data, nil
 }
 
 func auditMessageContent() string {

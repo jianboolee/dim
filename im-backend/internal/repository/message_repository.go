@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -70,31 +69,9 @@ func (r *MessageRepository) FindByClientMessageID(ctx context.Context, conversat
 	return &message, nil
 }
 
-func (r *MessageRepository) UpdateStatus(ctx context.Context, id primitive.ObjectID, status models.MessageStatus) error {
-	update := bson.M{
-		"$set": bson.M{
-			"status":     status,
-			"updated_at": time.Now(),
-		},
-	}
-
-	_, err := r.collection.UpdateByID(ctx, id, update)
-	if err != nil {
-		log.Printf("Error updating message status: %v", err)
-		return err
-	}
-
-	return nil
-}
-
 // FindMessagesByConversationID 根据会话ID查询消息
 func (r *MessageRepository) FindMessagesByConversationID(ctx context.Context, conversationID primitive.ObjectID, beforeID *primitive.ObjectID, afterID *primitive.ObjectID, limit int64) ([]models.Message, error) {
 	filter := bson.M{"conversation_id": conversationID}
-
-	log.Printf("conversationID: %+v", conversationID)
-	log.Printf("beforeID: %+v", beforeID)
-	log.Printf("afterID: %+v", afterID)
-	log.Printf("limit: %+v", limit)
 
 	sort := bson.M{"created_at": -1}
 	if beforeID != nil && !beforeID.IsZero() {

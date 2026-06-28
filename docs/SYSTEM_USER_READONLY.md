@@ -33,7 +33,7 @@
    - `resolveUserType()` 优先使用显式传入的 `Type`，否则根据 `system_` 前缀自动推断
 
 5. **消息发送拦截** (`service/message_service.go`)
-   - `SendMessageToConversation` 中检查接收方类型，若为 `system` 返回 `ErrCannotReplyToSystemUser`
+   - `SendMessageToConversation` 中检查单聊对方类型，若为 `system` 返回 `ErrCannotReplyToSystemUser`
    - HTTP 路径（`/im/api/conversations/:id/messages`）和 WebSocket 路径均覆盖
 
 6. **WebSocket 拦截** (`handler/ws_handler.go`)
@@ -51,7 +51,7 @@
 ### 前端
 
 9. **类型定义** (`types/user.ts`, `sdk/im.ts`)
-   - `UserInfo` 和 `to_user_info` 接口新增 `type` 字段
+   - `UserInfo` 和 `peer_user_info` 接口新增 `type` 字段
 
 10. **聊天页** (`views/im/chat.vue`)
     - 新增 `peerUserType` 计算属性

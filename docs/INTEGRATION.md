@@ -7,7 +7,7 @@ d-im 作为嵌入式 IM 模块：**不提供独立登录注册**。业务系统�
 | 场景 | 接口 | 落地页 |
 |------|------|--------|
 | 进入会话列表 | `POST /im/api/integration/login` | `/im/home` |
-| 进入指定单聊 | `POST /im/api/integration/conversations` | `/im/chat/:peerId` |
+| 进入指定单聊 | `POST /im/api/integration/conversations` | `/im/chat/:conversationId` |
 
 ## 架构概览
 
@@ -27,7 +27,7 @@ sequenceDiagram
   User->>Web: GET /im/enter?token=...&conversation_id=...
   Web->>IM: GET /im/api/users/me
   Web->>IM: GET /im/api/conversations/:id
-  Web->>User: 跳转 /im/chat/:peerId
+  Web->>User: 跳转 /im/chat/:conversationId
 ```
 
 ## 环境变量
@@ -74,12 +74,12 @@ Vite 开发代理（见 [im-frontend/vite.config.ts](../im-frontend/vite.config.
 
 ```json
 {
-  "from_user": {
+  "user": {
     "id": "user_a",
     "nickname": "买家张三",
     "avatar": "https://cdn.example.com/a.jpg"
   },
-  "to_user": {
+  "peer_user": {
     "id": "user_b",
     "nickname": "卖家李四",
     "avatar": "https://cdn.example.com/b.jpg"
@@ -87,11 +87,11 @@ Vite 开发代理（见 [im-frontend/vite.config.ts](../im-frontend/vite.config.
 }
 ```
 
-- `from_user`：即将进入 IM 的当前用户（JWT `sub` 为其 `id`）
-- `to_user`：会话对方
+- `user`：即将进入 IM 的当前用户（JWT `sub` 为其 `id`）
+- `peer_user`：单聊对方
 - 双方均需传入 `id`、`nickname`；头像使用 `avatar`（也兼容 `avatar_url`）
-- `from_user.id` 必须等于业务系统当前登录用户 ID
-- `from_user.id` 与 `to_user.id` 不能相同
+- `user.id` 必须等于业务系统当前登录用户 ID
+- `user.id` 与 `peer_user.id` 不能相同
 
 **成功响应（200）：**
 
@@ -109,7 +109,7 @@ Vite 开发代理（见 [im-frontend/vite.config.ts](../im-frontend/vite.config.
 
 | 字段 | 说明 |
 |------|------|
-| `token` | 短期登录 JWT，`sub` = `from_user.id`，算法 HS256 |
+| `token` | 短期登录 JWT，`sub` = `user.id`，算法 HS256 |
 | `conversation_id` | 单聊会话 MongoDB ObjectId（hex） |
 | `redirect_url` | 业务系统应对用户浏览器 **302** 到此 URL |
 
@@ -120,8 +120,8 @@ curl -X POST http://localhost:8901/im/api/integration/conversations \
   -H "Content-Type: application/json" \
   -H "X-Integration-Key: change-me-integration-key" \
   -d '{
-    "from_user": {"id": "user_a", "nickname": "买家", "avatar": ""},
-    "to_user": {"id": "user_b", "nickname": "卖家", "avatar": ""}
+    "user": {"id": "user_a", "nickname": "买家", "avatar": ""},
+    "peer_user": {"id": "user_b", "nickname": "卖家", "avatar": ""}
   }'
 ```
 
@@ -240,7 +240,7 @@ curl -X POST http://localhost:8901/im/api/integration/login \
 ## 业务系统需实现
 
 1. **进入会话列表**：调用 `POST /im/api/integration/login`，传入当前登录用户 `user`
-2. **进入指定单聊**：调用 `POST /im/api/integration/conversations`，传入 `from_user` / `to_user`
+2. **进入指定单聊**：调用 `POST /im/api/integration/conversations`，传入 `user` / `peer_user`
 3. 两类接口均需携带 `X-Integration-Key`（仅服务端持有）
 4. 收到响应后，将当前登录用户浏览器 **302 到 `redirect_url`**
 5. Token 超过绝对会话上限（`JWT_MAX_SESSION`）时，需重新调用对应 integration 接口获取新链接

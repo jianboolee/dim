@@ -43,7 +43,7 @@ const createClientMessageId = (userId: string) => {
 │    a. 检查 MongoDB 唯一索引 (conversation_id+sender_id+cid)  │
 │    b. 已存在 → 返回已有消息（幂等）                              │
 │    c. 不存在 → 插入新消息 → 生成 ObjectID                    │
-│    d. 异步 WS push 给 sender + receiver                      │
+│    d. 异步 WS push 给会话成员                                │
 ├─────────────────────────────────────────────────────────────┤
 │ 5. 前端 HTTP 响应                                             │
 │    confirmPendingMessage() → 用服务端返回的消息替换本地临时消息   │

@@ -16,48 +16,26 @@ const (
 	ConversationTypeChannel ConversationType = "channel" // 频道会话
 )
 
-type ConversationUserState struct {
-	LastActivatedAt time.Time `bson:"last_activated_at,omitempty" json:"last_activated_at,omitempty"`
-	LastReadAt      time.Time `bson:"last_read_at,omitempty" json:"last_read_at,omitempty"`
-	UnreadCount     int64     `bson:"unread_count" json:"unread_count"`
-}
-
 // Conversation 表示一个会话
 type Conversation struct {
-	ID           primitive.ObjectID               `bson:"_id" json:"id"`
-	HashID       string                           `bson:"hash_id" json:"hash_id"` // 会话ID的哈希值, 根据参与者生成唯一、稳定的 ObjectID（顺序无关 + 去重）
-	Type         ConversationType                 `bson:"type" json:"type"`       // 会话类型
-	GroupID      *primitive.ObjectID              `bson:"group_id,omitempty" json:"group_id,omitempty"`
-	MessageSeq   int64                            `bson:"message_seq" json:"message_seq"`
-	Participants []string                         `bson:"participants" json:"participants"` // 参与者的用户ID列表
-	LastMessage  *LastMessageSnapshot             `bson:"last_message,omitempty" json:"last_message"`
-	ImageURL     string                           `bson:"image_url" json:"image_url"` // 会话图片
-	DisplayName  string                           `bson:"display_name,omitempty" json:"display_name,omitempty"`
-	UserStates   map[string]ConversationUserState `bson:"user_states,omitempty" json:"user_states,omitempty"`
-	LastActivity time.Time                        `json:"last_activity" bson:"-"`
-	CreatedAt    time.Time                        `bson:"created_at" json:"created_at"`
-	UpdatedAt    time.Time                        `bson:"updated_at" json:"updated_at"`
+	ID           primitive.ObjectID   `bson:"_id" json:"id"`
+	HashID       string               `bson:"hash_id" json:"hash_id"` // 会话ID的哈希值, 根据参与者生成唯一、稳定的 ObjectID（顺序无关 + 去重）
+	Type         ConversationType     `bson:"type" json:"type"`       // 会话类型
+	GroupID      *primitive.ObjectID  `bson:"group_id,omitempty" json:"group_id,omitempty"`
+	MessageSeq   int64                `bson:"message_seq" json:"message_seq"`
+	Participants []string             `bson:"participants" json:"participants"` // 参与者的用户ID列表
+	LastMessage  *LastMessageSnapshot `bson:"last_message,omitempty" json:"last_message"`
+	ImageURL     string               `bson:"image_url" json:"image_url"` // 会话图片
+	DisplayName  string               `bson:"display_name,omitempty" json:"display_name,omitempty"`
+	LastActivity time.Time            `json:"last_activity" bson:"-"`
+	CreatedAt    time.Time            `bson:"created_at" json:"created_at"`
+	UpdatedAt    time.Time            `bson:"updated_at" json:"updated_at"`
 
 	// 新增字段 👇
 	RefType     string            `bson:"ref_type,omitempty" json:"ref_type,omitempty"`         // 引用类型，如 "used_car"、"listing"
 	RefID       string            `bson:"ref_id,omitempty" json:"ref_id,omitempty"`             // 引用实体ID（例如二手车ID）
 	RefTitle    string            `bson:"ref_title,omitempty" json:"ref_title,omitempty"`       // 引用标题（例如车名或商品名，冗余存储方便展示）
 	RefSnapshot map[string]string `bson:"ref_snapshot,omitempty" json:"ref_snapshot,omitempty"` // 冗余字段，如价格、车型、封面图
-}
-
-// GetUnreadCount 获取指定用户的未读数
-func (c *Conversation) GetUnreadCount(userID string) int64 {
-	if state, ok := c.UserStates[userID]; ok {
-		return state.UnreadCount
-	}
-	return 0
-}
-
-func (c *Conversation) GetLastActivatedAt(userID string) time.Time {
-	if state, ok := c.UserStates[userID]; ok {
-		return state.LastActivatedAt
-	}
-	return time.Time{}
 }
 
 func (c *Conversation) GetLastActivityWithMember(member *ConversationMember) time.Time {
@@ -78,19 +56,6 @@ func (c *Conversation) HasParticipant(userID string) bool {
 		}
 	}
 	return false
-}
-
-// GetLastActivity 设置当前用户视角下的最后活动时间
-func (c *Conversation) GetLastActivity(userID ...string) {
-	c.LastActivity = c.UpdatedAt
-	if c.LastMessage != nil {
-		c.LastActivity = c.LastMessage.CreatedAt
-	}
-	if len(userID) > 0 {
-		if activatedAt := c.GetLastActivatedAt(userID[0]); activatedAt.After(c.LastActivity) {
-			c.LastActivity = activatedAt
-		}
-	}
 }
 
 // NormalizeParticipants 规范化参与者列表, 确保参与者列表按字典序排序

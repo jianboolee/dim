@@ -27,9 +27,9 @@ var (
 type config struct {
 	apiBase        string
 	integrationKey string
-	toUserID       string
-	toNickname     string
-	toAvatar       string
+	peerUserID     string
+	peerNickname   string
+	peerAvatar     string
 	count          int
 	startIndex     int
 	userIDPrefix   string
@@ -57,7 +57,7 @@ func main() {
 		fromName := englishName(seq - 1)
 		fromAvatar := mockAvatarURL(seq)
 
-		log.Printf("[%d/%d] %s (%s) -> %s", i+1, cfg.count, fromID, fromName, cfg.toUserID)
+		log.Printf("[%d/%d] %s (%s) -> %s", i+1, cfg.count, fromID, fromName, cfg.peerUserID)
 
 		if cfg.dryRun {
 			log.Printf("  dry-run: create conversation + send message")
@@ -65,16 +65,16 @@ func main() {
 			continue
 		}
 
-		session, err := integrationClient.CreateConversation(ctx, dim.CreateConversationRequest{
-			FromUser: dim.User{
+		session, err := integrationClient.CreateConversation(ctx, dim.IntegrationPrivateConversationRequest{
+			User: dim.User{
 				ID:       fromID,
 				Nickname: fromName,
 				Avatar:   fromAvatar,
 			},
-			ToUser: dim.User{
-				ID:       cfg.toUserID,
-				Nickname: cfg.toNickname,
-				Avatar:   cfg.toAvatar,
+			PeerUser: dim.User{
+				ID:       cfg.peerUserID,
+				Nickname: cfg.peerNickname,
+				Avatar:   cfg.peerAvatar,
 			},
 		})
 		if err != nil {
@@ -87,7 +87,7 @@ func main() {
 			BaseURL: cfg.apiBase,
 			Token:   session.Token,
 		})
-		content := fmt.Sprintf("Hi %s, this is %s. Nice to meet you!", cfg.toNickname, fromName)
+		content := fmt.Sprintf("Hi %s, this is %s. Nice to meet you!", cfg.peerNickname, fromName)
 		if _, err := userClient.SendTextMessage(ctx, session.ConversationID, content); err != nil {
 			log.Printf("  message failed: %v", err)
 			failCount++
@@ -106,39 +106,39 @@ func main() {
 func parseConfig() config {
 	apiBase := envOr("IM_API_BASE", "http://localhost:8901")
 	integrationKey := envOr("INTEGRATION_API_KEY", "")
-	toUserID := envOr("TO_USER_ID", demo.USER_A.ID)
-	toNickname := envOr("TO_USER_NICKNAME", demo.USER_A.Nickname)
-	toAvatar := envOr("TO_USER_AVATAR", demo.USER_A.Avatar)
+	peerUserID := envOr("PEER_USER_ID", demo.USER_A.ID)
+	peerNickname := envOr("PEER_USER_NICKNAME", demo.USER_A.Nickname)
+	peerAvatar := envOr("PEER_USER_AVATAR", demo.USER_A.Avatar)
 
 	var (
-		flagAPIBase  string
-		flagKey      string
-		flagToUser   string
-		flagToNick   string
-		flagToAvatar string
-		flagCount    int
-		flagStart    int
-		flagPrefix   string
-		flagDryRun   bool
+		flagAPIBase    string
+		flagKey        string
+		flagPeerUser   string
+		flagPeerNick   string
+		flagPeerAvatar string
+		flagCount      int
+		flagStart      int
+		flagPrefix     string
+		flagDryRun     bool
 	)
 
 	flag.StringVar(&flagAPIBase, "api-base", apiBase, "IM API base URL")
 	flag.StringVar(&flagKey, "key", integrationKey, "X-Integration-Key")
-	flag.StringVar(&flagToUser, "to-user", toUserID, "会话对方用户 ID")
-	flag.StringVar(&flagToNick, "to-nickname", toNickname, "会话对方昵称")
-	flag.StringVar(&flagToAvatar, "to-avatar", toAvatar, "会话对方头像 URL")
+	flag.StringVar(&flagPeerUser, "peer-user", peerUserID, "会话对方用户 ID")
+	flag.StringVar(&flagPeerNick, "peer-nickname", peerNickname, "会话对方昵称")
+	flag.StringVar(&flagPeerAvatar, "peer-avatar", peerAvatar, "会话对方头像 URL")
 	flag.IntVar(&flagCount, "count", 100, "创建会话数量")
 	flag.IntVar(&flagStart, "start", 1, "起始序号")
-	flag.StringVar(&flagPrefix, "prefix", "seed_user_", "from_user ID 前缀")
+	flag.StringVar(&flagPrefix, "prefix", "seed_user_", "用户 ID 前缀")
 	flag.BoolVar(&flagDryRun, "dry-run", false, "只打印计划，不请求 API")
 	flag.Parse()
 
 	return config{
 		apiBase:        strings.TrimRight(flagAPIBase, "/"),
 		integrationKey: flagKey,
-		toUserID:       flagToUser,
-		toNickname:     flagToNick,
-		toAvatar:       flagToAvatar,
+		peerUserID:     flagPeerUser,
+		peerNickname:   flagPeerNick,
+		peerAvatar:     flagPeerAvatar,
 		count:          flagCount,
 		startIndex:     flagStart,
 		userIDPrefix:   flagPrefix,

@@ -13,9 +13,9 @@ integrationClient := dim.NewIntegrationClient(dim.Config{
     APIKey:  "change-me-integration-key",
 })
 
-session, err := integrationClient.CreateConversation(ctx, dim.CreateConversationRequest{
-    FromUser: dim.User{ID: "user_a", Nickname: "Alice"},
-    ToUser:   dim.User{ID: "user_b", Nickname: "Bob"},
+session, err := integrationClient.CreateConversation(ctx, dim.IntegrationPrivateConversationRequest{
+    User:     dim.User{ID: "user_a", Nickname: "Alice"},
+    PeerUser: dim.User{ID: "user_b", Nickname: "Bob"},
 })
 if err != nil {
     return err
@@ -69,4 +69,3 @@ go run ./examples/seed \
   -key change-me-integration-key \
   -count 20
 ```
-

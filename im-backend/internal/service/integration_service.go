@@ -88,36 +88,36 @@ func (s *IntegrationService) CreateLoginSession(
 
 func (s *IntegrationService) CreateConversationSession(
 	ctx context.Context,
-	req *dto.IntegrationCreateConversationRequest,
+	req *dto.IntegrationPrivateConversationRequest,
 ) (*dto.IntegrationCreateConversationResponse, error) {
-	if req.FromUser.ID == req.ToUser.ID {
-		return nil, fmt.Errorf("from_user and to_user must be different")
+	if req.User.ID == req.PeerUser.ID {
+		return nil, fmt.Errorf("user and peer_user must be different")
 	}
 
 	users := []*models.User{
 		{
-			ID:       req.FromUser.ID,
-			Nickname: req.FromUser.ResolveNickname(),
-			Avatar:   req.FromUser.ResolveAvatar(),
-			Type:     resolveUserType(req.FromUser.ID, req.FromUser.Type),
+			ID:       req.User.ID,
+			Nickname: req.User.ResolveNickname(),
+			Avatar:   req.User.ResolveAvatar(),
+			Type:     resolveUserType(req.User.ID, req.User.Type),
 		},
 		{
-			ID:       req.ToUser.ID,
-			Nickname: req.ToUser.ResolveNickname(),
-			Avatar:   req.ToUser.ResolveAvatar(),
-			Type:     resolveUserType(req.ToUser.ID, req.ToUser.Type),
+			ID:       req.PeerUser.ID,
+			Nickname: req.PeerUser.ResolveNickname(),
+			Avatar:   req.PeerUser.ResolveAvatar(),
+			Type:     resolveUserType(req.PeerUser.ID, req.PeerUser.Type),
 		},
 	}
 	if err := s.userService.UpsertUsers(ctx, users...); err != nil {
 		return nil, fmt.Errorf("failed to upsert users: %w", err)
 	}
 
-	conversation, err := s.conversationService.GetOrCreatePrivateConversation(ctx, req.FromUser.ID, req.ToUser.ID)
+	conversation, err := s.conversationService.GetOrCreatePrivateConversation(ctx, req.User.ID, req.PeerUser.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create conversation: %w", err)
 	}
 
-	session, err := s.authService.CreateSession(ctx, req.FromUser.ID)
+	session, err := s.authService.CreateSession(ctx, req.User.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create auth session: %w", err)
 	}

@@ -181,7 +181,7 @@ const conversationItems = computed(() => {
 
   return displayConversations.value.map((conversation) => {
     const peerId = getPeerUserId(conversation, uid)
-    const profile = conversation.peer_user_info ?? conversation.to_user_info ?? userMap.value[peerId]
+    const profile = conversation.peer_user_info ?? userMap.value[peerId]
     const unreadCount = getUnreadCount(conversation, uid)
     const groupMembers = isGroupConversation(conversation)
       ? conversation.group_info?.members ?? []
@@ -208,7 +208,6 @@ const conversationItems = computed(() => {
 const mergeConversationUsers = (items: Conversation[]) => {
   const users = items.flatMap((conversation) => [
     conversation.peer_user_info,
-    conversation.to_user_info,
     ...(conversation.group_info?.members ?? []).map((member) => member.user_info),
   ])
   mergeUsers(users)
@@ -261,7 +260,7 @@ const selectConversation = async (item: { id: string; peerId: string; conversati
 }
 
 const onIncomingMessage = async (message: Parameters<typeof handleIncomingMessage>[0]) => {
-  const peerIds = [message.from_id, message.to_id].filter(
+  const peerIds = [message.from_id].filter(
     (id): id is string => Boolean(id) && id !== currentUserId.value,
   )
   await fetchUsers(peerIds)

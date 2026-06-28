@@ -33,12 +33,11 @@
 
 ```json
 {
-  "user_states": {
-    "user_a": {
-      "last_activated_at": "2026-06-25T10:00:00Z",
-      "last_read_at": "...",
-      "unread_count": 0
-    }
+  "member_state": {
+    "status": "active",
+    "last_activated_at": "2026-06-25T10:00:00Z",
+    "last_read_at": "...",
+    "unread_count": 0
   }
 }
 ```
@@ -50,7 +49,7 @@
 服务端返回 `last_activity`，当前实现为以下时间的最大值：
 
 - `last_message.created_at`
-- `user_states.<current_user_id>.last_activated_at`
+- `conversation_members.last_activated_at`
 - `updated_at`
 
 前端按 `last_activity` 倒序展示。
@@ -151,11 +150,9 @@ sequenceDiagram
 推荐规则：
 
 - 收到非当前会话的新消息：未读数 +1。
-- 当前用户拉取某个会话消息时，服务端清空该用户在该会话下的未读数，并写入 `last_read_at`。
+- 当前用户调用会话级已读接口时，服务端清空该用户在该会话下的未读数，并写入 `last_read_at`。
 - 当前会话收到新消息后，前端可以先清空本地未读角标；后续拉取或同步消息时，服务端状态也会归零。
 - `activate` 不清理未读数。
-
-如果后续需要更明确的手动已读语义，可以再增加会话级已读接口，例如：
 
 ```http
 PUT /im/api/conversations/:id/read
@@ -213,7 +210,7 @@ Flutter 页面只做：
 
 | 能力 | 当前位置 |
 |------|----------|
-| 会话状态字段 | `user_states.<user_id>.last_activated_at` |
+| 会话状态字段 | `conversation_members.last_activated_at` |
 | 排序返回字段 | `last_activity` |
 | 会话列表接口 | `GET /im/api/conversations` |
 | 激活接口 | `POST /im/api/conversations/:id/activate` |

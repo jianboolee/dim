@@ -15,7 +15,6 @@ export enum MessageType {
   export enum MessageStatus {
     Sending = 'sending',
     Sent = 'sent',
-    Delivered = 'delivered',
     Failed = 'failed'
   }
   
@@ -57,7 +56,6 @@ export enum MessageType {
     conversation_id?: string;
     seq?: number;
     from_id?: string;
-    to_id: string;
     type: MessageType;
     content: string;
     status?: MessageStatus;
@@ -66,13 +64,6 @@ export enum MessageType {
     updated_at?: string;
   }
   
-  // 会话接口
-  export interface ConversationUserState {
-    last_activated_at?: string;
-    last_read_at?: string;
-    unread_count?: number;
-  }
-
   export interface UserInfo {
     id: string;
     nickname?: string;
@@ -116,10 +107,8 @@ export enum MessageType {
     group_id?: string;
     group_info?: GroupSummary;
     peer_user_info?: UserInfo;
-    to_user_info?: UserInfo;
     member_state?: ConversationMemberState;
     image_url: string;
-    user_states?: { [key: string]: ConversationUserState };
     created_at: string;
     updated_at: string;
     last_activity: string;
@@ -200,7 +189,6 @@ export enum MessageType {
       conversation_id: raw.conversation_id == null ? undefined : String(raw.conversation_id),
       seq: raw.seq == null ? undefined : Number(raw.seq),
       from_id: String(raw.sender_id ?? raw.from_id ?? ''),
-      to_id: String(raw.receiver_id ?? raw.to_id ?? ''),
       type: (raw.type as MessageType) ?? MessageType.Text,
       content: String(raw.content ?? ''),
       status: raw.status as MessageStatus | undefined,
@@ -405,7 +393,6 @@ export enum MessageType {
           const message = {
             client_message_id: clientMessageId,
             conversation_id: conversationId,
-            to_id: '',
             type,
             content,
             payload: buildPayload(type, payload),
@@ -625,7 +612,7 @@ export enum MessageType {
       }
   
       this.heartbeatTimer = setInterval(() => {
-        this.send({ type: MessageType.Ping, to_id: '', content: '' }).catch((error) => {
+        this.send({ type: MessageType.Ping, content: '' }).catch((error) => {
           console.error('Heartbeat failed:', error);
           this.disconnect();
         });

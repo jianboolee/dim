@@ -60,7 +60,7 @@ func NewMessageService(
 	}
 }
 
-// SendMessageToConversationHTTP 通过 HTTP 发送会话消息，并异步推送给接收方。
+// SendMessageToConversationHTTP 通过 HTTP 发送会话消息，并异步推送给会话成员。
 func (s *MessageService) SendMessageToConversationHTTP(ctx context.Context, senderID string, conversationID primitive.ObjectID, clientMessageID string, content string, msgType *models.MessageType, payload *models.Payload) (*models.Message, error) {
 	message, created, err := s.SendMessageToConversation(ctx, senderID, conversationID, clientMessageID, content, msgType, payload)
 	if err != nil {
@@ -80,7 +80,7 @@ func (s *MessageService) SendMessageToConversationHTTP(ctx context.Context, send
 	return message, nil
 }
 
-// SendMessageToConversation 发送会话消息。当前项目只支持单聊，因此接收方由会话参与者推导。
+// SendMessageToConversation 发送会话消息。单聊和群聊统一按 conversation_members 做权限与未读控制。
 func (s *MessageService) SendMessageToConversation(
 	ctx context.Context,
 	senderID string,
@@ -101,17 +101,15 @@ func (s *MessageService) SendMessageToConversation(
 		return nil, false, fmt.Errorf("failed to get conversation member: %w", err)
 	}
 
-	receiverID := ""
 	if conversation.Type == models.ConversationTypePrivate {
-		var err error
-		receiverID, err = resolvePrivateReceiverID(conversation, senderID)
+		peerID, err := resolvePrivatePeerID(conversation, senderID)
 		if err != nil {
 			return nil, false, err
 		}
 
 		// 检查对方是否为系统用户（只读），普通用户不能回复系统消息
 		if s.userRepo != nil {
-			if peerUser, err := s.userRepo.GetByID(ctx, receiverID); err == nil && peerUser.Type == models.UserTypeSystem {
+			if peerUser, err := s.userRepo.GetByID(ctx, peerID); err == nil && peerUser.Type == models.UserTypeSystem {
 				return nil, false, ErrCannotReplyToSystemUser
 			}
 		}
@@ -152,7 +150,6 @@ func (s *MessageService) SendMessageToConversation(
 		ConversationID:  conversation.ID,
 		Seq:             seq,
 		SenderID:        senderID,
-		ReceiverID:      receiverID,
 		Content:         content,
 		Type:            msgTypeValue,
 		Payload:         payload,
@@ -190,7 +187,7 @@ func (s *MessageService) SendMessageToConversation(
 	return result, true, nil
 }
 
-func resolvePrivateReceiverID(conversation *models.Conversation, senderID string) (string, error) {
+func resolvePrivatePeerID(conversation *models.Conversation, senderID string) (string, error) {
 	if conversation.Type != models.ConversationTypePrivate || len(conversation.Participants) != 2 {
 		return "", fmt.Errorf("unsupported conversation type")
 	}
@@ -240,7 +237,7 @@ func (s *MessageService) FanoutMessage(ctx context.Context, message *models.Mess
 
 	for _, userID := range recipientIDs {
 		if err := s.pushToUser(ctx, userID, messageBytes); err != nil {
-			logger.Error("failed to push message via ws", zap.String("receiver_id", userID), zap.Error(err))
+			logger.Error("failed to push message via ws", zap.String("user_id", userID), zap.Error(err))
 		}
 	}
 	return nil
@@ -306,22 +303,13 @@ func (s *MessageService) CreateSystemEvent(
 	return s.FanoutMessage(ctx, result)
 }
 
-// SendMessageWithWs 将消息推送给在线用户（本进程 WS 或经 Redis 转发到 WS 进程）
-func (s *MessageService) SendMessageWithWs(ctx context.Context, receiverID string, message *models.Message) error {
-	messageBytes, err := json.Marshal(message)
-	if err != nil {
-		return fmt.Errorf("failed to marshal message: %w", err)
-	}
-	return s.pushToUser(ctx, receiverID, messageBytes)
-}
-
-func (s *MessageService) pushToUser(ctx context.Context, receiverID string, messageBytes []byte) error {
-	if receiverID == "" {
+func (s *MessageService) pushToUser(ctx context.Context, userID string, messageBytes []byte) error {
+	if userID == "" {
 		return nil
 	}
 
 	// 同进程直连（cmd/server 单进程模式）
-	if s.wsManager != nil && s.wsManager.TryDeliver(receiverID, messageBytes) {
+	if s.wsManager != nil && s.wsManager.TryDeliver(userID, messageBytes) {
 		return nil
 	}
 
@@ -331,8 +319,8 @@ func (s *MessageService) pushToUser(ctx context.Context, receiverID string, mess
 	}
 
 	event := WSPushEvent{
-		ReceiverID: receiverID,
-		Message:    json.RawMessage(messageBytes),
+		UserID:  userID,
+		Message: json.RawMessage(messageBytes),
 	}
 	payload, err := json.Marshal(event)
 	if err != nil {
@@ -359,55 +347,6 @@ func (s *MessageService) FindMessagesByConversationID(ctx context.Context, conve
 		messages[i].DecodePayload()
 	}
 	return messages, nil
-}
-
-// 注意：GetConversations方法应该在ConversationService中实现，这里删除
-
-// MarkMessageAsDelivered 标记消息为已送达
-func (s *MessageService) MarkMessageAsDelivered(ctx context.Context, messageID primitive.ObjectID, currentUserID string) error {
-	// 先获取消息信息
-	message, err := s.repo.FindByID(ctx, messageID)
-	if err != nil {
-		return fmt.Errorf("failed to find message: %w", err)
-	}
-
-	// 检查权限：只有消息接收者可以标记消息为已送达
-	if message.ReceiverID != currentUserID {
-		return fmt.Errorf("permission denied: only message recipient can mark message as delivered")
-	}
-
-	return s.repo.UpdateStatus(ctx, messageID, models.MessageStatusDelivered)
-}
-
-// MarkMessageAsRead 标记消息为已读
-func (s *MessageService) MarkMessageAsRead(ctx context.Context, messageID primitive.ObjectID, currentUserID string) error {
-	// 先获取消息信息
-	message, err := s.repo.FindByID(ctx, messageID)
-	if err != nil {
-		return fmt.Errorf("failed to find message: %w", err)
-	}
-
-	// 检查权限：只有消息接收者可以标记消息为已读
-	if message.ReceiverID != currentUserID {
-		return fmt.Errorf("permission denied: only message recipient can mark message as read")
-	}
-
-	// 已读消息不重复扣减未读数
-	if message.Status == models.MessageStatusRead {
-		return nil
-	}
-
-	// 更新消息状态
-	if err := s.repo.UpdateStatus(ctx, messageID, models.MessageStatusRead); err != nil {
-		return err
-	}
-
-	// 如果消息被标记为已读，更新会话的未读数
-	if err := s.conversationService.UpdateUnreadCount(ctx, message.ConversationID, currentUserID, -1); err != nil {
-		return fmt.Errorf("failed to update conversation unread count: %w", err)
-	}
-
-	return nil
 }
 
 // ProcessWebSocketMessage 处理 WebSocket 消息

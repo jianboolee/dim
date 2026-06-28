@@ -10,9 +10,7 @@ import (
 type MessageStatus string
 
 const (
-	MessageStatusSent      MessageStatus = "sent"      // 已发送
-	MessageStatusDelivered MessageStatus = "delivered" // 已送达
-	MessageStatusRead      MessageStatus = "read"      // 已读
+	MessageStatusSent MessageStatus = "sent" // 已发送
 )
 
 type MessageType string
@@ -66,7 +64,6 @@ type Message struct {
 	ConversationID  primitive.ObjectID `bson:"conversation_id" json:"conversation_id"`                         // 所属会话 ID
 	Seq             int64              `bson:"seq" json:"seq"`                                                 // 会话内单调递增序号
 	SenderID        string             `bson:"sender_id" json:"sender_id"`                                     // 发送者 ID
-	ReceiverID      string             `bson:"receiver_id,omitempty" json:"receiver_id,omitempty"`             // 私聊兼容字段；群聊按 conversation fanout
 	Type            MessageType        `bson:"type" json:"type"`                                               // 消息类型
 
 	// 内容与扩展字段
@@ -79,7 +76,7 @@ type Message struct {
 	RootMessageID   *primitive.ObjectID `bson:"root_message_id,omitempty" json:"root_message_id,omitempty"`     // 所属的主消息（例如帖子）
 
 	// 互动状态
-	Status         MessageStatus       `bson:"status" json:"status"`                                         // 消息状态：已发送、已送达、已读
+	Status         MessageStatus       `bson:"status" json:"status"`                                         // 消息状态
 	IsRevoked      bool                `bson:"is_revoked" json:"is_revoked"`                                 // 是否被撤回
 	MentionedIDs   *[]string           `bson:"mentioned_ids,omitempty" json:"mentioned_ids,omitempty"`       // 被@的人
 	QuoteMessageID *primitive.ObjectID `bson:"quote_message_id,omitempty" json:"quote_message_id,omitempty"` // 引用的消息（类似微信回复）

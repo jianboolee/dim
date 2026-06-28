@@ -8,15 +8,15 @@
 // 使用方法：
 //
 //	// 以系统通知身份向用户 Alice 发送文本消息
-//	integrationClient.CreateConversation(ctx, dim.CreateConversationRequest{
-//	    FromUser: demo.USER_SYSTEM_NOTICE,
-//	    ToUser:   demo.USER_A,
+//	integrationClient.CreateConversation(ctx, dim.IntegrationPrivateConversationRequest{
+//	    User:     demo.USER_SYSTEM_NOTICE,
+//	    PeerUser: demo.USER_A,
 //	})
 //
 //	// 以系统订单身份向用户 Alice 发送卡片消息
-//	session, _ := integrationClient.CreateConversation(ctx, dim.CreateConversationRequest{
-//	    FromUser: demo.USER_SYSTEM_ORDER,
-//	    ToUser:   demo.USER_A,
+//	session, _ := integrationClient.CreateConversation(ctx, dim.IntegrationPrivateConversationRequest{
+//	    User:     demo.USER_SYSTEM_ORDER,
+//	    PeerUser: demo.USER_A,
 //	})
 //	userClient := dim.NewUserClient(dim.Config{BaseURL: apiBase, Token: session.Token})
 //	userClient.SendCardMessage(ctx, session.ConversationID, dim.Payload{

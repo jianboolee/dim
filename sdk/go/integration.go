@@ -13,7 +13,7 @@ func NewIntegrationClient(cfg Config) *IntegrationClient {
 	return &IntegrationClient{client: newClient(cfg)}
 }
 
-func (c *IntegrationClient) CreateConversation(ctx context.Context, req CreateConversationRequest) (*CreateConversationResponse, error) {
+func (c *IntegrationClient) CreateConversation(ctx context.Context, req IntegrationPrivateConversationRequest) (*CreateConversationResponse, error) {
 	var out CreateConversationResponse
 	if err := c.client.do(ctx, http.MethodPost, "/im/api/integration/conversations", req, &out); err != nil {
 		return nil, err

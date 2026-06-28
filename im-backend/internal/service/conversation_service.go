@@ -61,8 +61,8 @@ func NewConversationService(
 }
 
 // CreatePrivateConversation 创建或获取单聊会话
-func (s *ConversationService) CreatePrivateConversation(ctx context.Context, senderID, receiverID string) (*models.Conversation, error) {
-	return s.getOrCreatePrivateConversation(ctx, senderID, receiverID)
+func (s *ConversationService) CreatePrivateConversation(ctx context.Context, userID, peerID string) (*models.Conversation, error) {
+	return s.getOrCreatePrivateConversation(ctx, userID, peerID)
 }
 
 // GetOrCreatePrivateConversation 获取或创建单聊会话（参与者顺序无关）
@@ -284,11 +284,6 @@ func (s *ConversationService) UpdateLastMessage(ctx context.Context, conversatio
 	return s.repo.UpdateConversation(ctx, conversationID, update)
 }
 
-// UpdateUnreadCount 更新未读消息数（扣减时不会低于 0）
-func (s *ConversationService) UpdateUnreadCount(ctx context.Context, conversationID primitive.ObjectID, userID string, increment int) error {
-	return nil
-}
-
 // MarkConversationRead 标记当前用户已读该会话，清空会话级未读数。
 func (s *ConversationService) MarkConversationRead(ctx context.Context, conversationID primitive.ObjectID, userID string) error {
 	conversation, err := s.repo.GetConversation(ctx, conversationID)
@@ -414,7 +409,6 @@ func (s *ConversationService) toConversationDTOs(ctx context.Context, conversati
 			DisplayAvatar: conversation.ImageURL,
 			GroupID:       conversation.GroupID,
 			ImageURL:      conversation.ImageURL,
-			UserStates:    conversation.UserStates,
 			LastActivity:  conversation.LastActivity,
 			CreatedAt:     conversation.CreatedAt,
 			UpdatedAt:     conversation.UpdatedAt,
@@ -445,7 +439,6 @@ func (s *ConversationService) toConversationDTOs(ctx context.Context, conversati
 				}
 				if user := usersByID[participantID]; user != nil {
 					item.PeerUserInfo = dto.ConvertToUserInfoDto(user)
-					item.ToUserInfo = item.PeerUserInfo
 					item.DisplayName = item.PeerUserInfo.Nickname
 					item.DisplayAvatar = item.PeerUserInfo.Avatar
 				}

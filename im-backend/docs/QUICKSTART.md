@@ -137,7 +137,7 @@ ws.onopen = function() {
     
     // 发送消息
     ws.send(JSON.stringify({
-        receiver_id: "target_user_id",
+        conversation_id: "conversation_object_id",
         type: "text",
         content: "Hello, World!"
     }));

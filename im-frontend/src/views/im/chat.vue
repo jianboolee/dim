@@ -259,13 +259,12 @@ const isGroupConversation = computed(() => isGroupConversationModel(conversation
 const peerUserId = computed(() => {
   if (!conversation.value || isGroupConversation.value) return ''
   return conversation.value.peer_user_info?.id
-    || conversation.value.to_user_info?.id
     || getPeerUserId(conversation.value, currentUserId.value || '')
 })
 const peerUserType = computed(
   () => isGroupConversation.value
     ? ''
-    : conversation.value?.peer_user_info?.type || conversation.value?.to_user_info?.type || userMap.value[peerUserId.value]?.type || '',
+    : conversation.value?.peer_user_info?.type || userMap.value[peerUserId.value]?.type || '',
 )
 const conversationTitle = computed(() => (
   conversation.value
@@ -283,7 +282,7 @@ const conversationInfoParticipants = computed<UserInfo[]>(() => {
   const participantIds = conversation.value?.participants.filter((id) => id && id !== currentId) ?? []
   const usersById = new Map<string, UserInfo>()
 
-  const peerInfo = conversation.value?.peer_user_info ?? conversation.value?.to_user_info
+  const peerInfo = conversation.value?.peer_user_info
   if (peerInfo?.id && peerInfo.id !== currentId) {
     usersById.set(peerInfo.id, peerInfo)
   }
@@ -305,7 +304,6 @@ const { setBaseTitle } = usePageTitleNotification('消息')
 const mergeConversationUsers = (item: Conversation) => {
   mergeUsers([
     item.peer_user_info,
-    item.to_user_info,
     ...(item.group_info?.members ?? []).map((member) => member.user_info),
   ])
 }
@@ -358,7 +356,7 @@ watch(
     if (!user) return
     conversation.value = user
     mergeConversationUsers(user)
-    const peerInfo = user.peer_user_info ?? user.to_user_info
+    const peerInfo = user.peer_user_info
     if (!isGroupConversationModel(user) && peerInfo) {
       mergeUsers([peerInfo])
       targetUser.value = peerInfo
@@ -437,19 +435,7 @@ const chatImages = computed(() =>
 provide('chatImages', chatImages)
 
 const isCurrentChatMessage = (message: ChatMessage) => {
-  const myId = userStore.userInfo?.id
-  if (!myId) return false
-
-  if (message.conversation_id && message.conversation_id === conversationId.value) {
-    return true
-  }
-
-  if (!peerUserId.value) return false
-
-  return (
-    (message.from_id === peerUserId.value && message.to_id === myId) ||
-    (message.from_id === myId && message.to_id === peerUserId.value)
-  )
+  return Boolean(message.conversation_id && message.conversation_id === conversationId.value)
 }
 
 const isNearBottom = () => {
@@ -583,7 +569,6 @@ const sendMessage = async () => {
     client_message_id: clientMessageId,
     conversation_id: conversationId.value,
     from_id: currentUserId.value,
-    to_id: isGroupConversation.value ? '' : peerUserId.value,
     type: MessageType.Text,
     content,
     status: 'sending',
@@ -750,7 +735,7 @@ const fetchTargetUser = async () => {
     return
   }
 
-  const peerInfo = conversation.value?.peer_user_info ?? conversation.value?.to_user_info
+  const peerInfo = conversation.value?.peer_user_info
   if (peerInfo) {
     mergeUsers([peerInfo])
     targetUser.value = peerInfo
@@ -765,7 +750,7 @@ const fetchTargetUser = async () => {
   const fromConversation = conversations.value.find(
     (item) => item.id === conversationId.value,
   )
-  const fromConversationPeer = fromConversation?.peer_user_info ?? fromConversation?.to_user_info
+  const fromConversationPeer = fromConversation?.peer_user_info
   if (fromConversationPeer) {
     mergeUsers([fromConversationPeer])
     targetUser.value = fromConversationPeer
@@ -786,7 +771,7 @@ const fetchConversation = async () => {
   if (existing) {
     conversation.value = existing
     mergeConversationUsers(existing)
-    const peerInfo = existing.peer_user_info ?? existing.to_user_info
+    const peerInfo = existing.peer_user_info
     if (!isGroupConversationModel(existing) && peerInfo) {
       mergeUsers([peerInfo])
       targetUser.value = peerInfo
@@ -803,7 +788,7 @@ const fetchConversation = async () => {
   if (!conversation.value) return
 
   mergeConversationUsers(conversation.value)
-  const peerInfo = conversation.value.peer_user_info ?? conversation.value.to_user_info
+  const peerInfo = conversation.value.peer_user_info
   if (!isGroupConversation.value && peerInfo) {
     mergeUsers([peerInfo])
     targetUser.value = peerInfo
@@ -928,7 +913,6 @@ const handleSelectFile = (file: File, type: string, preview: FilePreview) => {
     client_message_id: clientMessageId,
     conversation_id: conversationId.value,
     from_id: currentUserId.value,
-    to_id: isGroupConversation.value ? '' : peerUserId.value,
     type: messageType,
     content: messageType === MessageType.Image ? '[图片]' : '[视频]',
     status: 'sending',

@@ -92,28 +92,6 @@ func (h *MessageHandler) GetUnreadCount(c *gin.Context) {
 	response.Success(c, "success", gin.H{"unread_count": count})
 }
 
-// MarkMessageAsRead 标记消息为已读
-func (h *MessageHandler) MarkMessageAsRead(c *gin.Context) {
-	messageID := c.Param("id")
-	objID, err := primitive.ObjectIDFromHex(messageID)
-	if err != nil {
-		response.BadRequest(c, "Invalid message ID")
-		return
-	}
-
-	currentUserID := contextx.MustGetUserID(c)
-	if err := h.messageService.MarkMessageAsRead(c.Request.Context(), objID, currentUserID); err != nil {
-		if err.Error() == "permission denied: only message recipient can mark message as read" {
-			response.Forbidden(c, err.Error())
-			return
-		}
-		response.InternalServerError(c, "Failed to mark message as read")
-		return
-	}
-
-	response.Success(c, "success", gin.H{"success": true})
-}
-
 // SendMessageToConversation 通过 HTTP 接口发送会话消息
 func (h *MessageHandler) SendMessageToConversation(c *gin.Context) {
 	conversationID, err := primitive.ObjectIDFromHex(c.Param("id"))
