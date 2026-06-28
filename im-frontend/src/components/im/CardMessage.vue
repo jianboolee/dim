@@ -117,7 +117,7 @@ const openLink = () => {
 
 .card-thumb {
   width: 100%;
-  aspect-ratio: 1/1;
+  aspect-ratio: 4/3;
   background: #EFF1F8;
   overflow: hidden;
 }

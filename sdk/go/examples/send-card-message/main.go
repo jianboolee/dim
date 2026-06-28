@@ -58,7 +58,7 @@ func main() {
 	var payload = dim.Payload{
 		Title:       "Build with agents in VS Code",
 		Description: "Visual Studio Code comes with AI agents built in. Describe a task in natural language and an agent plans the approach, edits files across your project, runs commands, and self-corrects until the work is done. Agents stay in the flow of how you already work, so you can focus on intent and review instead of typing every line.",
-		ImageURL:    "https://code.visualstudio.com/assets/docs/agents/agents-overview/agents-window-hero.png",
+		ImageURL:    "https://oss.21rv.com/uploads/im/images/20260628/9b6s6sdu5gwrs3lpa5bhvest1t6tjy53.jpg?x-oss-process=image/resize,w_960,m_lfit",
 		URL:         "https://code.visualstudio.com/docs/agents/overview",
 		Price:       "$0/mon",
 	}
