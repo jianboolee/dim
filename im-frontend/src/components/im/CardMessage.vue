@@ -29,7 +29,7 @@
         <div class="card-title">{{ message.payload?.title || '' }}</div>
         <div class="card-desc">{{ message.payload?.description }}</div>
         <div class="card-price" v-if="message.payload?.price">
-          <span class="amount">{{ message.payload.price }}</span>
+          <span class="price-amount">{{ message.payload.price }}</span>
         </div>
       </div>
     </div>
@@ -37,6 +37,16 @@
       v-if="isMine" 
       :status="message.status" 
       @retry="$emit('retry')" 
+    />
+    <ConfirmDialog
+      :visible="showConfirm"
+      title="打开链接"
+      message="即将在浏览器中打开以下链接"
+      :detail="linkToOpen"
+      confirm-text="打开"
+      cancel-text="取消"
+      @confirm="openLink"
+      @cancel="showConfirm = false"
     />
   </div>
 </template>
@@ -46,9 +56,7 @@ import { ref } from 'vue'
 import type { Message } from '@/types/im'
 import MessageStatus from './MessageStatus.vue'
 import PlaceholderImage from '../common/PlaceholderImage.vue'
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
+import ConfirmDialog from '../common/ConfirmDialog.vue'
 
 const props = defineProps<{
   message: Message
@@ -60,10 +68,20 @@ defineEmits<{
 }>()
 
 const imageError = ref(false)
+const showConfirm = ref(false)
+const linkToOpen = ref('')
 
 const handleCardClick = () => {
-  if (props.message.payload?.url) {
-    router.push(props.message.payload.url)
+  const url = props.message.payload?.url
+  if (!url) return
+  linkToOpen.value = url
+  showConfirm.value = true
+}
+
+const openLink = () => {
+  showConfirm.value = false
+  if (linkToOpen.value) {
+    window.open(linkToOpen.value, '_blank', 'noopener,noreferrer')
   }
 }
 </script>
@@ -73,13 +91,13 @@ const handleCardClick = () => {
   position: relative;
   border-radius: 12px;
   background: var(--bg-color);
-  max-width: 180px;
+  max-width: 260px;
   width: 80%;
   padding: 0;
 }
 
 .message-content.message-card {
-  max-width: 180px;
+  max-width: 260px;
   width: 80%;
   padding: 0;
   overflow: hidden;
@@ -94,6 +112,7 @@ const handleCardClick = () => {
   border-radius: 12px;
   overflow: hidden;
   background: var(--bg-color);
+  cursor: pointer;
 }
 
 .card-thumb {
@@ -110,7 +129,7 @@ const handleCardClick = () => {
 }
 
 .card-info {
-  padding: 8px 12px;
+  padding: 10px 12px;
   flex: 1;
   min-width: 0;
 }
@@ -131,29 +150,23 @@ const handleCardClick = () => {
 .card-desc {
   font-size: 12px;
   color: var(--text-color-light);
+  line-height: 1.5;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
 
 .card-price {
+  margin-top: 6px;
+}
+
+.price-amount {
   font-size: 14px;
   color: var(--price-color);
   font-weight: 600;
-  display: flex;
-  align-items: baseline;
-  gap: 2px;
-}
-
-.card-price .currency {
-  font-size: 12px;
-  font-weight: normal;
-}
-
-.card-price .amount {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 .message-arrow {
