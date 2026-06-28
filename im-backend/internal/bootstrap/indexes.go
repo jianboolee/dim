@@ -154,22 +154,74 @@ func InitConversationIndexes(ctx context.Context, db *mongo.Database) error {
 // InitIndexes 初始化索引, 给 last_seen 字段创建 TTL 索引, 设置自动过期时间
 func InitSessionIndexes(ctx context.Context, db *mongo.Database) error {
 	sessionCollection := db.Collection(models.CollectionSession)
+	const (
+		sessionTTLIndexName     = "last_seen_1"
+		sessionTTLExpireSeconds = int32(60 * 5)
+	)
 
-	indexModel := mongo.IndexModel{
-		Keys: bson.M{"last_seen": 1},
-		Options: options.Index().
-			SetExpireAfterSeconds(60 * 5), // 5 分钟后过期
+	if err := dropConflictingTTLIndex(ctx, sessionCollection, sessionTTLIndexName, sessionTTLExpireSeconds); err != nil {
+		return fmt.Errorf("prepare session ttl index failed: %w", err)
 	}
 
-	fmt.Printf("Indexes ensured for %s\n", sessionCollection.Name())
+	indexModel := mongo.IndexModel{
+		Keys: bson.D{{Key: "last_seen", Value: 1}},
+		Options: options.Index().
+			SetName(sessionTTLIndexName).
+			SetExpireAfterSeconds(sessionTTLExpireSeconds), // 5 分钟后过期
+	}
 
-	_, err := sessionCollection.Indexes().CreateOne(ctx, indexModel)
-
+	name, err := sessionCollection.Indexes().CreateOne(ctx, indexModel)
 	if err != nil {
 		return fmt.Errorf("init session indexes failed: %w", err)
 	}
 
+	log.Printf("Indexes ensured for [%s]: [%s]\n", sessionCollection.Name(), name)
 	return nil
+}
+
+func dropConflictingTTLIndex(ctx context.Context, collection *mongo.Collection, indexName string, expireSeconds int32) error {
+	cursor, err := collection.Indexes().List(ctx)
+	if err != nil {
+		return err
+	}
+	defer cursor.Close(ctx)
+
+	for cursor.Next(ctx) {
+		var index bson.M
+		if err := cursor.Decode(&index); err != nil {
+			return err
+		}
+		if index["name"] != indexName {
+			continue
+		}
+
+		if indexTTLSeconds(index["expireAfterSeconds"]) == expireSeconds {
+			return nil
+		}
+
+		if _, err := collection.Indexes().DropOne(ctx, indexName); err != nil {
+			return err
+		}
+		log.Printf("Dropped conflicting TTL index [%s.%s]\n", collection.Name(), indexName)
+		return nil
+	}
+
+	return cursor.Err()
+}
+
+func indexTTLSeconds(value any) int32 {
+	switch v := value.(type) {
+	case int32:
+		return v
+	case int64:
+		return int32(v)
+	case int:
+		return int32(v)
+	case float64:
+		return int32(v)
+	default:
+		return -1
+	}
 }
 
 func InitAuthSessionIndexes(ctx context.Context, db *mongo.Database) error {

@@ -1,9 +1,15 @@
 SERVICES := api ws frontend
 
-.PHONY: help docker-build docker-push docker-release $(SERVICES:%=docker-build-%) $(SERVICES:%=docker-push-%) $(SERVICES:%=docker-release-%)
+.PHONY: help dev dev-api dev-ws dev-frontend docker-build docker-push docker-release $(SERVICES:%=docker-build-%) $(SERVICES:%=docker-push-%) $(SERVICES:%=docker-release-%)
 
 help:
-	@echo "d-im root docker targets"
+	@echo "d-im root targets"
+	@echo "  make dev                 Start API, WebSocket, and frontend dev servers"
+	@echo "  make dev-api             Start API dev server"
+	@echo "  make dev-ws              Start WebSocket dev server"
+	@echo "  make dev-frontend        Start frontend dev server"
+	@echo ""
+	@echo "Docker:"
 	@echo "  make docker-build        Build all service images"
 	@echo "  make docker-push         Push all service images"
 	@echo "  make docker-release      Build and push all service images"
@@ -16,6 +22,18 @@ help:
 	@echo "Optional variables:"
 	@echo "  IMAGE_TAG=<tag>"
 	@echo "  DOCKER_PLATFORM=linux/amd64"
+
+dev:
+	+@$(MAKE) -j3 dev-api dev-ws dev-frontend
+
+dev-api:
+	+@$(MAKE) -C im-backend dev-api
+
+dev-ws:
+	+@$(MAKE) -C im-backend dev-ws
+
+dev-frontend:
+	+@$(MAKE) -C im-frontend dev
 
 docker-build: $(SERVICES:%=docker-build-%)
 docker-push: $(SERVICES:%=docker-push-%)

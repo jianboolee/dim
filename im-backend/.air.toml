@@ -7,7 +7,7 @@ tmp_dir = "tmp"
   bin = "./tmp/unified-server"
   cmd = "go build -o ./tmp/unified-server ./cmd/server"
   delay = 1000
-  exclude_dir = ["assets", "tmp", "vendor", "testdata", "docs", "scripts", "xim-js-sdk"]
+  exclude_dir = ["assets", "bin", "logs", "tmp", "vendor", "testdata", "docs", "scripts", "xim-js-sdk"]
   exclude_file = []
   exclude_regex = ["_test.go"]
   exclude_unchanged = false
@@ -16,13 +16,13 @@ tmp_dir = "tmp"
   include_dir = []
   include_ext = ["go", "tpl", "tmpl", "html"]
   include_file = []
-  kill_delay = "0s"
+  kill_delay = "500ms"
   log = "build-errors.log"
   poll = false
   poll_interval = 0
   rerun = false
   rerun_delay = 500
-  send_interrupt = false
+  send_interrupt = true
   stop_on_root = false
 
 [color]
