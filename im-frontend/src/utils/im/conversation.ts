@@ -105,16 +105,21 @@ export function applyIncomingMessage(
 
   if (index === -1) {
     const created = buildConversationFromMessage(message, currentUserId)
-    if (activeConversationId && created.id === activeConversationId && message.to_id === currentUserId) {
+    if (activeConversationId && created.id === activeConversationId && message.from_id !== currentUserId) {
       created.user_states = { [currentUserId]: { unread_count: 0 } }
+      created.member_state = {
+        ...created.member_state,
+        status: created.member_state?.status ?? 'active',
+        last_read_seq: created.member_state?.last_read_seq ?? 0,
+        unread_count: 0,
+      }
     }
     return sortConversationsByActivity([created, ...conversations])
   }
 
   const existing = conversations[index]!
   const shouldIncrementUnread =
-    !isGroupConversation(existing) &&
-    message.to_id === currentUserId && existing.id !== activeConversationId
+    message.from_id !== currentUserId && existing.id !== activeConversationId
 
   const updated: Conversation = {
     ...existing,
