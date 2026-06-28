@@ -7,6 +7,7 @@ import VideoMessage from './VideoMessage.vue'
 import CardMessage from './CardMessage.vue'
 import MessageStatus from './MessageStatus.vue'
 import LinkMessage from './LinkMessage.vue'
+import SystemEventMessage from './SystemEventMessage.vue'
 
 export {
   TextMessage,
@@ -16,11 +17,12 @@ export {
   CardMessage,
   MessageStatus,
   LinkMessage,
+  SystemEventMessage,
 }
 
 export const MessageComponents: Partial<Record<MessageType, Component>> = {
   [MessageType.Text]: TextMessage,
-  [MessageType.SystemEvent]: TextMessage,
+  [MessageType.SystemEvent]: SystemEventMessage,
   [MessageType.Image]: ImageMessage,
   [MessageType.Audio]: AudioMessage,
   [MessageType.Video]: VideoMessage,

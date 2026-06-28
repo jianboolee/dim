@@ -262,7 +262,8 @@ const onIncomingMessage = async (message: Parameters<typeof handleIncomingMessag
     (id): id is string => Boolean(id) && id !== currentUserId.value,
   )
   await fetchUsers(peerIds)
-  handleIncomingMessage(message, props.activeConversationId || undefined)
+  await handleIncomingMessage(message, props.activeConversationId || undefined)
+  mergeConversationUsers(conversations.value)
 }
 
 const refresh = async () => {

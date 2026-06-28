@@ -98,12 +98,16 @@
           <div v-if="item.type === 'time'" class="message-time-divider">
             {{ item.text }}
           </div>
+          <SystemEventMessage
+            v-else-if="isSystemEventMessage(item.message)"
+            :message="item.message"
+          />
           <div
             v-else
             class="message-item"
             :class="{ 'message-mine': item.message.from_id === currentUserId }"
           >
-            <div class="message-avatar">
+            <div v-if="getMessageAvatar(item.message)" class="message-avatar">
               <img
                 :src="getMessageAvatar(item.message)"
                 alt=""
@@ -199,6 +203,7 @@ import MultilineInput from '@/components/im/MultilineInput.vue'
 import ConversationList from '@/components/im/ConversationList.vue'
 import ConversationSearchModal from '@/components/im/ConversationSearchModal.vue'
 import ConversationInfoDrawer from '@/components/im/ConversationInfoDrawer.vue'
+import SystemEventMessage from '@/components/im/SystemEventMessage.vue'
 import { usePageTitleNotification } from '@/composables/usePageTitleNotification'
 import { buildMessageTimeline } from '@/utils/im/timeline'
 import {
@@ -206,6 +211,7 @@ import {
   getPeerUserId,
   isGroupConversation as isGroupConversationModel,
 } from '@/utils/im/conversation'
+import { collectSystemEventUserIds } from '@/utils/im/systemEvent'
 import { readImageDimensions, getFileFormat } from '@/utils/file'
 import { uploadIMFile } from '@/utils/upload'
 
@@ -311,6 +317,21 @@ const getMessageAvatar = (message: ChatMessage) => {
     return userMap.value[message.from_id || '']?.avatar || ''
   }
   return targetUser.value?.avatar || ''
+}
+
+const isSystemEventMessage = (message: ChatMessage) => message.type === MessageType.SystemEvent
+
+const collectMessageUserIds = (items: ChatMessage[]) => {
+  const ids = new Set<string>()
+  for (const message of items) {
+    if (message.from_id) ids.add(message.from_id)
+    if (isSystemEventMessage(message)) {
+      for (const userId of collectSystemEventUserIds(message)) {
+        ids.add(userId)
+      }
+    }
+  }
+  return [...ids]
 }
 
 watch(pageTitle, (title) => {
@@ -532,8 +553,8 @@ const syncConversationByMessage = (message: ChatMessage, shouldScroll = false) =
 const handleNewMessage = async (message: ChatMessage) => {
   if (!isCurrentChatMessage(message)) return
 
-  if (isGroupConversation.value && message.from_id && message.from_id !== currentUserId.value) {
-    await fetchUser(message.from_id)
+  if (isGroupConversation.value) {
+    await fetchUsers(collectMessageUserIds([message]))
   }
   mergeMessages([message])
   syncConversationByMessage(message, message.from_id === currentUserId.value)
@@ -628,7 +649,7 @@ const fetchHistoryMessages = async (loadMore = false) => {
       (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime(),
     )
     if (isGroupConversation.value) {
-      await fetchUsers(newMessages.map((message) => message.from_id).filter(Boolean) as string[])
+      await fetchUsers(collectMessageUserIds(newMessages))
     }
 
     if (loadMore) {
@@ -695,7 +716,7 @@ const syncLatestMessages = async () => {
 
     mergeMessages(incoming)
     if (isGroupConversation.value) {
-      await fetchUsers(incoming.map((message) => message.from_id).filter(Boolean) as string[])
+      await fetchUsers(collectMessageUserIds(incoming))
     }
 
     await syncUnreadState()

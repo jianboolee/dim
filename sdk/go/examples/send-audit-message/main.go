@@ -15,7 +15,7 @@ import (
 )
 
 var FromUser = demo.USER_SYSTEM_AUDIT
-var ToUser = demo.USER_AUDIT
+var ToUser = demo.USER_AUDITOR
 
 type output struct {
 	ConversationID string      `json:"conversation_id"`

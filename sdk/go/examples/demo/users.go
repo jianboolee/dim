@@ -2,8 +2,8 @@ package demo
 
 import dim "d-im-go-sdk"
 
-var USER_AUDIT = dim.User{
-	ID:       "user_audit",
+var USER_AUDITOR = dim.User{
+	ID:       "user_auditor",
 	Nickname: "审核员",
 	Avatar:   "https://oss.21rv.com/uploads/avatar/6.jpg" + AvatarSuffix,
 }

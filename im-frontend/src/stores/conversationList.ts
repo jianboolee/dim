@@ -254,12 +254,18 @@ export const useConversationListStore = defineStore('conversationList', () => {
     return searchMorePromise
   }
 
-  function handleIncomingMessage(message: Message, activeConversationId?: string) {
+  async function handleIncomingMessage(message: Message, activeConversationId?: string) {
     const userId = currentUserId.value
     if (!userId) return
-    const knownConversation = message.conversation_id
+    let knownConversation = message.conversation_id
       ? conversations.value.some((conversation) => conversation.id === message.conversation_id)
       : false
+
+    if (!knownConversation && message.conversation_id) {
+      const conversation = await ensureConversationInList(message.conversation_id)
+      knownConversation = Boolean(conversation)
+    }
+
     if (!knownConversation && message.from_id !== userId && message.to_id !== userId) return
     conversations.value = applyIncomingMessage(
       conversations.value,
