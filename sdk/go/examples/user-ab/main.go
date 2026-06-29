@@ -40,26 +40,20 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	integrationClient := dim.NewIntegrationClient(dim.Config{
-		BaseURL: apiBase,
-		APIKey:  integrationKey,
-	})
-
-	session, err := integrationClient.CreateConversation(ctx, dim.IntegrationPrivateConversationRequest{
-		User:     User,
-		PeerUser: PeerUser,
-	})
+	imClient := dim.New(dim.WithBaseURL(apiBase), dim.WithAPIKey(integrationKey))
+	if err := imClient.EnsureUsers(ctx, User, PeerUser); err != nil {
+		log.Fatal(err)
+	}
+	session, err := imClient.Login(ctx, User.ID)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// 激活会话
-	userClient := dim.NewUserClient(dim.Config{
-		BaseURL: apiBase,
-		Token:   session.Token,
-	})
-
-	conversation, err := userClient.ActivateConversation(ctx, session.ConversationID)
+	conversation, err := session.Conversations().GetOrCreatePrivate(ctx, PeerUser.ID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	conversation, err = session.Conversations().Activate(ctx, conversation.ID)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -68,10 +62,10 @@ func main() {
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(output{
-		Token:          session.Token,
-		ExpiresIn:      session.ExpiresIn,
-		ConversationID: session.ConversationID,
-		RedirectURL:    session.RedirectURL,
+		Token:          session.Token(),
+		ExpiresIn:      session.ExpiresIn(),
+		ConversationID: conversation.ID,
+		RedirectURL:    session.RedirectURL(dim.WithConversationID(conversation.ID)),
 		Conversation:   *conversation,
 	}); err != nil {
 		log.Fatal(err)

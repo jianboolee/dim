@@ -21,16 +21,26 @@ WebSocket 使用：
 业务服务端入口使用 `X-Integration-Key`。
 
 ```http
+POST /im/api/integration/users
 POST /im/api/integration/login
-POST /im/api/integration/conversations
 ```
 
-创建或进入单聊的请求体：
+写入用户资料：
 
 ```json
 {
-  "user": {"id": "user_a", "nickname": "买家"},
-  "peer_user": {"id": "user_b", "nickname": "卖家"}
+  "users": [
+    {"id": "user_a", "nickname": "买家", "type": "normal"},
+    {"id": "system_order", "nickname": "订单消息", "type": "system"}
+  ]
+}
+```
+
+登录请求体：
+
+```json
+{
+  "user_id": "user_a"
 }
 ```
 
@@ -68,6 +78,7 @@ POST /im/api/conversations/:id/messages
 
 ```http
 POST   /im/api/groups
+POST   /im/api/groups/get-or-create
 GET    /im/api/groups/:id
 PATCH  /im/api/groups/:id
 GET    /im/api/groups/:id/members

@@ -2,32 +2,34 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
 
 	"d-im/internal/dto"
 	"d-im/internal/models"
+
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
+var ErrIntegrationUserNotFound = errors.New("integration user not found")
+
 type IntegrationService struct {
-	userService         *UserService
-	conversationService *ConversationService
-	authService         *AuthService
-	frontendBaseURL     string
+	userService     *UserService
+	authService     *AuthService
+	frontendBaseURL string
 }
 
 func NewIntegrationService(
 	userService *UserService,
-	conversationService *ConversationService,
 	authService *AuthService,
 	frontendBaseURL string,
 ) *IntegrationService {
 	return &IntegrationService{
-		userService:         userService,
-		conversationService: conversationService,
-		authService:         authService,
-		frontendBaseURL:     frontendBaseURL,
+		userService:     userService,
+		authService:     authService,
+		frontendBaseURL: frontendBaseURL,
 	}
 }
 
@@ -40,25 +42,64 @@ func (s *IntegrationService) buildEnterRedirectURL(token, conversationID string)
 	return redirectURL
 }
 
-func (s *IntegrationService) upsertIntegrationUser(ctx context.Context, input dto.IntegrationUserInput) error {
-	user := &models.User{
-		ID:       input.ID,
-		Nickname: input.ResolveNickname(),
-		Avatar:   input.ResolveAvatar(),
-		Type:     resolveUserType(input.ID, input.Type),
+func integrationUsersFromInputs(inputs []dto.IntegrationUserInput) ([]*models.User, error) {
+	merged := map[string]*models.User{}
+	order := make([]string, 0, len(inputs))
+
+	for _, input := range inputs {
+		id := strings.TrimSpace(input.ID)
+		if id == "" {
+			return nil, fmt.Errorf("user.id is required")
+		}
+		userType, err := resolveUserType(input.Type)
+		if err != nil {
+			return nil, fmt.Errorf("invalid user.type for %s: %w", id, err)
+		}
+
+		user, exists := merged[id]
+		if !exists {
+			user = &models.User{ID: id}
+			merged[id] = user
+			order = append(order, id)
+		}
+		if nickname := input.ResolveNickname(); nickname != "" {
+			user.Nickname = nickname
+		}
+		if avatar := input.ResolveAvatar(); avatar != "" {
+			user.Avatar = avatar
+		}
+		if userType != "" {
+			user.Type = userType
+		}
 	}
-	return s.userService.UpsertUsers(ctx, user)
+
+	users := make([]*models.User, 0, len(order))
+	for _, id := range order {
+		users = append(users, merged[id])
+	}
+	return users, nil
 }
 
-// resolveUserType 根据显式传入或 ID 前缀推断用户类型
-func resolveUserType(userID, explicitType string) models.UserType {
-	if t := models.UserType(strings.TrimSpace(explicitType)); t != "" {
-		return t
+func resolveUserType(explicitType string) (models.UserType, error) {
+	switch t := models.UserType(strings.TrimSpace(explicitType)); t {
+	case "", models.UserTypeNormal:
+		return models.UserTypeNormal, nil
+	case models.UserTypeSystem, models.UserTypeBot:
+		return t, nil
+	default:
+		return "", fmt.Errorf("must be normal, system, or bot")
 	}
-	if strings.HasPrefix(userID, "system_") {
-		return models.UserTypeSystem
+}
+
+func (s *IntegrationService) EnsureUsers(ctx context.Context, req *dto.IntegrationEnsureUsersRequest) error {
+	if req == nil || len(req.Users) == 0 {
+		return fmt.Errorf("users is required")
 	}
-	return ""
+	users, err := integrationUsersFromInputs(req.Users)
+	if err != nil {
+		return err
+	}
+	return s.userService.UpsertUsers(ctx, users...)
 }
 
 func deviceMetaFromInput(input dto.DeviceInput) DeviceMeta {
@@ -76,15 +117,18 @@ func (s *IntegrationService) CreateLoginSession(
 	ctx context.Context,
 	req *dto.IntegrationLoginRequest,
 ) (*dto.IntegrationLoginResponse, error) {
-	if strings.TrimSpace(req.User.ID) == "" {
-		return nil, fmt.Errorf("user.id is required")
+	userID := strings.TrimSpace(req.UserID)
+	if userID == "" {
+		return nil, fmt.Errorf("user_id is required")
+	}
+	if _, err := s.userService.GetUserInfo(ctx, userID); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, ErrIntegrationUserNotFound
+		}
+		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	if err := s.upsertIntegrationUser(ctx, req.User); err != nil {
-		return nil, fmt.Errorf("failed to upsert user: %w", err)
-	}
-
-	session, err := s.authService.CreateSession(ctx, req.User.ID, deviceMetaFromInput(req.Device))
+	session, err := s.authService.CreateSession(ctx, userID, deviceMetaFromInput(req.Device))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create auth session: %w", err)
 	}
@@ -95,51 +139,5 @@ func (s *IntegrationService) CreateLoginSession(
 		RefreshToken: session.RefreshToken,
 		SessionID:    session.SessionID,
 		RedirectURL:  s.buildEnterRedirectURL(session.AccessToken, ""),
-	}, nil
-}
-
-func (s *IntegrationService) CreateConversationSession(
-	ctx context.Context,
-	req *dto.IntegrationPrivateConversationRequest,
-) (*dto.IntegrationCreateConversationResponse, error) {
-	if req.User.ID == req.PeerUser.ID {
-		return nil, fmt.Errorf("user and peer_user must be different")
-	}
-
-	users := []*models.User{
-		{
-			ID:       req.User.ID,
-			Nickname: req.User.ResolveNickname(),
-			Avatar:   req.User.ResolveAvatar(),
-			Type:     resolveUserType(req.User.ID, req.User.Type),
-		},
-		{
-			ID:       req.PeerUser.ID,
-			Nickname: req.PeerUser.ResolveNickname(),
-			Avatar:   req.PeerUser.ResolveAvatar(),
-			Type:     resolveUserType(req.PeerUser.ID, req.PeerUser.Type),
-		},
-	}
-	if err := s.userService.UpsertUsers(ctx, users...); err != nil {
-		return nil, fmt.Errorf("failed to upsert users: %w", err)
-	}
-
-	conversation, err := s.conversationService.GetOrCreatePrivateConversation(ctx, req.User.ID, req.PeerUser.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create conversation: %w", err)
-	}
-
-	session, err := s.authService.CreateSession(ctx, req.User.ID, deviceMetaFromInput(req.Device))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create auth session: %w", err)
-	}
-
-	return &dto.IntegrationCreateConversationResponse{
-		Token:          session.AccessToken,
-		ExpiresIn:      session.AccessExpiresIn,
-		RefreshToken:   session.RefreshToken,
-		SessionID:      session.SessionID,
-		ConversationID: conversation.ID.Hex(),
-		RedirectURL:    s.buildEnterRedirectURL(session.AccessToken, conversation.ID.Hex()),
 	}, nil
 }

@@ -74,7 +74,6 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 	}, cfg.JWT.MaxActiveSessions)
 	integrationService := service.NewIntegrationService(
 		userService,
-		conversationService,
 		authService,
 		cfg.App.FrontendBaseURL,
 	)

@@ -19,6 +19,8 @@ type Group struct {
 	Name           string             `bson:"name" json:"name"`
 	AvatarURL      string             `bson:"avatar_url,omitempty" json:"avatar_url,omitempty"`
 	OwnerID        string             `bson:"owner_id" json:"owner_id"`
+	ScopeUserID    string             `bson:"scope_user_id,omitempty" json:"scope_user_id,omitempty"`
+	UniqueKey      string             `bson:"unique_key,omitempty" json:"unique_key,omitempty"`
 	MemberCount    int                `bson:"member_count" json:"member_count"`
 	Status         GroupStatus        `bson:"status" json:"status"`
 	CreatedAt      time.Time          `bson:"created_at" json:"created_at"`

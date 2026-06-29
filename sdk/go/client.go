@@ -20,6 +20,12 @@ type Config struct {
 	HTTPClient *http.Client
 }
 
+type Option func(*Config)
+
+type Client struct {
+	client *client
+}
+
 type client struct {
 	baseURL    string
 	apiKey     string
@@ -44,6 +50,41 @@ func newClient(cfg Config) *client {
 		apiKey:     cfg.APIKey,
 		token:      cfg.Token,
 		httpClient: httpClient,
+	}
+}
+
+func New(options ...Option) *Client {
+	var cfg Config
+	for _, option := range options {
+		option(&cfg)
+	}
+	return &Client{client: newClient(cfg)}
+}
+
+func WithBaseURL(baseURL string) Option {
+	return func(cfg *Config) {
+		cfg.BaseURL = baseURL
+	}
+}
+
+func WithAPIKey(apiKey string) Option {
+	return func(cfg *Config) {
+		cfg.APIKey = apiKey
+	}
+}
+
+func WithHTTPClient(httpClient *http.Client) Option {
+	return func(cfg *Config) {
+		cfg.HTTPClient = httpClient
+	}
+}
+
+func (c *client) withToken(token string) *client {
+	return &client{
+		baseURL:    c.baseURL,
+		apiKey:     c.apiKey,
+		token:      token,
+		httpClient: c.httpClient,
 	}
 }
 

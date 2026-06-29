@@ -8,25 +8,29 @@ This module is intentionally outside `im-backend`. It must not import backend
 ## Example
 
 ```go
-integrationClient := dim.NewIntegrationClient(dim.Config{
-    BaseURL: "http://localhost:8901",
-    APIKey:  "change-me-integration-key",
-})
+imClient := dim.New(
+    dim.WithBaseURL("http://localhost:8901"),
+    dim.WithAPIKey("change-me-integration-key"),
+)
 
-session, err := integrationClient.CreateConversation(ctx, dim.IntegrationPrivateConversationRequest{
-    User:     dim.User{ID: "user_a", Nickname: "Alice"},
-    PeerUser: dim.User{ID: "user_b", Nickname: "Bob"},
-})
+if err := imClient.EnsureUsers(ctx,
+    dim.UserInput{ID: "user_a", Nickname: "Alice"},
+    dim.UserInput{ID: "user_b", Nickname: "Bob"},
+); err != nil {
+    return err
+}
+
+session, err := imClient.Login(ctx, "user_a")
 if err != nil {
     return err
 }
 
-userClient := dim.NewUserClient(dim.Config{
-    BaseURL: "http://localhost:8901",
-    Token:   session.Token,
-})
+conv, err := session.Conversations().GetOrCreatePrivate(ctx, "user_b")
+if err != nil {
+    return err
+}
 
-_, err = userClient.SendTextMessage(ctx, session.ConversationID, "hello")
+_, err = session.Messages().Send(ctx, conv.ID, dim.NewMessage(dim.TextMessage("hello")))
 ```
 
 ## Seed Example

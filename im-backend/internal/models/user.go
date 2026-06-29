@@ -17,7 +17,7 @@ const (
 	UserTypeBot    UserType = "bot"    // 机器人/客服（可回复）
 )
 
-// IsSystemLike 判断是否为系统类用户（system 或 bot），用于前端隐藏输入框等
+// IsSystemLike 判断是否为服务端托管账号（system 或 bot），用于限制实时客户端连接。
 func (t UserType) IsSystemLike() bool {
 	return t == UserTypeSystem || t == UserTypeBot
 }

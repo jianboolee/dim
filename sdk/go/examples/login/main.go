@@ -30,14 +30,15 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	integrationClient := dim.NewIntegrationClient(dim.Config{
-		BaseURL: strings.TrimRight(apiBase, "/"),
-		APIKey:  integrationKey,
-	})
+	imClient := dim.New(
+		dim.WithBaseURL(strings.TrimRight(apiBase, "/")),
+		dim.WithAPIKey(integrationKey),
+	)
 
-	session, err := integrationClient.Login(ctx, dim.LoginRequest{
-		User: LOGIN_USER,
-	})
+	if err := imClient.EnsureUser(ctx, LOGIN_USER); err != nil {
+		log.Fatal(err)
+	}
+	session, err := imClient.Login(ctx, LOGIN_USER.ID)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -45,7 +46,14 @@ func main() {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(session); err != nil {
+	if err := encoder.Encode(map[string]any{
+		"token":         session.Token(),
+		"user_id":       session.UserID(),
+		"session_id":    session.SessionID(),
+		"expires_in":    session.ExpiresIn(),
+		"redirect_url":  session.RedirectURL(),
+		"refresh_token": session.RefreshToken(),
+	}); err != nil {
 		log.Fatal(err)
 	}
 }

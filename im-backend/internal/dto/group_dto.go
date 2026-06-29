@@ -9,9 +9,11 @@ import (
 )
 
 type GroupCreateRequest struct {
-	Name      string   `json:"name"`
-	AvatarURL string   `json:"avatar_url,omitempty"`
-	MemberIDs []string `json:"member_ids,omitempty"`
+	Name        string   `json:"name"`
+	AvatarURL   string   `json:"avatar_url,omitempty"`
+	MemberIDs   []string `json:"member_ids,omitempty"`
+	UniqueKey   string   `json:"unique_key,omitempty"`
+	ScopeUserID string   `json:"scope_user_id,omitempty"`
 }
 
 type GroupUpdateRequest struct {
@@ -33,6 +35,8 @@ type GroupDTO struct {
 	Name           string             `json:"name"`
 	AvatarURL      string             `json:"avatar_url,omitempty"`
 	OwnerID        string             `json:"owner_id"`
+	ScopeUserID    string             `json:"scope_user_id,omitempty"`
+	UniqueKey      string             `json:"unique_key,omitempty"`
 	MemberCount    int                `json:"member_count"`
 	Status         models.GroupStatus `json:"status"`
 	CreatedAt      time.Time          `json:"created_at"`
@@ -81,6 +85,8 @@ func ConvertToGroupDTO(group *models.Group) *GroupDTO {
 		Name:           group.Name,
 		AvatarURL:      group.AvatarURL,
 		OwnerID:        group.OwnerID,
+		ScopeUserID:    group.ScopeUserID,
+		UniqueKey:      group.UniqueKey,
 		MemberCount:    group.MemberCount,
 		Status:         group.Status,
 		CreatedAt:      group.CreatedAt,

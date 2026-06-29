@@ -37,41 +37,36 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	integrationClient := dim.NewIntegrationClient(dim.Config{
-		BaseURL: apiBase,
-		APIKey:  integrationKey,
-	})
-
-	session, err := integrationClient.CreateConversation(ctx, dim.IntegrationPrivateConversationRequest{
-		User:     User,
-		PeerUser: PeerUser,
-	})
+	imClient := dim.New(dim.WithBaseURL(apiBase), dim.WithAPIKey(integrationKey))
+	if err := imClient.EnsureUsers(ctx, User, PeerUser); err != nil {
+		log.Fatal(err)
+	}
+	session, err := imClient.Login(ctx, User.ID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	conversation, err := session.Conversations().GetOrCreatePrivate(ctx, PeerUser.ID)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	userClient := dim.NewUserClient(dim.Config{
-		BaseURL: apiBase,
-		Token:   session.Token,
-	})
-
 	// var payload = dim.Payload{
 	// 	Title:       "租车订单已提交，等待商家确认",
 	// 	Description: "您的租车订单已成功提交，请耐心等待商家确认。商家确认后我们将第一时间通知您。",
-	// 	ImageURL:    "https://img02.wanfangche.com/uploads/im/images/20260628/bqks3c09hnp9lms7z264xahx533m7fhr.jpg?x-oss-process=image/resize,w_960,m_lfit",
+	// 	ImageURL:    "https://img01.wanfangche.com/uploads/im/images/20260628/bqks3c09hnp9lms7z264xahx533m7fhr.jpg?x-oss-process=image/resize,w_960,m_lfit",
 	// 	URL:         "https://www.example.com/order/detail",
 	// 	PriceText:   "待确认",
 	// }
 
-	var payload = dim.Payload{
+	card := dim.CardInput{
 		Title:       "[租车]商家已确认",
 		Description: "您的租车订单商家已确认。",
-		ImageURL:    "https://img02.wanfangche.com/uploads/im/images/20260629/qsj3rve45p0rqcckj0x7byyinywolyw2.jpg?x-oss-process=image/resize,w_960,m_lfit",
+		ImageURL:    "https://img01.wanfangche.com/uploads/im/images/20260629/qsj3rve45p0rqcckj0x7byyinywolyw2.jpg?x-oss-process=image/resize,w_960,m_lfit",
 		URL:         "https://www.example.com/order/detail",
 		PriceText:   "￥899元/天起",
 	}
 
-	message, err := userClient.SendCardMessage(ctx, session.ConversationID, payload)
+	message, err := session.Messages().Send(ctx, conversation.ID, dim.NewMessage(dim.CardMessage(card)))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -80,7 +75,7 @@ func main() {
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(output{
-		ConversationID: session.ConversationID,
+		ConversationID: conversation.ID,
 		Message:        *message,
 	}); err != nil {
 		log.Fatal(err)

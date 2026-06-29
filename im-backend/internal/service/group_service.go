@@ -20,12 +20,13 @@ import (
 const maxGroupMembers = 500
 
 var (
-	ErrGroupNotFound         = errors.New("group not found")
-	ErrGroupDissolved        = errors.New("group dissolved")
-	ErrGroupAccessDenied     = errors.New("group access denied")
-	ErrGroupPermissionDenied = errors.New("group permission denied")
-	ErrGroupMemberLimit      = errors.New("group member limit exceeded")
-	ErrGroupOwnerRequired    = errors.New("group owner required")
+	ErrGroupNotFound          = errors.New("group not found")
+	ErrGroupDissolved         = errors.New("group dissolved")
+	ErrGroupAccessDenied      = errors.New("group access denied")
+	ErrGroupPermissionDenied  = errors.New("group permission denied")
+	ErrGroupMemberLimit       = errors.New("group member limit exceeded")
+	ErrGroupOwnerRequired     = errors.New("group owner required")
+	ErrGroupUniqueKeyRequired = errors.New("group unique_key required")
 )
 
 type GroupService struct {
@@ -56,9 +57,39 @@ func NewGroupService(
 }
 
 func (s *GroupService) CreateGroup(ctx context.Context, creatorID string, req dto.GroupCreateRequest) (*dto.GroupDetailResponse, error) {
+	return s.createGroup(ctx, creatorID, req)
+}
+
+func (s *GroupService) GetOrCreateGroup(ctx context.Context, creatorID string, req dto.GroupCreateRequest) (*dto.GroupDetailResponse, error) {
+	uniqueKey := strings.TrimSpace(req.UniqueKey)
+	if uniqueKey == "" {
+		return nil, ErrGroupUniqueKeyRequired
+	}
+	scopeUserID := strings.TrimSpace(req.ScopeUserID)
+	if scopeUserID == "" {
+		scopeUserID = creatorID
+	}
+
+	if group, err := s.groupRepo.GetActiveByUniqueKey(ctx, scopeUserID, uniqueKey); err == nil {
+		return s.GetGroup(ctx, group.ID, creatorID)
+	} else if err != mongo.ErrNoDocuments {
+		return nil, err
+	}
+
+	req.UniqueKey = uniqueKey
+	req.ScopeUserID = scopeUserID
+	return s.createGroup(ctx, creatorID, req)
+}
+
+func (s *GroupService) createGroup(ctx context.Context, creatorID string, req dto.GroupCreateRequest) (*dto.GroupDetailResponse, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		name = "群聊"
+	}
+	uniqueKey := strings.TrimSpace(req.UniqueKey)
+	scopeUserID := strings.TrimSpace(req.ScopeUserID)
+	if uniqueKey != "" && scopeUserID == "" {
+		scopeUserID = creatorID
 	}
 
 	groupID := primitive.NewObjectID()
@@ -77,6 +108,8 @@ func (s *GroupService) CreateGroup(ctx context.Context, creatorID string, req dt
 		Name:           name,
 		AvatarURL:      strings.TrimSpace(req.AvatarURL),
 		OwnerID:        creatorID,
+		ScopeUserID:    scopeUserID,
+		UniqueKey:      uniqueKey,
 		MemberCount:    len(memberIDs),
 		Status:         models.GroupStatusActive,
 	})

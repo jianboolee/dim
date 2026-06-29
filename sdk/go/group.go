@@ -3,12 +3,56 @@ package dim
 import (
 	"context"
 	"net/http"
+	"net/url"
 )
 
-func (c *UserClient) CreateGroup(ctx context.Context, req CreateGroupRequest) (*GroupDetailResponse, error) {
+type GroupService struct {
+	client *client
+}
+
+func (s *GroupService) Create(ctx context.Context, req CreateGroupRequest) (*GroupDetailResponse, error) {
 	var out GroupDetailResponse
-	if err := c.client.do(ctx, http.MethodPost, "/im/api/groups", req, &out); err != nil {
+	if err := s.client.do(ctx, http.MethodPost, "/im/api/groups", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
+}
+
+func (s *GroupService) GetOrCreate(ctx context.Context, req GetOrCreateGroupParams) (*GroupDetailResponse, error) {
+	var out GroupDetailResponse
+	if err := s.client.do(ctx, http.MethodPost, "/im/api/groups/get-or-create", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (s *GroupService) Detail(ctx context.Context, groupID string) (*GroupDetailResponse, error) {
+	var out GroupDetailResponse
+	if err := s.client.do(ctx, http.MethodGet, "/im/api/groups/"+url.PathEscape(groupID), nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (s *GroupService) Invite(ctx context.Context, groupID string, userIDs []string) (*GroupDetailResponse, error) {
+	var out GroupDetailResponse
+	req := struct {
+		UserIDs []string `json:"user_ids"`
+	}{UserIDs: userIDs}
+	if err := s.client.do(ctx, http.MethodPost, "/im/api/groups/"+url.PathEscape(groupID)+"/members", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (s *GroupService) Kick(ctx context.Context, groupID string, userID string) (*GroupDetailResponse, error) {
+	var out GroupDetailResponse
+	if err := s.client.do(ctx, http.MethodDelete, "/im/api/groups/"+url.PathEscape(groupID)+"/members/"+url.PathEscape(userID), nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (s *GroupService) Leave(ctx context.Context, groupID string) error {
+	return s.client.do(ctx, http.MethodPost, "/im/api/groups/"+url.PathEscape(groupID)+"/leave", nil, nil)
 }

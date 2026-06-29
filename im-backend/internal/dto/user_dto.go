@@ -1,22 +1,18 @@
 package dto
 
-import (
-	"strings"
-
-	"d-im/internal/models"
-)
+import "d-im/internal/models"
 
 type UserInfoDto struct {
-	ID       string           `json:"id"`
-	Nickname string           `json:"nickname"`
-	Avatar   string           `json:"avatar"`
-	Type     models.UserType  `json:"type,omitempty"`
+	ID       string          `json:"id"`
+	Nickname string          `json:"nickname"`
+	Avatar   string          `json:"avatar"`
+	Type     models.UserType `json:"type,omitempty"`
 }
 
 func ConvertToUserInfoDto(user *models.User) *UserInfoDto {
 	t := user.Type
-	if t == "" && strings.HasPrefix(user.ID, "system_") {
-		t = models.UserTypeSystem
+	if t == "" {
+		t = models.UserTypeNormal
 	}
 	return &UserInfoDto{
 		ID:       user.ID,

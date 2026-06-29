@@ -58,6 +58,19 @@ func (r *GroupRepository) GetByConversationID(ctx context.Context, conversationI
 	return &group, nil
 }
 
+func (r *GroupRepository) GetActiveByUniqueKey(ctx context.Context, scopeUserID string, uniqueKey string) (*models.Group, error) {
+	var group models.Group
+	err := r.collection.FindOne(ctx, bson.M{
+		"scope_user_id": scopeUserID,
+		"unique_key":    uniqueKey,
+		"status":        models.GroupStatusActive,
+	}).Decode(&group)
+	if err != nil {
+		return nil, err
+	}
+	return &group, nil
+}
+
 func (r *GroupRepository) Update(ctx context.Context, id primitive.ObjectID, update bson.M) error {
 	if update == nil {
 		return errors.New("update data cannot be nil")

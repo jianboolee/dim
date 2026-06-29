@@ -40,7 +40,7 @@ func SetupAPI(
 	integration := im.Group("/api/integration")
 	integration.Use(integrationAPIKeyMiddleware)
 	{
-		integration.POST("/conversations", integrationHandler.CreateConversation)
+		integration.POST("/users", integrationHandler.EnsureUsers)
 		integration.POST("/login", integrationHandler.Login)
 	}
 
@@ -66,6 +66,7 @@ func SetupAPI(
 		api.GET("/conversations/:id", conversationHandler.GetConversation)
 
 		api.POST("/groups", groupHandler.CreateGroup)
+		api.POST("/groups/get-or-create", groupHandler.GetOrCreateGroup)
 		api.GET("/groups/:id", groupHandler.GetGroup)
 		api.PATCH("/groups/:id", groupHandler.UpdateGroup)
 		api.GET("/groups/:id/members", groupHandler.GetMembers)

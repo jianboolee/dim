@@ -40,30 +40,18 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	integrationClient := dim.NewIntegrationClient(dim.Config{
-		BaseURL: apiBase,
-		APIKey:  integrationKey,
-	})
-
-	// integration login 会 upsert 用户；这里先确保审核机器人、USER_A、USER_B 都存在。
-	botSession, err := integrationClient.Login(ctx, dim.LoginRequest{User: AuditBot})
+	imClient := dim.New(dim.WithBaseURL(apiBase), dim.WithAPIKey(integrationKey))
+	if err := imClient.EnsureUsers(ctx, AuditBot, demo.USER_A, demo.USER_B); err != nil {
+		log.Fatal(err)
+	}
+	botSession, err := imClient.Login(ctx, AuditBot.ID)
 	if err != nil {
 		log.Fatalf("login audit bot: %v", err)
 	}
-	if _, err := integrationClient.Login(ctx, dim.LoginRequest{User: demo.USER_A}); err != nil {
-		log.Fatalf("upsert user A: %v", err)
-	}
-	if _, err := integrationClient.Login(ctx, dim.LoginRequest{User: demo.USER_B}); err != nil {
-		log.Fatalf("upsert user B: %v", err)
-	}
 
-	userClient := dim.NewUserClient(dim.Config{
-		BaseURL: apiBase,
-		Token:   botSession.Token,
-	})
-
-	group, err := userClient.CreateGroup(ctx, dim.CreateGroupRequest{
-		Name: groupName,
+	group, err := botSession.Groups().GetOrCreate(ctx, dim.GetOrCreateGroupParams{
+		UniqueKey: "content_audit",
+		Name:      groupName,
 		MemberIDs: []string{
 			demo.USER_A.ID,
 			demo.USER_B.ID,
@@ -76,7 +64,7 @@ func main() {
 		log.Fatal("create group response missing group")
 	}
 
-	message, err := userClient.SendTextMessage(ctx, group.Group.ConversationID, auditMessageContent())
+	message, err := botSession.Messages().Send(ctx, group.Group.ConversationID, dim.NewMessage(dim.TextMessage(auditMessageContent())))
 	if err != nil {
 		log.Fatal(err)
 	}

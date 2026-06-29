@@ -35,6 +35,21 @@ func (h *GroupHandler) CreateGroup(c *gin.Context) {
 	response.Success(c, "success", result)
 }
 
+func (h *GroupHandler) GetOrCreateGroup(c *gin.Context) {
+	var req dto.GroupCreateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request body")
+		return
+	}
+
+	result, err := h.groupService.GetOrCreateGroup(c.Request.Context(), contextx.MustGetUserID(c), req)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	response.Success(c, "success", result)
+}
+
 func (h *GroupHandler) GetGroup(c *gin.Context) {
 	groupID, ok := parseGroupID(c)
 	if !ok {
@@ -173,6 +188,8 @@ func (h *GroupHandler) handleError(c *gin.Context, err error) {
 		response.Forbidden(c, "Permission denied")
 	case errors.Is(err, service.ErrGroupMemberLimit):
 		response.BadRequest(c, "Group member limit exceeded")
+	case errors.Is(err, service.ErrGroupUniqueKeyRequired):
+		response.BadRequest(c, "unique_key is required")
 	default:
 		response.InternalServerError(c, err.Error())
 	}

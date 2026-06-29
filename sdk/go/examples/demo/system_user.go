@@ -2,29 +2,27 @@
 //
 // 本文件定义了系统默认用户（System User），用于业务系统向指定用户
 // 发送系统级消息（如通知、提醒、客服等场景）。
-// 系统用户与普通用户一样通过 integration 接口创建会话、发送消息，
-// 其 user ID 均以 "system_" 为前缀，便于前端识别与区分展示。
+// 系统用户通过 EnsureUser 写入资料，再通过 Login 获取服务端操作会话。
+// 用户类型必须显式传入，不能依赖 "system_" ID 前缀推断。
 //
 // 使用方法：
 //
 //	// 以系统通知身份向用户 Alice 发送文本消息
-//	integrationClient.CreateConversation(ctx, dim.IntegrationPrivateConversationRequest{
-//	    User:     demo.USER_SYSTEM_NOTICE,
-//	    PeerUser: demo.USER_A,
-//	})
+//	imClient.EnsureUsers(ctx, demo.USER_SYSTEM_NOTICE, demo.USER_A)
+//	session, _ := imClient.Login(ctx, demo.USER_SYSTEM_NOTICE.ID)
+//	conv, _ := session.Conversations().GetOrCreatePrivate(ctx, demo.USER_A.ID)
+//	session.Messages().Send(ctx, conv.ID, dim.NewMessage(dim.TextMessage("通知内容")))
 //
 //	// 以系统订单身份向用户 Alice 发送卡片消息
-//	session, _ := integrationClient.CreateConversation(ctx, dim.IntegrationPrivateConversationRequest{
-//	    User:     demo.USER_SYSTEM_ORDER,
-//	    PeerUser: demo.USER_A,
-//	})
-//	userClient := dim.NewUserClient(dim.Config{BaseURL: apiBase, Token: session.Token})
-//	userClient.SendCardMessage(ctx, session.ConversationID, dim.Payload{
+//	imClient.EnsureUsers(ctx, demo.USER_SYSTEM_ORDER, demo.USER_A)
+//	session, _ := imClient.Login(ctx, demo.USER_SYSTEM_ORDER.ID)
+//	conv, _ := session.Conversations().GetOrCreatePrivate(ctx, demo.USER_A.ID)
+//	session.Messages().Send(ctx, conv.ID, dim.NewMessage(dim.CardMessage(dim.CardInput{
 //	    Title:       "订单已发货",
 //	    Description: "您的订单已由顺丰快递发出，运单号：SF1234567890",
 //	    ImageURL:    "https://img.example.com/order.jpg",
 //	    URL:         "https://example.com/order/123",
-//	})
+//	})))
 //
 // 系统用户 ID 列表及用途说明：
 //
@@ -50,7 +48,7 @@ const AvatarSuffix = "?x-oss-process=image/resize,m_fill,w_200,h_200"
 var USER_SYSTEM_NOTICE = dim.User{
 	ID:       "system_notice",
 	Nickname: "系统通知",
-	Avatar:   "https://img02.wanfangche.com/uploads/avatar/21.jpg" + AvatarSuffix,
+	Avatar:   "https://img01.wanfangche.com/uploads/avatar/21.jpg" + AvatarSuffix,
 	Type:     "system",
 }
 
@@ -58,7 +56,7 @@ var USER_SYSTEM_NOTICE = dim.User{
 var USER_SYSTEM_OPS = dim.User{
 	ID:       "system_ops",
 	Nickname: "系统运维",
-	Avatar:   "https://img02.wanfangche.com/uploads/avatar/23.jpg" + AvatarSuffix,
+	Avatar:   "https://img01.wanfangche.com/uploads/avatar/23.jpg" + AvatarSuffix,
 	Type:     "system",
 }
 
@@ -68,7 +66,7 @@ var USER_SYSTEM_OPS = dim.User{
 var USER_SYSTEM_ORDER = dim.User{
 	ID:       "system_order",
 	Nickname: "订单消息",
-	Avatar:   "https://img02.wanfangche.com/uploads/avatar/22.jpg" + AvatarSuffix,
+	Avatar:   "https://img01.wanfangche.com/uploads/avatar/22.jpg" + AvatarSuffix,
 	Type:     "system",
 }
 
@@ -76,7 +74,7 @@ var USER_SYSTEM_ORDER = dim.User{
 var USER_SYSTEM_PAYMENT = dim.User{
 	ID:       "system_payment",
 	Nickname: "支付消息",
-	Avatar:   "https://img02.wanfangche.com/uploads/avatar/27.jpg" + AvatarSuffix,
+	Avatar:   "https://img01.wanfangche.com/uploads/avatar/27.jpg" + AvatarSuffix,
 	Type:     "system",
 }
 
@@ -84,7 +82,7 @@ var USER_SYSTEM_PAYMENT = dim.User{
 var USER_SYSTEM_LOGISTICS = dim.User{
 	ID:       "system_logistics",
 	Nickname: "物流消息",
-	Avatar:   "https://img02.wanfangche.com/uploads/avatar/28.jpg" + AvatarSuffix,
+	Avatar:   "https://img01.wanfangche.com/uploads/avatar/28.jpg" + AvatarSuffix,
 	Type:     "system",
 }
 
@@ -94,7 +92,7 @@ var USER_SYSTEM_LOGISTICS = dim.User{
 var USER_SYSTEM_INTERACTION = dim.User{
 	ID:       "system_interaction",
 	Nickname: "互动消息",
-	Avatar:   "https://img02.wanfangche.com/uploads/avatar/24.jpg" + AvatarSuffix,
+	Avatar:   "https://img01.wanfangche.com/uploads/avatar/24.jpg" + AvatarSuffix,
 	Type:     "system",
 }
 
@@ -104,7 +102,7 @@ var USER_SYSTEM_INTERACTION = dim.User{
 var USER_SYSTEM_SERVICE = dim.User{
 	ID:       "system_service",
 	Nickname: "客服消息",
-	Avatar:   "https://img02.wanfangche.com/uploads/avatar/29.jpg" + AvatarSuffix,
+	Avatar:   "https://img01.wanfangche.com/uploads/avatar/29.jpg" + AvatarSuffix,
 	Type:     "bot",
 }
 
@@ -112,7 +110,7 @@ var USER_SYSTEM_SERVICE = dim.User{
 var USER_SYSTEM_REMINDER = dim.User{
 	ID:       "system_reminder",
 	Nickname: "提醒通知",
-	Avatar:   "https://img02.wanfangche.com/uploads/avatar/30.jpg" + AvatarSuffix,
+	Avatar:   "https://img01.wanfangche.com/uploads/avatar/30.jpg" + AvatarSuffix,
 	Type:     "system",
 }
 
@@ -120,7 +118,7 @@ var USER_SYSTEM_REMINDER = dim.User{
 var USER_SYSTEM_AUDIT = dim.User{
 	ID:       "system_audit",
 	Nickname: "审核消息",
-	Avatar:   "https://img02.wanfangche.com/uploads/avatar/23.jpg" + AvatarSuffix,
+	Avatar:   "https://img01.wanfangche.com/uploads/avatar/23.jpg" + AvatarSuffix,
 	Type:     "bot",
 }
 
@@ -130,6 +128,6 @@ var USER_SYSTEM_AUDIT = dim.User{
 var USER_SYSTEM_REPORT = dim.User{
 	ID:       "system_report",
 	Nickname: "数据报告",
-	Avatar:   "https://img02.wanfangche.com/uploads/avatar/32.jpg" + AvatarSuffix,
+	Avatar:   "https://img01.wanfangche.com/uploads/avatar/32.jpg" + AvatarSuffix,
 	Type:     "system",
 }

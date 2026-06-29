@@ -38,27 +38,22 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	integrationClient := dim.NewIntegrationClient(dim.Config{
-		BaseURL: apiBase,
-		APIKey:  integrationKey,
-	})
-
-	session, err := integrationClient.CreateConversation(ctx, dim.IntegrationPrivateConversationRequest{
-		User:     User,
-		PeerUser: PeerUser,
-	})
+	imClient := dim.New(dim.WithBaseURL(apiBase), dim.WithAPIKey(integrationKey))
+	if err := imClient.EnsureUsers(ctx, User, PeerUser); err != nil {
+		log.Fatal(err)
+	}
+	session, err := imClient.Login(ctx, User.ID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	conversation, err := session.Conversations().GetOrCreatePrivate(ctx, PeerUser.ID)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	userClient := dim.NewUserClient(dim.Config{
-		BaseURL: apiBase,
-		Token:   session.Token,
-	})
-
 	content := fmt.Sprintf("你好啊~, 当前时间是: %s", time.Now().Format("2006-01-02 15:04:05"))
 
-	message, err := userClient.SendTextMessage(ctx, session.ConversationID, content)
+	message, err := session.Messages().Send(ctx, conversation.ID, dim.NewMessage(dim.TextMessage(content)))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -67,7 +62,7 @@ func main() {
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(output{
-		ConversationID: session.ConversationID,
+		ConversationID: conversation.ID,
 		Message:        *message,
 	}); err != nil {
 		log.Fatal(err)

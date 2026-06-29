@@ -230,25 +230,24 @@ _, err = session.Messages().Send(ctx, conv.ID, im.TextMessage("内容已审核�
 ```go
 func (s *MessageService) Send(ctx context.Context, conversationID string, msg MessageInput) (*Message, error)
 
-func TextMessage(content string) MessageInput
-func CardMessage(input CardInput) MessageInput
-func ImageMessage(url string) MessageInput
-func VideoMessage(url string) MessageInput
-func AudioMessage(url string) MessageInput
-func LinkMessage(input LinkInput) MessageInput
+func NewMessage(body MessageBody) MessageInput
+func TextMessage(content string) MessageBody
+func CardMessage(input CardInput) MessageBody
+func ImageMessage(url string) MessageBody
+func VideoMessage(url string) MessageBody
+func AudioMessage(url string) MessageBody
+func LinkMessage(input LinkInput) MessageBody
 ```
 
 `MessageInput` 应支持幂等字段，便于业务方避免重复发送。`ClientMessageID` 属于消息 envelope，不属于卡片、图片、文本等 payload：
 
 ```go
-msg := im.MessageInput{
-    ClientMessageID: "order-123-submitted",
-    Body: im.CardMessage(im.CardInput{
-        Title:       "租车订单已提交",
-        Description: "等待商家确认",
-        URL:         "https://example.com/order/123",
-    }),
-})
+msg := im.NewMessage(im.CardMessage(im.CardInput{
+    Title:       "租车订单已提交",
+    Description: "等待商家确认",
+    URL:         "https://example.com/order/123",
+}))
+msg.ClientMessageID = "order-123-submitted"
 ```
 
 卡片消息的价格字段是展示文案，不参与金额计算。为避免 `price` 被误解为数值金额，接口字段建议命名为 `price_text`，Go 字段命名为 `PriceText`：

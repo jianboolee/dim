@@ -219,6 +219,17 @@ func InitGroupIndexes(ctx context.Context, db *mongo.Database) error {
 				SetName("idx_group_owner_id"),
 		},
 		{
+			Keys: bson.D{{Key: "scope_user_id", Value: 1}, {Key: "unique_key", Value: 1}},
+			Options: options.Index().
+				SetUnique(true).
+				SetPartialFilterExpression(bson.M{
+					"status":        models.GroupStatusActive,
+					"scope_user_id": bson.M{"$exists": true, "$gt": ""},
+					"unique_key":    bson.M{"$exists": true, "$gt": ""},
+				}).
+				SetName("unique_active_group_scope_key"),
+		},
+		{
 			Keys: bson.D{{Key: "status", Value: 1}},
 			Options: options.Index().
 				SetName("idx_group_status"),

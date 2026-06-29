@@ -44,10 +44,7 @@ func main() {
 		log.Fatal("INTEGRATION_API_KEY is required (flag -key or env)")
 	}
 
-	integrationClient := dim.NewIntegrationClient(dim.Config{
-		BaseURL: cfg.apiBase,
-		APIKey:  cfg.integrationKey,
-	})
+	imClient := dim.New(dim.WithBaseURL(cfg.apiBase), dim.WithAPIKey(cfg.integrationKey))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -67,30 +64,27 @@ func main() {
 			continue
 		}
 
-		session, err := integrationClient.CreateConversation(ctx, dim.IntegrationPrivateConversationRequest{
-			User: dim.User{
-				ID:       fromID,
-				Nickname: fromName,
-				Avatar:   fromAvatar,
-			},
-			PeerUser: dim.User{
-				ID:       cfg.peerUserID,
-				Nickname: cfg.peerNickname,
-				Avatar:   cfg.peerAvatar,
-			},
-		})
+		fromUser := dim.User{ID: fromID, Nickname: fromName, Avatar: fromAvatar}
+		peerUser := dim.User{ID: cfg.peerUserID, Nickname: cfg.peerNickname, Avatar: cfg.peerAvatar}
+		if err := imClient.EnsureUsers(ctx, fromUser, peerUser); err != nil {
+			log.Printf("  ensure users failed: %v", err)
+			failCount++
+			continue
+		}
+		session, err := imClient.Login(ctx, fromID)
+		if err != nil {
+			log.Printf("  login failed: %v", err)
+			failCount++
+			continue
+		}
+		conversation, err := session.Conversations().GetOrCreatePrivate(ctx, cfg.peerUserID)
 		if err != nil {
 			log.Printf("  create failed: %v", err)
 			failCount++
 			continue
 		}
-
-		userClient := dim.NewUserClient(dim.Config{
-			BaseURL: cfg.apiBase,
-			Token:   session.Token,
-		})
 		content := fmt.Sprintf("Hi %s, this is %s. Nice to meet you!", cfg.peerNickname, fromName)
-		if _, err := userClient.SendTextMessage(ctx, session.ConversationID, content); err != nil {
+		if _, err := session.Messages().Send(ctx, conversation.ID, dim.NewMessage(dim.TextMessage(content))); err != nil {
 			log.Printf("  message failed: %v", err)
 			failCount++
 			continue
@@ -164,7 +158,7 @@ func mockAvatarURL(index int) string {
 	if index > 100 {
 		index = ((index - 1) % 100) + 1
 	}
-	return fmt.Sprintf("https://img02.wanfangche.com/mock/images/%d.jpg%s", index, demo.AvatarSuffix)
+	return fmt.Sprintf("https://img01.wanfangche.com/mock/images/%d.jpg%s", index, demo.AvatarSuffix)
 }
 
 func envOr(key, fallback string) string {

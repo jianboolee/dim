@@ -10,6 +10,14 @@ type User struct {
 	Type      string `json:"type,omitempty"` // normal / system / bot
 }
 
+const (
+	UserTypeNormal = "normal"
+	UserTypeSystem = "system"
+	UserTypeBot    = "bot"
+)
+
+type UserInput = User
+
 type Conversation struct {
 	ID            string                   `json:"id"`
 	Type          string                   `json:"type"`
@@ -74,6 +82,38 @@ type Payload struct {
 	AfterValue    string            `json:"after_value,omitempty"`
 }
 
+type MessageBody struct {
+	Type    string   `json:"type"`
+	Content string   `json:"content,omitempty"`
+	Payload *Payload `json:"payload,omitempty"`
+}
+
+type MessageInput struct {
+	ClientMessageID string      `json:"client_message_id,omitempty"`
+	Body            MessageBody `json:"body"`
+}
+
+type CardInput struct {
+	Title       string
+	Description string
+	URL         string
+	ImageURL    string
+	PriceText   string
+}
+
+type ListMessagesParams struct {
+	Limit    int
+	BeforeID string
+	AfterID  string
+}
+
+type ListConversationsParams struct {
+	Limit                int
+	Cursor               string
+	Query                string
+	ActiveConversationID string
+}
+
 type ConversationPage struct {
 	Items      []Conversation `json:"items"`
 	NextCursor string         `json:"next_cursor,omitempty"`
@@ -84,23 +124,8 @@ type CreatePrivateConversationRequest struct {
 	PeerID string `json:"peer_id"`
 }
 
-type IntegrationPrivateConversationRequest struct {
-	User     User   `json:"user"`
-	PeerUser User   `json:"peer_user"`
-	Device   Device `json:"device,omitempty"`
-}
-
-type CreateConversationResponse struct {
-	Token          string `json:"token"`
-	ExpiresIn      int    `json:"expires_in"`
-	RefreshToken   string `json:"refresh_token"`
-	SessionID      string `json:"session_id"`
-	ConversationID string `json:"conversation_id"`
-	RedirectURL    string `json:"redirect_url"`
-}
-
 type LoginRequest struct {
-	User   User   `json:"user"`
+	UserID string `json:"user_id"`
 	Device Device `json:"device,omitempty"`
 }
 
@@ -128,10 +153,14 @@ type SendMessageRequest struct {
 }
 
 type CreateGroupRequest struct {
-	Name      string   `json:"name"`
-	AvatarURL string   `json:"avatar_url,omitempty"`
-	MemberIDs []string `json:"member_ids,omitempty"`
+	Name        string   `json:"name"`
+	AvatarURL   string   `json:"avatar_url,omitempty"`
+	MemberIDs   []string `json:"member_ids,omitempty"`
+	UniqueKey   string   `json:"unique_key,omitempty"`
+	ScopeUserID string   `json:"scope_user_id,omitempty"`
 }
+
+type GetOrCreateGroupParams = CreateGroupRequest
 
 type GroupDetailResponse struct {
 	Group   *Group        `json:"group"`
@@ -144,6 +173,8 @@ type Group struct {
 	Name           string    `json:"name"`
 	AvatarURL      string    `json:"avatar_url,omitempty"`
 	OwnerID        string    `json:"owner_id"`
+	ScopeUserID    string    `json:"scope_user_id,omitempty"`
+	UniqueKey      string    `json:"unique_key,omitempty"`
 	MemberCount    int       `json:"member_count"`
 	Status         string    `json:"status"`
 	CreatedAt      time.Time `json:"created_at"`

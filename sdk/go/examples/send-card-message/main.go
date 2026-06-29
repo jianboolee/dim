@@ -37,33 +37,28 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	integrationClient := dim.NewIntegrationClient(dim.Config{
-		BaseURL: apiBase,
-		APIKey:  integrationKey,
-	})
-
-	session, err := integrationClient.CreateConversation(ctx, dim.IntegrationPrivateConversationRequest{
-		User:     User,
-		PeerUser: PeerUser,
-	})
+	imClient := dim.New(dim.WithBaseURL(apiBase), dim.WithAPIKey(integrationKey))
+	if err := imClient.EnsureUsers(ctx, User, PeerUser); err != nil {
+		log.Fatal(err)
+	}
+	session, err := imClient.Login(ctx, User.ID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	conversation, err := session.Conversations().GetOrCreatePrivate(ctx, PeerUser.ID)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	userClient := dim.NewUserClient(dim.Config{
-		BaseURL: apiBase,
-		Token:   session.Token,
-	})
-
-	var payload = dim.Payload{
+	card := dim.CardInput{
 		Title:       "[租车]暑期特惠，租车低至899元/天起",
 		Description: "暑期出行，租车低至899元/天起，支持全国取还车，随时随地畅享自驾乐趣。",
-		ImageURL:    "https://img02.wanfangche.com/uploads/im/images/20260628/bqks3c09hnp9lms7z264xahx533m7fhr.jpg?x-oss-process=image/resize,w_960,m_lfit",
+		ImageURL:    "https://img01.wanfangche.com/uploads/im/images/20260628/bqks3c09hnp9lms7z264xahx533m7fhr.jpg?x-oss-process=image/resize,w_960,m_lfit",
 		URL:         "https://code.visualstudio.com/docs/agents/overview",
 		PriceText:   "￥899元/天起",
 	}
 
-	message, err := userClient.SendCardMessage(ctx, session.ConversationID, payload)
+	message, err := session.Messages().Send(ctx, conversation.ID, dim.NewMessage(dim.CardMessage(card)))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -72,7 +67,7 @@ func main() {
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(output{
-		ConversationID: session.ConversationID,
+		ConversationID: conversation.ID,
 		Message:        *message,
 	}); err != nil {
 		log.Fatal(err)

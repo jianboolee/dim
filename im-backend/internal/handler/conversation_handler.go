@@ -34,6 +34,10 @@ func (h *ConversationHandler) CreateConversation(c *gin.Context) {
 	senderID := contextx.MustGetUserID(c)
 	conversation, err := h.conversationService.CreatePrivateConversation(c.Request.Context(), senderID, req.PeerID)
 	if err != nil {
+		if errors.Is(err, service.ErrCannotStartConversationWithSystemUser) {
+			response.Forbidden(c, "Cannot start conversation with system user")
+			return
+		}
 		response.InternalServerError(c, "Failed to create conversation")
 		return
 	}

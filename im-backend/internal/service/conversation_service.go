@@ -37,6 +37,7 @@ const (
 var ErrInvalidConversationCursor = errors.New("invalid conversation cursor")
 var ErrInvalidConversationID = errors.New("invalid conversation id")
 var ErrConversationAccessDenied = errors.New("conversation access denied")
+var ErrCannotStartConversationWithSystemUser = errors.New("cannot start conversation with system user")
 
 type conversationCursor struct {
 	SortAt time.Time `json:"sort_at"`
@@ -70,6 +71,9 @@ func (s *ConversationService) GetOrCreatePrivateConversation(ctx context.Context
 }
 
 func (s *ConversationService) getOrCreatePrivateConversation(ctx context.Context, userAID, userBID string) (*models.Conversation, error) {
+	if err := s.ensureCanStartPrivateConversation(ctx, userAID, userBID); err != nil {
+		return nil, err
+	}
 	conversation, err := s.repo.UpsertConversationByParticipants(ctx, []string{userAID, userBID})
 	if err != nil {
 		return nil, err
@@ -84,6 +88,27 @@ func (s *ConversationService) getOrCreatePrivateConversation(ctx context.Context
 		}
 	}
 	return conversation, nil
+}
+
+func (s *ConversationService) ensureCanStartPrivateConversation(ctx context.Context, initiatorID, peerID string) error {
+	if s.userRepo == nil {
+		return nil
+	}
+	initiator, err := s.userRepo.GetByID(ctx, initiatorID)
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+	peer, err := s.userRepo.GetByID(ctx, peerID)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil
+		}
+		return err
+	}
+	if peer.Type == models.UserTypeSystem && (initiator == nil || initiator.Type == "" || initiator.Type == models.UserTypeNormal) {
+		return ErrCannotStartConversationWithSystemUser
+	}
+	return nil
 }
 
 // GetConversation 获取会话详情

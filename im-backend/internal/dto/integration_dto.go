@@ -7,7 +7,11 @@ type IntegrationUserInput struct {
 	Nickname  string `json:"nickname"`
 	Avatar    string `json:"avatar"`
 	AvatarURL string `json:"avatar_url"`
-	Type      string `json:"type"` // 可选：normal / system / bot，不传时根据 system_ 前缀自动推断
+	Type      string `json:"type"` // 可选：normal / system / bot，不传时默认为 normal
+}
+
+type IntegrationEnsureUsersRequest struct {
+	Users []IntegrationUserInput `json:"users" binding:"required"`
 }
 
 type DeviceInput struct {
@@ -30,24 +34,9 @@ func (u IntegrationUserInput) ResolveNickname() string {
 	return strings.TrimSpace(u.Nickname)
 }
 
-type IntegrationPrivateConversationRequest struct {
-	User     IntegrationUserInput `json:"user" binding:"required"`
-	PeerUser IntegrationUserInput `json:"peer_user" binding:"required"`
-	Device   DeviceInput          `json:"device"`
-}
-
-type IntegrationCreateConversationResponse struct {
-	Token          string `json:"token"`
-	ExpiresIn      int    `json:"expires_in"`
-	RefreshToken   string `json:"refresh_token"`
-	SessionID      string `json:"session_id"`
-	ConversationID string `json:"conversation_id"`
-	RedirectURL    string `json:"redirect_url"`
-}
-
 type IntegrationLoginRequest struct {
-	User   IntegrationUserInput `json:"user" binding:"required"`
-	Device DeviceInput          `json:"device"`
+	UserID string      `json:"user_id" binding:"required"`
+	Device DeviceInput `json:"device"`
 }
 
 type IntegrationLoginResponse struct {
