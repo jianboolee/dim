@@ -1,7 +1,7 @@
 <template>
   <div class="login-page">
     <div class="content">
-      <i class="bi bi-chat-dots icon"></i>
+      <i class="ri-chat-3-line icon"></i>
       <h1>即时消息</h1>
       <p>请从业务系统进入聊天，IM 不提供独立登录。</p>
     </div>

@@ -3,7 +3,6 @@ import { ref } from 'vue'
 import IMSDK, { type Message, type ConnectionStatus, type MessageHandler, type ConnectionHandler, MessageType } from '@/sdk/im'
 import { getImSdkOptions } from '@/config'
 import { useUserStore } from './user'
-import { useUnreadMessageStore } from './unreadMessage'
 import { usePageNotificationStore } from './pageNotification'
 import { useIMTabStore } from './imTab'
 
@@ -20,7 +19,6 @@ export const useIMStore = defineStore('im', () => {
     const maxReconnectAttempts = 5
     const baseReconnectDelay = 3000
     const userStore = useUserStore()
-    const unreadMessageStore = useUnreadMessageStore()
     const pageNotificationStore = usePageNotificationStore()
     const manualDisconnect = ref(false)
     const imTabStore = useIMTabStore()
@@ -88,9 +86,6 @@ export const useIMStore = defineStore('im', () => {
 
             if (status.status === 'connected') {
                 imSDK.value?.startHeartbeat()
-                void unreadMessageStore.fetchUnreadCount().catch((error) => {
-                    console.error('同步未读消息总数失败:', error)
-                })
             } else if (status.status === 'disconnected' && !manualDisconnect.value && !connectingPromise.value) {
                 imSDK.value?.stopHeartbeat()
                 handleReconnectError()
@@ -98,26 +93,12 @@ export const useIMStore = defineStore('im', () => {
         })
 
         // 添加全局消息处理器，用于更新未读消息计数
-        let unreadSyncTimer: ReturnType<typeof setTimeout> | null = null
         imSDK.value.onMessage((message: Message) => {
             if (
                 message.type !== MessageType.Pong &&
                 message.type !== MessageType.Ping &&
                 message.from_id !== userStore.userInfo?.id
             ) {
-                // 服务端推送了权威未读数时，直接使用；否则触发防抖同步
-                if (message._ws_unread_count != null) {
-                    // 有服务端权威数据：触发一次 API 同步（防抖）
-                    if (unreadSyncTimer) clearTimeout(unreadSyncTimer)
-                    unreadSyncTimer = setTimeout(() => {
-                        unreadMessageStore.fetchUnreadCount().catch((error) => {
-                            console.error('同步未读消息总数失败:', error)
-                        })
-                    }, 500)
-                } else {
-                    // 兼容旧格式：本地递增
-                    unreadMessageStore.increment()
-                }
                 pageNotificationStore.notifyNewMessage()
             }
         })

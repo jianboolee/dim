@@ -184,13 +184,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, provide, onMounted, onUnmounted } from 'vue'
+import { defineAsyncComponent, ref, computed, nextTick, watch, provide, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from '@/plugins/toast'
 import { useUserStore } from '@/stores/user'
 import { useIMStore } from '@/stores/im'
 import { useIMTabStore } from '@/stores/imTab'
-import { useUnreadMessageStore } from '@/stores/unreadMessage'
 import { useConversationList } from '@/composables/useConversationList'
 import { useUserProfiles } from '@/composables/useUserProfiles'
 import { MessageType } from '@/sdk/im'
@@ -198,11 +197,8 @@ import type { Payload } from '@/sdk/im'
 import type { ChatMessage, Conversation, UploadState } from '@/types/im'
 import type { UserInfo } from '@/types/user'
 import { MessageComponents } from '@/components/im'
-import MessageMoreOptions from '@/components/im/MessageMoreOptions.vue'
 import MultilineInput from '@/components/im/MultilineInput.vue'
 import ConversationList from '@/components/im/ConversationList.vue'
-import ConversationSearchModal from '@/components/im/ConversationSearchModal.vue'
-import ConversationInfoDrawer from '@/components/im/ConversationInfoDrawer.vue'
 import SystemEventMessage from '@/components/im/SystemEventMessage.vue'
 import { usePageTitleNotification } from '@/composables/usePageTitleNotification'
 import { buildMessageTimeline } from '@/utils/im/timeline'
@@ -219,11 +215,14 @@ const props = defineProps<{
   conversationId: string
 }>()
 
+const MessageMoreOptions = defineAsyncComponent(() => import('@/components/im/MessageMoreOptions.vue'))
+const ConversationSearchModal = defineAsyncComponent(() => import('@/components/im/ConversationSearchModal.vue'))
+const ConversationInfoDrawer = defineAsyncComponent(() => import('@/components/im/ConversationInfoDrawer.vue'))
+
 const router = useRouter()
 const userStore = useUserStore()
 const imStore = useIMStore()
 const imTabStore = useIMTabStore()
-const unreadMessageStore = useUnreadMessageStore()
 const {
   conversations,
   clearUnreadForPeer,
@@ -724,8 +723,6 @@ const syncUnreadState = async () => {
     clearUnreadForPeer(peerUserId.value)
   }
   clearUnreadForConversation(conversationId.value)
-  unreadMessageStore.requestRefresh()
-  await unreadMessageStore.fetchUnreadCount()
 }
 
 const fetchTargetUser = async () => {

@@ -3,7 +3,7 @@
   <div class="message-content message-audio">
     <div class="message-arrow"></div>
     <div class="audio-container" @click="togglePlay">
-      <i class="bi" :class="isPlaying ? 'bi-pause-fill' : 'bi-play-fill'"></i>
+      <i :class="isPlaying ? 'ri-pause-fill' : 'ri-play-fill'"></i>
       <div class="audio-wave" :class="{ 'wave-animate': isPlaying }">
         <i v-for="n in 4" :key="n" class="wave-bar"></i>
       </div>

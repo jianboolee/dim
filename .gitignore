@@ -1,3 +1,5 @@
 temp/
+!sdk/go/examples/temp/
+!sdk/go/examples/temp/.gitignore
 .env
 deploy-production

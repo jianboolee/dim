@@ -45,6 +45,11 @@ const router = createRouter({
           component: () => import('@/views/im/chat.vue'),
           props: true,
         },
+        {
+          path: 'video-player',
+          name: 'im-video-player',
+          component: () => import('@/views/im/video-player.vue'),
+        },
       ],
     },
     {

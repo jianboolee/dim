@@ -161,12 +161,14 @@ func (r *ConversationMemberRepository) ListByUser(
 	return members, cursor.Err()
 }
 
-// ListByUserAndConversationIDs 获取用户在指定会话列表中的成员记录,
-// 仅在搜索场景使用, 按 sort_at 倒序, 不做游标分页（搜索结果的匹配会话数有限）。
+// ListByUserAndConversationIDs 获取用户在指定会话列表中的成员记录。
 func (r *ConversationMemberRepository) ListByUserAndConversationIDs(
 	ctx context.Context,
 	userID string,
 	conversationIDs []primitive.ObjectID,
+	limit int64,
+	cursorSortAt time.Time,
+	cursorID primitive.ObjectID,
 ) ([]*models.ConversationMember, error) {
 	if len(conversationIDs) == 0 {
 		return nil, nil
@@ -177,7 +179,19 @@ func (r *ConversationMemberRepository) ListByUserAndConversationIDs(
 		"status":          models.ConversationMemberStatusActive,
 		"conversation_id": bson.M{"$in": conversationIDs},
 	}
-	opts := options.Find().SetSort(bson.D{{Key: "sort_at", Value: -1}})
+	if !cursorSortAt.IsZero() && !cursorID.IsZero() {
+		filter["$or"] = []bson.M{
+			{"sort_at": bson.M{"$lt": cursorSortAt}},
+			{
+				"sort_at": cursorSortAt,
+				"_id":     bson.M{"$lt": cursorID},
+			},
+		}
+	}
+	opts := options.Find().SetSort(bson.D{{Key: "sort_at", Value: -1}, {Key: "_id", Value: -1}})
+	if limit > 0 {
+		opts.SetLimit(limit)
+	}
 
 	cursor, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {

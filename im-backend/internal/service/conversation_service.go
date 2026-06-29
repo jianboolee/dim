@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
@@ -116,7 +115,7 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, senderID
 
 	// 搜索分支：先在 DB 层面搜到匹配的会话 ID，再取 member
 	if keyword != "" {
-		return s.searchUserConversations(ctx, senderID, limit, keyword)
+		return s.searchUserConversations(ctx, senderID, limit, cursorValue, keyword)
 	}
 
 	var cursorSortAt time.Time
@@ -193,15 +192,30 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, senderID
 // searchUserConversations 按关键词搜索当前用户的会话。
 //
 // 流程: user keyword → peerIDs → SearchConversationIDs → ListByUserAndConversationIDs → 拼装结果。
-// 注意搜索结果不依赖 conversation_member.sort_at 游标分页，匹配量有限。
 func (s *ConversationService) searchUserConversations(
 	ctx context.Context,
 	senderID string,
 	limit int64,
+	cursorValue string,
 	keyword string,
 ) (*dto.ConversationListResponse, error) {
 	if s.userRepo == nil {
 		return emptyConversationList(), nil
+	}
+
+	var cursorSortAt time.Time
+	var cursorID primitive.ObjectID
+	if cursorValue != "" {
+		cursor, err := decodeConversationCursor(cursorValue)
+		if err != nil {
+			return nil, err
+		}
+		cursorObjectID, err := primitive.ObjectIDFromHex(cursor.ID)
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid cursor id", ErrInvalidConversationCursor)
+		}
+		cursorSortAt = cursor.SortAt
+		cursorID = cursorObjectID
 	}
 
 	// 1. 搜用户，收集 peerIDs
@@ -223,7 +237,7 @@ func (s *ConversationService) searchUserConversations(
 	}
 
 	// 2. 按参与者 ID + 群名搜会话 ID
-	convIDs, err := s.repo.SearchConversationIDs(ctx, peerIDs, keyword, maxConversationSearchUsers)
+	convIDs, err := s.repo.SearchConversationIDs(ctx, peerIDs, keyword, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search conversation ids: %w", err)
 	}
@@ -232,7 +246,7 @@ func (s *ConversationService) searchUserConversations(
 	}
 
 	// 3. 取当前用户在这些会话中的 member 记录
-	memberPage, err := s.memberRepo.ListByUserAndConversationIDs(ctx, senderID, convIDs)
+	memberPage, err := s.memberRepo.ListByUserAndConversationIDs(ctx, senderID, convIDs, limit+1, cursorSortAt, cursorID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversation members: %w", err)
 	}
@@ -278,38 +292,6 @@ func (s *ConversationService) searchUserConversations(
 		NextCursor: nextCursor,
 		HasMore:    hasMore,
 	}, nil
-}
-
-func matchesConversationFilter(conversation *models.Conversation, filter bson.M) bool {
-	conditions, ok := filter["$or"].([]bson.M)
-	if !ok || len(conditions) == 0 {
-		return true
-	}
-	for _, condition := range conditions {
-		if displayName, ok := condition["display_name"].(bson.M); ok {
-			pattern, _ := displayName["$regex"].(string)
-			if pattern != "" {
-				matched, _ := regexp.MatchString("(?i)"+pattern, conversation.DisplayName)
-				if matched {
-					return true
-				}
-			}
-		}
-		if participants, ok := condition["participants"].(bson.M); ok {
-			if ids, ok := participants["$in"].([]string); ok {
-				allowed := map[string]struct{}{}
-				for _, id := range ids {
-					allowed[id] = struct{}{}
-				}
-				for _, id := range conversation.Participants {
-					if _, ok := allowed[id]; ok {
-						return true
-					}
-				}
-			}
-		}
-	}
-	return false
 }
 
 func emptyConversationList() *dto.ConversationListResponse {

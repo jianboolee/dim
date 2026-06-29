@@ -6,4 +6,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 set -a
 source "$PROJECT_ROOT/../.env"
 set +a
-go run "$PROJECT_ROOT/send-order-message"
+
+mkdir -p "$PROJECT_ROOT/temp"
+go build -o "$PROJECT_ROOT/temp/send-order-message" "$PROJECT_ROOT/send-order-message"
+"$PROJECT_ROOT/temp/send-order-message"

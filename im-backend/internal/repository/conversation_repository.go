@@ -201,9 +201,6 @@ func (r *ConversationRepository) SearchConversationIDs(
 	if len(participantIDs) == 0 && groupKeyword == "" {
 		return nil, nil
 	}
-	if limit <= 0 {
-		limit = 50
-	}
 
 	conditions := []bson.M{}
 	if len(participantIDs) > 0 {
@@ -224,7 +221,10 @@ func (r *ConversationRepository) SearchConversationIDs(
 	}
 
 	filter := bson.M{"$or": conditions}
-	opts := options.Find().SetLimit(limit).SetProjection(bson.M{"_id": 1})
+	opts := options.Find().SetProjection(bson.M{"_id": 1})
+	if limit > 0 {
+		opts.SetLimit(limit)
+	}
 
 	cursor, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {
