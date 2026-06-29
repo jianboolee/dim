@@ -40,10 +40,12 @@ onMounted(() => {
 
 <style scoped>
 .page {
-  min-height: 100dvh;
+  height: 100dvh;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: white;
+  overflow: hidden;
 }
 
 .nav-bar {

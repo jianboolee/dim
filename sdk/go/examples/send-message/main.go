@@ -14,7 +14,7 @@ import (
 	"d-im-go-sdk/examples/demo"
 )
 
-var User = demo.USER_SYSTEM_NOTICE
+var User = demo.USER_A
 var PeerUser = demo.USER_B
 
 type output struct {
@@ -39,6 +39,7 @@ func main() {
 	defer cancel()
 
 	imClient := dim.New(dim.WithBaseURL(apiBase), dim.WithAPIKey(integrationKey))
+
 	if err := imClient.EnsureUsers(ctx, User, PeerUser); err != nil {
 		log.Fatal(err)
 	}

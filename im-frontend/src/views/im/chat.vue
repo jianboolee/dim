@@ -68,9 +68,15 @@
       <div v-else-if="hasSelectedConversation" class="chat-main">
     <div class="nav-bar">
       <div class="nav-bar-content">
-        <!-- <button class="nav-side-btn back-btn" type="button" @click="handleBack">
+        <button
+          v-if="isMobileViewport"
+          class="nav-side-btn back-btn"
+          type="button"
+          aria-label="返回"
+          @click="handleBack"
+        >
           <i class="ri-arrow-left-s-line"></i>
-        </button> -->
+        </button>
         <div class="nav-bar-center">
           <div class="user-info">
             <h1 class="title">{{ conversationTitle }}</h1>
@@ -364,16 +370,12 @@ watch(
 )
 
 const handleBack = () => {
-  const back = window.history.state?.back
-  const backToAnotherChat =
-    typeof back === 'string' && /\/im\/chat\/[^/]+/.test(back)
-
-  if (typeof back === 'string' && !backToAnotherChat) {
+  if (window.history.state?.back) {
     router.back()
     return
   }
 
-  router.replace({ name: 'im-home' })
+  router.push({ name: 'im-home' })
 }
 
 const handleLogout = () => {

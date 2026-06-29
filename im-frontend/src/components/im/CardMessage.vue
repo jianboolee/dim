@@ -91,13 +91,13 @@ const openLink = () => {
   position: relative;
   border-radius: 12px;
   background: var(--bg-color);
-  max-width: 260px;
+  max-width: 320px;
   width: 80%;
   padding: 0;
 }
 
 .message-content.message-card {
-  max-width: 260px;
+  max-width: 320px;
   width: 80%;
   padding: 0;
   overflow: hidden;
