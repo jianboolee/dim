@@ -1228,7 +1228,7 @@ onUnmounted(() => {
 
 .sidebar-footer-trigger:hover,
 .sidebar-footer-trigger.is-active {
-  background: var(--bg-color-gray);
+  background: transparent;
 }
 
 .sidebar-footer-user {
