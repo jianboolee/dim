@@ -61,6 +61,16 @@ func resolveUserType(userID, explicitType string) models.UserType {
 	return ""
 }
 
+func deviceMetaFromInput(input dto.DeviceInput) DeviceMeta {
+	return DeviceMeta{
+		Platform:   input.Platform,
+		DeviceID:   input.DeviceID,
+		DeviceName: input.DeviceName,
+		AppVersion: input.AppVersion,
+		PushToken:  input.PushToken,
+	}
+}
+
 // CreateLoginSession 业务用户 SSO 进入 IM 会话列表
 func (s *IntegrationService) CreateLoginSession(
 	ctx context.Context,
@@ -74,15 +84,17 @@ func (s *IntegrationService) CreateLoginSession(
 		return nil, fmt.Errorf("failed to upsert user: %w", err)
 	}
 
-	session, err := s.authService.CreateSession(ctx, req.User.ID)
+	session, err := s.authService.CreateSession(ctx, req.User.ID, deviceMetaFromInput(req.Device))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create auth session: %w", err)
 	}
 
 	return &dto.IntegrationLoginResponse{
-		Token:       session.AccessToken,
-		ExpiresIn:   session.AccessExpiresIn,
-		RedirectURL: s.buildEnterRedirectURL(session.AccessToken, ""),
+		Token:        session.AccessToken,
+		ExpiresIn:    session.AccessExpiresIn,
+		RefreshToken: session.RefreshToken,
+		SessionID:    session.SessionID,
+		RedirectURL:  s.buildEnterRedirectURL(session.AccessToken, ""),
 	}, nil
 }
 
@@ -117,7 +129,7 @@ func (s *IntegrationService) CreateConversationSession(
 		return nil, fmt.Errorf("failed to create conversation: %w", err)
 	}
 
-	session, err := s.authService.CreateSession(ctx, req.User.ID)
+	session, err := s.authService.CreateSession(ctx, req.User.ID, deviceMetaFromInput(req.Device))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create auth session: %w", err)
 	}
@@ -125,6 +137,8 @@ func (s *IntegrationService) CreateConversationSession(
 	return &dto.IntegrationCreateConversationResponse{
 		Token:          session.AccessToken,
 		ExpiresIn:      session.AccessExpiresIn,
+		RefreshToken:   session.RefreshToken,
+		SessionID:      session.SessionID,
 		ConversationID: conversation.ID.Hex(),
 		RedirectURL:    s.buildEnterRedirectURL(session.AccessToken, conversation.ID.Hex()),
 	}, nil

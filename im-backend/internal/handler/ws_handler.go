@@ -17,14 +17,16 @@ import (
 type WSHandler struct {
 	wsManager   *service.WSManager
 	jwtService  *jwtpkg.Service
+	authService *service.AuthService
 	userService *service.UserService
 	upgrader    websocket.Upgrader
 }
 
-func NewWSHandler(wsManager *service.WSManager, jwtService *jwtpkg.Service, userService *service.UserService) *WSHandler {
+func NewWSHandler(wsManager *service.WSManager, jwtService *jwtpkg.Service, authService *service.AuthService, userService *service.UserService) *WSHandler {
 	return &WSHandler{
 		wsManager:   wsManager,
 		jwtService:  jwtService,
+		authService: authService,
 		userService: userService,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
@@ -50,12 +52,9 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 		response.Error(c, http.StatusUnauthorized, http.StatusUnauthorized, err.Error())
 		return
 	}
-
-	// 升级连接为 WebSocket
-	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
-	if err != nil {
-		log.Printf("Failed to upgrade connection: %v", err)
-		response.Error(c, http.StatusInternalServerError, http.StatusInternalServerError, "Failed to upgrade connection")
+	if err := h.authService.ValidateAccessClaims(c.Request.Context(), claims); err != nil {
+		log.Printf("Session validation error: %v", err)
+		response.Error(c, http.StatusUnauthorized, http.StatusUnauthorized, "invalid session")
 		return
 	}
 
@@ -69,12 +68,22 @@ func (h *WSHandler) HandleWebSocket(c *gin.Context) {
 		return
 	}
 
+	// 升级连接为 WebSocket
+	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Printf("Failed to upgrade connection: %v", err)
+		response.Error(c, http.StatusInternalServerError, http.StatusInternalServerError, "Failed to upgrade connection")
+		return
+	}
+
 	logger.Debug("WebSocket connection established for user", zap.String("user_id", userID))
 
 	client := &service.Client{
-		UserID: userID,
-		Conn:   conn,
-		Send:   make(chan []byte, 256),
+		UserID:    userID,
+		SessionID: claims.SessionID,
+		DeviceID:  claims.DeviceID,
+		Conn:      conn,
+		Send:      make(chan []byte, 256),
 	}
 
 	h.wsManager.Register <- client

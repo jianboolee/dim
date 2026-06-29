@@ -8,12 +8,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
 )
 
 type Client struct {
+	ID        string
 	UserID    string
+	SessionID string
+	DeviceID  string
 	Conn      *websocket.Conn
 	Send      chan []byte
 	closeOnce sync.Once
@@ -41,7 +45,7 @@ type wsMessage struct {
 }
 
 type WSManager struct {
-	Clients        map[string]*Client
+	Clients        map[string]map[string]*Client
 	Broadcast      chan []byte
 	Register       chan *Client
 	Unregister     chan *Client
@@ -73,7 +77,7 @@ func NewWSManager(redisClient *redis.Client, sessionService *SessionService, opt
 	}
 
 	return &WSManager{
-		Clients:        make(map[string]*Client),
+		Clients:        make(map[string]map[string]*Client),
 		Broadcast:      make(chan []byte),
 		Register:       make(chan *Client),
 		Unregister:     make(chan *Client),
@@ -99,15 +103,16 @@ func (m *WSManager) Run() {
 	for {
 		select {
 		case client := <-m.Register:
-			m.mutex.Lock()
-			if oldClient, ok := m.Clients[client.UserID]; ok && oldClient != client {
-				delete(m.Clients, client.UserID)
-				oldClient.closeSend()
-				_ = oldClient.Conn.Close()
+			if client.ID == "" {
+				client.ID = uuid.NewString()
 			}
-			m.Clients[client.UserID] = client
+			m.mutex.Lock()
+			if _, ok := m.Clients[client.UserID]; !ok {
+				m.Clients[client.UserID] = map[string]*Client{}
+			}
+			m.Clients[client.UserID][client.ID] = client
 			m.mutex.Unlock()
-			log.Printf("Client connected: %s", client.UserID)
+			log.Printf("Client connected: user=%s session=%s connection=%s", client.UserID, client.SessionID, client.ID)
 
 			// 更新用户在线状态
 			if err := m.sessionService.UpdateUserStatus(context.Background(), client.UserID, true); err != nil {
@@ -139,15 +144,20 @@ func (m *WSManager) Run() {
 
 func (m *WSManager) unregister(client *Client) {
 	m.mutex.Lock()
-	currentClient, ok := m.Clients[client.UserID]
-	if ok && currentClient == client {
-		delete(m.Clients, client.UserID)
+	userClients, ok := m.Clients[client.UserID]
+	_, exists := userClients[client.ID]
+	if ok && exists {
+		delete(userClients, client.ID)
+		if len(userClients) == 0 {
+			delete(m.Clients, client.UserID)
+		}
 		client.closeSend()
-		log.Printf("Client disconnected: %s", client.UserID)
+		log.Printf("Client disconnected: user=%s session=%s connection=%s", client.UserID, client.SessionID, client.ID)
 	}
+	hasMoreUserConnections := ok && len(userClients) > 0
 	m.mutex.Unlock()
 
-	if ok && currentClient == client {
+	if ok && exists && !hasMoreUserConnections {
 		// 更新用户离线状态
 		if err := m.sessionService.UpdateUserStatus(context.Background(), client.UserID, false); err != nil {
 			log.Printf("Failed to update user status: %v", err)
@@ -166,19 +176,26 @@ func (m *WSManager) unregisterAsync(client *Client) {
 // TryDeliver 尝试向本进程已连接的客户端投递消息
 func (m *WSManager) TryDeliver(userID string, message []byte) bool {
 	m.mutex.RLock()
-	client, ok := m.Clients[userID]
+	userClients := m.Clients[userID]
+	clients := make([]*Client, 0, len(userClients))
+	for _, client := range userClients {
+		clients = append(clients, client)
+	}
 	m.mutex.RUnlock()
 
-	if !ok {
+	if len(clients) == 0 {
 		return false
 	}
 
-	if client.enqueue(message) {
-		return true
+	delivered := false
+	for _, client := range clients {
+		if client.enqueue(message) {
+			delivered = true
+			continue
+		}
+		log.Printf("Client send buffer full or closed, dropping direct delivery for user=%s connection=%s", userID, client.ID)
 	}
-
-	log.Printf("Client send buffer full or closed, dropping direct delivery for %s", userID)
-	return false
+	return delivered
 }
 
 func (m *WSManager) startRedisSubscriber() {
@@ -221,14 +238,24 @@ func (m *WSManager) startRedisSubscriber() {
 // SendMessage 发送消息给指定用户
 func (m *WSManager) SendMessage(userID string, message []byte) error {
 	m.mutex.RLock()
-	client, ok := m.Clients[userID]
+	userClients := m.Clients[userID]
+	clients := make([]*Client, 0, len(userClients))
+	for _, client := range userClients {
+		clients = append(clients, client)
+	}
 	m.mutex.RUnlock()
 
-	if !ok {
+	if len(clients) == 0 {
 		return nil
 	}
-	if !client.enqueue(message) {
-		return fmt.Errorf("client send buffer full or closed for %s", userID)
+	delivered := false
+	for _, client := range clients {
+		if client.enqueue(message) {
+			delivered = true
+		}
+	}
+	if !delivered {
+		return fmt.Errorf("all client send buffers full or closed for %s", userID)
 	}
 	return nil
 }
@@ -248,14 +275,16 @@ func (m *WSManager) Shutdown() {
 	defer m.mutex.Unlock()
 
 	// 关闭所有客户端连接
-	for _, client := range m.Clients {
-		log.Printf("Closing connection for client: %s", client.UserID)
-		client.closeSend()
-		client.Conn.Close()
+	for _, userClients := range m.Clients {
+		for _, client := range userClients {
+			log.Printf("Closing connection for client: user=%s connection=%s", client.UserID, client.ID)
+			client.closeSend()
+			client.Conn.Close()
+		}
 	}
 
 	// 清空客户端映射
-	m.Clients = make(map[string]*Client)
+	m.Clients = make(map[string]map[string]*Client)
 
 	log.Println("WebSocket manager shutdown completed")
 }

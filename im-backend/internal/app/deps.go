@@ -71,7 +71,7 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 		Domain:   cfg.JWT.RefreshCookieDomain,
 		Secure:   cfg.JWT.RefreshCookieSecure,
 		SameSite: service.ParseSameSite(cfg.JWT.RefreshCookieSameSite),
-	})
+	}, cfg.JWT.MaxActiveSessions)
 	integrationService := service.NewIntegrationService(
 		userService,
 		conversationService,
@@ -99,7 +99,7 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 	deps := &Dependencies{
 		Config:                cfg,
 		JWTService:            jwtService,
-		JWTAuthMiddleware:     middleware.JWTAuth(jwtService),
+		JWTAuthMiddleware:     middleware.JWTAuth(jwtService, authService),
 		IntegrationMiddleware: middleware.IntegrationAPIKey(cfg),
 		MessageHandler:        handler.NewMessageHandler(messageService, conversationService),
 		ConversationHandler:   handler.NewConversationHandler(conversationService),
@@ -113,7 +113,7 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 	}
 
 	if withWS && wsManager != nil {
-		deps.WSHandler = handler.NewWSHandler(wsManager, jwtService, userService)
+		deps.WSHandler = handler.NewWSHandler(wsManager, jwtService, authService, userService)
 	}
 
 	return deps

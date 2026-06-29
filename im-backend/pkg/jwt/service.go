@@ -22,6 +22,8 @@ var (
 type AuthTokenClaims struct {
 	SessionID string `json:"sid,omitempty"`
 	TokenType string `json:"typ,omitempty"`
+	Platform  string `json:"platform,omitempty"`
+	DeviceID  string `json:"device_id,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -96,15 +98,15 @@ func (s *Service) RefreshTokenExpiry(now, sessionStart time.Time) time.Time {
 	return refreshExpiry
 }
 
-func (s *Service) SignAccessToken(userID, sessionID string, sessionStart time.Time) (string, int, error) {
+func (s *Service) SignAccessToken(userID, sessionID string, sessionStart time.Time, platform string, deviceID string) (string, int, error) {
 	now := time.Now()
-	return s.signToken(userID, sessionID, "access", sessionStart, now, s.AccessTokenExpiry(now, sessionStart))
+	return s.signToken(userID, sessionID, "access", sessionStart, now, s.AccessTokenExpiry(now, sessionStart), platform, deviceID)
 }
 
-func (s *Service) SignRefreshToken(userID, sessionID string, sessionStart time.Time) (string, time.Time, error) {
+func (s *Service) SignRefreshToken(userID, sessionID string, sessionStart time.Time, platform string, deviceID string) (string, time.Time, error) {
 	now := time.Now()
 	expiresAt := s.RefreshTokenExpiry(now, sessionStart)
-	token, _, err := s.signToken(userID, sessionID, "refresh", sessionStart, now, expiresAt)
+	token, _, err := s.signToken(userID, sessionID, "refresh", sessionStart, now, expiresAt, platform, deviceID)
 	return token, expiresAt, err
 }
 
@@ -157,6 +159,8 @@ func (s *Service) signToken(
 	sessionStart time.Time,
 	now time.Time,
 	expiresAt time.Time,
+	platform string,
+	deviceID string,
 ) (string, int, error) {
 	if userID == "" || sessionID == "" {
 		return "", 0, errors.New("user id and session id are required")
@@ -164,6 +168,8 @@ func (s *Service) signToken(
 	claims := AuthTokenClaims{
 		SessionID: sessionID,
 		TokenType: tokenType,
+		Platform:  platform,
+		DeviceID:  deviceID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   userID,
 			Issuer:    s.issuer,

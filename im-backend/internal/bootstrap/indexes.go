@@ -335,6 +335,14 @@ func InitAuthSessionIndexes(ctx context.Context, db *mongo.Database) error {
 			Options: options.Index().SetName("idx_auth_session_user_updated"),
 		},
 		{
+			Keys:    bson.D{{Key: "user_id", Value: 1}, {Key: "last_active_at", Value: -1}, {Key: "created_at", Value: -1}},
+			Options: options.Index().SetName("idx_auth_session_user_active"),
+		},
+		{
+			Keys:    bson.D{{Key: "user_id", Value: 1}, {Key: "device_id", Value: 1}, {Key: "updated_at", Value: -1}},
+			Options: options.Index().SetName("idx_auth_session_user_device"),
+		},
+		{
 			Keys:    bson.D{{Key: "expires_at", Value: 1}},
 			Options: options.Index().SetExpireAfterSeconds(0).SetName("ttl_auth_session_expiry"),
 		},

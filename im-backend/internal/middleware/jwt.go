@@ -7,10 +7,11 @@ import (
 
 	"d-im/internal/contextx"
 	"d-im/internal/response"
+	"d-im/internal/service"
 	jwtpkg "d-im/pkg/jwt"
 )
 
-func JWTAuth(jwtService *jwtpkg.Service) gin.HandlerFunc {
+func JWTAuth(jwtService *jwtpkg.Service, authService *service.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -31,6 +32,12 @@ func JWTAuth(jwtService *jwtpkg.Service) gin.HandlerFunc {
 		if err := jwtService.ParseAccessToken(tokenString, claims); err != nil {
 			log.Printf("Token validation error: %v", err)
 			response.Unauthorized(c, err.Error())
+			c.Abort()
+			return
+		}
+		if err := authService.ValidateAccessClaims(c.Request.Context(), claims); err != nil {
+			log.Printf("Session validation error: %v", err)
+			response.Unauthorized(c, "invalid session")
 			c.Abort()
 			return
 		}

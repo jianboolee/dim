@@ -85,25 +85,39 @@ type CreatePrivateConversationRequest struct {
 }
 
 type IntegrationPrivateConversationRequest struct {
-	User     User `json:"user"`
-	PeerUser User `json:"peer_user"`
+	User     User   `json:"user"`
+	PeerUser User   `json:"peer_user"`
+	Device   Device `json:"device,omitempty"`
 }
 
 type CreateConversationResponse struct {
 	Token          string `json:"token"`
 	ExpiresIn      int    `json:"expires_in"`
+	RefreshToken   string `json:"refresh_token"`
+	SessionID      string `json:"session_id"`
 	ConversationID string `json:"conversation_id"`
 	RedirectURL    string `json:"redirect_url"`
 }
 
 type LoginRequest struct {
-	User User `json:"user"`
+	User   User   `json:"user"`
+	Device Device `json:"device,omitempty"`
 }
 
 type LoginResponse struct {
-	Token       string `json:"token"`
-	ExpiresIn   int    `json:"expires_in"`
-	RedirectURL string `json:"redirect_url"`
+	Token        string `json:"token"`
+	ExpiresIn    int    `json:"expires_in"`
+	RefreshToken string `json:"refresh_token"`
+	SessionID    string `json:"session_id"`
+	RedirectURL  string `json:"redirect_url"`
+}
+
+type Device struct {
+	Platform   string `json:"platform,omitempty"`
+	DeviceID   string `json:"device_id,omitempty"`
+	DeviceName string `json:"device_name,omitempty"`
+	AppVersion string `json:"app_version,omitempty"`
+	PushToken  string `json:"push_token,omitempty"`
 }
 
 type SendMessageRequest struct {

@@ -2,10 +2,13 @@ import { config } from '@/config'
 import { SUCCESS_CODE, type ApiResponse } from '@/types/api'
 import axios from '@/plugins/axios'
 import { isAxiosError } from 'axios'
+import { getDeviceMeta } from '@/utils/device'
 
 export interface AccessTokenData {
   token: string
   expires_in: number
+  refresh_token: string
+  session_id: string
 }
 
 export type AuthActionErrorReason = 'auth' | 'network' | 'server'
@@ -39,7 +42,7 @@ export async function exchangeAccessToken(
   try {
     const response = await axios.post<ApiResponse<AccessTokenData>>(
       '/im/api/auth/exchange',
-      {},
+      { device: getDeviceMeta() },
       {
         baseURL: config.baseURL,
         headers: {
@@ -61,13 +64,19 @@ export async function exchangeAccessToken(
   }
 }
 
-export async function refreshAccessToken(): Promise<AccessTokenData> {
+export async function refreshAccessToken(refreshToken: string): Promise<AccessTokenData> {
   try {
     const response = await axios.post<ApiResponse<AccessTokenData>>(
       '/im/api/auth/refresh',
-      {},
+      {
+        refresh_token: refreshToken,
+        device: getDeviceMeta(),
+      },
       {
         baseURL: config.baseURL,
+        headers: {
+          'X-Refresh-Token': refreshToken,
+        },
       },
     )
 
@@ -84,13 +93,18 @@ export async function refreshAccessToken(): Promise<AccessTokenData> {
   }
 }
 
-export async function logoutSession(): Promise<void> {
+export async function logoutSession(refreshToken?: string | null): Promise<void> {
   try {
     await axios.post(
       '/im/api/auth/logout',
-      {},
+      refreshToken ? { refresh_token: refreshToken } : {},
       {
         baseURL: config.baseURL,
+        headers: refreshToken
+          ? {
+              'X-Refresh-Token': refreshToken,
+            }
+          : undefined,
       },
     )
   } catch (error) {

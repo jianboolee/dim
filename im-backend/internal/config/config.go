@@ -41,6 +41,7 @@ type Config struct {
 		RefreshCookieDomain   string
 		RefreshCookieSecure   bool
 		RefreshCookieSameSite string
+		MaxActiveSessions     int64
 	}
 	Integration struct {
 		APIKey string
@@ -81,6 +82,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("JWT_REFRESH_COOKIE_DOMAIN", "")
 	viper.SetDefault("JWT_REFRESH_COOKIE_SECURE", false)
 	viper.SetDefault("JWT_REFRESH_COOKIE_SAMESITE", "Lax")
+	viper.SetDefault("JWT_MAX_ACTIVE_SESSIONS", 10)
 
 	viper.SetDefault("INTEGRATION_API_KEY", "")
 	viper.SetDefault("IM_FRONTEND_BASE_URL", "http://localhost:5173")
@@ -125,6 +127,7 @@ func LoadConfig() (*Config, error) {
 	cfg.JWT.RefreshCookieDomain = viper.GetString("JWT_REFRESH_COOKIE_DOMAIN")
 	cfg.JWT.RefreshCookieSecure = viper.GetBool("JWT_REFRESH_COOKIE_SECURE")
 	cfg.JWT.RefreshCookieSameSite = viper.GetString("JWT_REFRESH_COOKIE_SAMESITE")
+	cfg.JWT.MaxActiveSessions = viper.GetInt64("JWT_MAX_ACTIVE_SESSIONS")
 
 	cfg.Integration.APIKey = viper.GetString("INTEGRATION_API_KEY")
 	cfg.App.FrontendBaseURL = viper.GetString("IM_FRONTEND_BASE_URL")

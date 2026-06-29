@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 
 	"d-im/internal/models"
@@ -25,6 +26,8 @@ var (
 	ErrAuthSessionExpired  = errors.New("auth session expired")
 )
 
+const defaultMaxActiveAuthSessionsPerUser = int64(10)
+
 type AuthCookieConfig struct {
 	Name     string
 	Domain   string
@@ -32,41 +35,57 @@ type AuthCookieConfig struct {
 	SameSite http.SameSite
 }
 
+type DeviceMeta struct {
+	Platform   string
+	DeviceID   string
+	DeviceName string
+	AppVersion string
+	PushToken  string
+}
+
 type TokenResult struct {
 	AccessToken      string
 	AccessExpiresIn  int
 	RefreshToken     string
 	RefreshExpiresAt time.Time
+	SessionID        string
 }
 
 type AuthService struct {
-	jwtService   *jwtpkg.Service
-	sessionRepo  *repository.AuthSessionRepository
-	cookieConfig AuthCookieConfig
+	jwtService        *jwtpkg.Service
+	sessionRepo       *repository.AuthSessionRepository
+	cookieConfig      AuthCookieConfig
+	maxActiveSessions int64
 }
 
 func NewAuthService(
 	jwtService *jwtpkg.Service,
 	sessionRepo *repository.AuthSessionRepository,
 	cookieConfig AuthCookieConfig,
+	maxActiveSessions int64,
 ) *AuthService {
+	if maxActiveSessions <= 0 {
+		maxActiveSessions = defaultMaxActiveAuthSessionsPerUser
+	}
 	return &AuthService{
-		jwtService:   jwtService,
-		sessionRepo:  sessionRepo,
-		cookieConfig: cookieConfig,
+		jwtService:        jwtService,
+		sessionRepo:       sessionRepo,
+		cookieConfig:      cookieConfig,
+		maxActiveSessions: maxActiveSessions,
 	}
 }
 
-func (s *AuthService) CreateSession(ctx context.Context, userID string) (*TokenResult, error) {
+func (s *AuthService) CreateSession(ctx context.Context, userID string, meta DeviceMeta) (*TokenResult, error) {
 	now := time.Now()
 	sessionID := uuid.NewString()
 	sessionStart := now
+	meta = normalizeDeviceMeta(meta)
 
-	refreshToken, refreshExpiresAt, err := s.jwtService.SignRefreshToken(userID, sessionID, sessionStart)
+	refreshToken, refreshExpiresAt, err := s.jwtService.SignRefreshToken(userID, sessionID, sessionStart, meta.Platform, meta.DeviceID)
 	if err != nil {
 		return nil, err
 	}
-	accessToken, accessExpiresIn, err := s.jwtService.SignAccessToken(userID, sessionID, sessionStart)
+	accessToken, accessExpiresIn, err := s.jwtService.SignAccessToken(userID, sessionID, sessionStart, meta.Platform, meta.DeviceID)
 	if err != nil {
 		return nil, err
 	}
@@ -74,12 +93,21 @@ func (s *AuthService) CreateSession(ctx context.Context, userID string) (*TokenR
 	err = s.sessionRepo.Create(ctx, &models.AuthSession{
 		ID:               sessionID,
 		UserID:           userID,
+		Platform:         meta.Platform,
+		DeviceID:         meta.DeviceID,
+		DeviceName:       meta.DeviceName,
+		AppVersion:       meta.AppVersion,
+		PushToken:        meta.PushToken,
 		RefreshTokenHash: hashToken(refreshToken),
 		ExpiresAt:        refreshExpiresAt,
+		LastActiveAt:     now,
 		CreatedAt:        sessionStart,
 		UpdatedAt:        now,
 	})
 	if err != nil {
+		return nil, err
+	}
+	if err := s.sessionRepo.RevokeOverflowActiveSessions(ctx, userID, s.maxActiveSessions, now); err != nil {
 		return nil, err
 	}
 
@@ -88,10 +116,11 @@ func (s *AuthService) CreateSession(ctx context.Context, userID string) (*TokenR
 		AccessExpiresIn:  accessExpiresIn,
 		RefreshToken:     refreshToken,
 		RefreshExpiresAt: refreshExpiresAt,
+		SessionID:        sessionID,
 	}, nil
 }
 
-func (s *AuthService) Exchange(ctx context.Context, accessToken string) (*TokenResult, error) {
+func (s *AuthService) Exchange(ctx context.Context, accessToken string, meta DeviceMeta) (*TokenResult, error) {
 	claims := &jwtpkg.AuthTokenClaims{}
 	if err := s.jwtService.ParseAccessToken(accessToken, claims); err != nil {
 		return nil, normalizeJWTError(err)
@@ -105,10 +134,10 @@ func (s *AuthService) Exchange(ctx context.Context, accessToken string) (*TokenR
 		return nil, ErrInvalidAuthToken
 	}
 
-	return s.rotateSession(ctx, session, "")
+	return s.rotateSession(ctx, session, "", meta)
 }
 
-func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*TokenResult, error) {
+func (s *AuthService) Refresh(ctx context.Context, refreshToken string, meta DeviceMeta) (*TokenResult, error) {
 	claims := &jwtpkg.AuthTokenClaims{}
 	if err := s.jwtService.ParseRefreshToken(refreshToken, claims); err != nil {
 		return nil, normalizeJWTError(err)
@@ -122,7 +151,7 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*TokenR
 		return nil, ErrInvalidAuthToken
 	}
 
-	return s.rotateSession(ctx, session, refreshToken)
+	return s.rotateSession(ctx, session, refreshToken, meta)
 }
 
 func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
@@ -131,6 +160,27 @@ func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
 		return normalizeJWTError(err)
 	}
 	return s.sessionRepo.Revoke(ctx, claims.SessionID, time.Now())
+}
+
+func (s *AuthService) ValidateAccessClaims(ctx context.Context, claims *jwtpkg.AuthTokenClaims) error {
+	if claims == nil || claims.SessionID == "" || claims.Subject == "" {
+		return ErrInvalidAuthToken
+	}
+	session, err := s.getSession(ctx, claims.SessionID)
+	if err != nil {
+		return err
+	}
+	if session.UserID != claims.Subject {
+		return ErrInvalidAuthToken
+	}
+	now := time.Now()
+	if session.RevokedAt != nil {
+		return ErrInvalidAuthToken
+	}
+	if !session.ExpiresAt.After(now) {
+		return ErrAuthSessionExpired
+	}
+	return s.sessionRepo.Touch(ctx, session.ID, now)
 }
 
 func (s *AuthService) ReadRefreshToken(c *gin.Context) (string, error) {
@@ -177,6 +227,7 @@ func (s *AuthService) rotateSession(
 	ctx context.Context,
 	session *models.AuthSession,
 	currentRefreshToken string,
+	meta DeviceMeta,
 ) (*TokenResult, error) {
 	now := time.Now()
 	if session.RevokedAt != nil {
@@ -190,12 +241,13 @@ func (s *AuthService) rotateSession(
 	if sessionStart.IsZero() {
 		sessionStart = now
 	}
+	meta = mergeDeviceMeta(session, meta)
 
-	refreshToken, refreshExpiresAt, err := s.jwtService.SignRefreshToken(session.UserID, session.ID, sessionStart)
+	refreshToken, refreshExpiresAt, err := s.jwtService.SignRefreshToken(session.UserID, session.ID, sessionStart, meta.Platform, meta.DeviceID)
 	if err != nil {
 		return nil, err
 	}
-	accessToken, accessExpiresIn, err := s.jwtService.SignAccessToken(session.UserID, session.ID, sessionStart)
+	accessToken, accessExpiresIn, err := s.jwtService.SignAccessToken(session.UserID, session.ID, sessionStart, meta.Platform, meta.DeviceID)
 	if err != nil {
 		return nil, err
 	}
@@ -211,10 +263,14 @@ func (s *AuthService) rotateSession(
 		hashToken(refreshToken),
 		now,
 		refreshExpiresAt,
+		deviceMetadataSet(meta),
 	); err != nil {
 		if errors.Is(err, repository.ErrAuthSessionConflict) {
 			return nil, ErrInvalidAuthToken
 		}
+		return nil, err
+	}
+	if err := s.sessionRepo.RevokeOverflowActiveSessions(ctx, session.UserID, s.maxActiveSessions, now); err != nil {
 		return nil, err
 	}
 
@@ -223,6 +279,7 @@ func (s *AuthService) rotateSession(
 		AccessExpiresIn:  accessExpiresIn,
 		RefreshToken:     refreshToken,
 		RefreshExpiresAt: refreshExpiresAt,
+		SessionID:        session.ID,
 	}, nil
 }
 
@@ -254,6 +311,55 @@ func normalizeJWTError(err error) error {
 func hashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
+}
+
+func normalizeDeviceMeta(meta DeviceMeta) DeviceMeta {
+	meta.Platform = strings.TrimSpace(meta.Platform)
+	meta.DeviceID = strings.TrimSpace(meta.DeviceID)
+	meta.DeviceName = strings.TrimSpace(meta.DeviceName)
+	meta.AppVersion = strings.TrimSpace(meta.AppVersion)
+	meta.PushToken = strings.TrimSpace(meta.PushToken)
+	if meta.Platform == "" {
+		meta.Platform = "web"
+	}
+	if meta.DeviceID == "" {
+		meta.DeviceID = uuid.NewString()
+	}
+	return meta
+}
+
+func mergeDeviceMeta(session *models.AuthSession, meta DeviceMeta) DeviceMeta {
+	meta.Platform = strings.TrimSpace(meta.Platform)
+	meta.DeviceID = strings.TrimSpace(meta.DeviceID)
+	meta.DeviceName = strings.TrimSpace(meta.DeviceName)
+	meta.AppVersion = strings.TrimSpace(meta.AppVersion)
+	meta.PushToken = strings.TrimSpace(meta.PushToken)
+	if meta.Platform == "" && session.Platform != "" {
+		meta.Platform = session.Platform
+	}
+	if meta.DeviceID == "" && session.DeviceID != "" {
+		meta.DeviceID = session.DeviceID
+	}
+	if meta.DeviceName == "" {
+		meta.DeviceName = session.DeviceName
+	}
+	if meta.AppVersion == "" {
+		meta.AppVersion = session.AppVersion
+	}
+	if meta.PushToken == "" {
+		meta.PushToken = session.PushToken
+	}
+	return normalizeDeviceMeta(meta)
+}
+
+func deviceMetadataSet(meta DeviceMeta) bson.M {
+	return bson.M{
+		"platform":    meta.Platform,
+		"device_id":   meta.DeviceID,
+		"device_name": meta.DeviceName,
+		"app_version": meta.AppVersion,
+		"push_token":  meta.PushToken,
+	}
 }
 
 func ParseSameSite(value string) http.SameSite {

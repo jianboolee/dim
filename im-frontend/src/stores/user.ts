@@ -21,10 +21,11 @@ let refreshTimer: ReturnType<typeof setTimeout> | null = null
 let visibilityBound = false
 let authChannelBound = false
 const AUTH_REFRESH_LOCK_KEY = 'd-im-auth-refresh-lock'
+const REFRESH_TOKEN_KEY = 'd-im-refresh-token'
 const AUTH_REFRESH_LOCK_TTL_MS = 15_000
 
 type AuthMessage =
-  | { type: 'token-updated'; token: string }
+  | { type: 'token-updated'; token: string; refreshToken: string }
   | { type: 'logout' }
 
 interface EnsureValidTokenOptions {
@@ -39,6 +40,24 @@ interface LogoutOptions {
 
 interface SetTokenOptions {
   broadcast?: boolean
+}
+
+function readStoredRefreshToken() {
+  if (typeof localStorage === 'undefined') {
+    return null
+  }
+  return localStorage.getItem(REFRESH_TOKEN_KEY)
+}
+
+function writeStoredRefreshToken(nextToken: string | null) {
+  if (typeof localStorage === 'undefined') {
+    return
+  }
+  if (nextToken) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, nextToken)
+  } else {
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
+  }
 }
 
 function createAuthChannel() {
@@ -152,6 +171,7 @@ function waitForRemoteAuthUpdate(timeoutMs = AUTH_REFRESH_LOCK_TTL_MS): Promise<
 
 export const useUserStore = defineStore('user', () => {
   const token = ref<string | null>(null)
+  const refreshTokenValue = ref<string | null>(readStoredRefreshToken())
   const userInfo = ref<UserInfo | null>(null)
   const sessionExpired = ref(false)
   const unreadMessageStore = useUnreadMessageStore()
@@ -186,21 +206,29 @@ export const useUserStore = defineStore('user', () => {
     visibilityBound = true
   }
 
-  const setToken = (newToken: string, options: SetTokenOptions = {}) => {
+  const setToken = (newToken: string, newRefreshToken: string, options: SetTokenOptions = {}) => {
     token.value = newToken
+    refreshTokenValue.value = newRefreshToken
+    writeStoredRefreshToken(newRefreshToken)
     scheduleRefresh(newToken)
 
     const imStore = useIMStore()
     imStore.syncAccessToken(newToken)
 
     if (options.broadcast !== false) {
-      createAuthChannel()?.postMessage({ type: 'token-updated', token: newToken } satisfies AuthMessage)
+      createAuthChannel()?.postMessage({
+        type: 'token-updated',
+        token: newToken,
+        refreshToken: newRefreshToken,
+      } satisfies AuthMessage)
     }
   }
 
   const clearLocalAuthState = (broadcast = false) => {
     clearRefreshTimer()
     token.value = null
+    refreshTokenValue.value = null
+    writeStoredRefreshToken(null)
     userInfo.value = null
 
     const imTabStore = useIMTabStore()
@@ -221,13 +249,14 @@ export const useUserStore = defineStore('user', () => {
 
   const logout = async (options: LogoutOptions = {}) => {
     const { broadcast = true, revokeSession = true } = options
+    const currentRefreshToken = refreshTokenValue.value
 
     clearLocalAuthState(broadcast)
     applyLogoutSideEffects()
 
     if (revokeSession) {
       try {
-        await logoutSession()
+        await logoutSession(currentRefreshToken)
       } catch (error) {
         console.error('登出会话失败:', error)
       }
@@ -264,9 +293,12 @@ export const useUserStore = defineStore('user', () => {
 
     refreshPromise = (async () => {
       try {
-        const result = await refreshAccessToken()
+        if (!refreshTokenValue.value) {
+          return null
+        }
+        const result = await refreshAccessToken(refreshTokenValue.value)
         if (result?.token) {
-          setToken(result.token, { broadcast: options.broadcast !== false })
+          setToken(result.token, result.refresh_token, { broadcast: options.broadcast !== false })
           return result.token
         }
         return null
@@ -335,7 +367,7 @@ export const useUserStore = defineStore('user', () => {
           return
         }
         if (message.type === 'token-updated') {
-          setToken(message.token, { broadcast: false })
+          setToken(message.token, message.refreshToken, { broadcast: false })
           if (!userInfo.value) {
             void fetchUser().catch((error) => {
               console.error('同步用户信息失败:', error)
@@ -367,7 +399,7 @@ export const useUserStore = defineStore('user', () => {
 
   const establishSession = async (entryToken: string): Promise<string> => {
     const result = await exchangeAccessToken(entryToken)
-    setToken(result.token)
+    setToken(result.token, result.refresh_token)
     return result.token
   }
 
@@ -388,9 +420,9 @@ export const useUserStore = defineStore('user', () => {
   watch(token, (newToken, oldToken) => {
     if (newToken && !oldToken) {
       // unreadMessageStore.startHeartbeat()
-      void unreadMessageStore.fetchUnreadCount().catch((error) => {
-        console.error('同步未读消息总数失败:', error)
-      })
+      // void unreadMessageStore.fetchUnreadCount().catch((error) => {
+      //   console.error('同步未读消息总数失败:', error)
+      // })
     } else if (!newToken && oldToken) {
       unreadMessageStore.reset()
       unreadMessageStore.stopHeartbeat()

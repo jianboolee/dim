@@ -15,7 +15,7 @@ func TestSignAccessTokenExpiresInMatchesJWTExp(t *testing.T) {
 	}
 
 	sessionStart := time.Now()
-	token, expiresIn, err := svc.SignAccessToken("user1", "sess1", sessionStart)
+	token, expiresIn, err := svc.SignAccessToken("user1", "sess1", sessionStart, "web", "device1")
 	if err != nil {
 		t.Fatal(err)
 	}
