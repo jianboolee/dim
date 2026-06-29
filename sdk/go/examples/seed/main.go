@@ -164,7 +164,7 @@ func mockAvatarURL(index int) string {
 	if index > 100 {
 		index = ((index - 1) % 100) + 1
 	}
-	return fmt.Sprintf("https://oss.21rv.com/mock/images/%d.jpg%s", index, demo.AvatarSuffix)
+	return fmt.Sprintf("https://img02.wanfangche.com/mock/images/%d.jpg%s", index, demo.AvatarSuffix)
 }
 
 func envOr(key, fallback string) string {

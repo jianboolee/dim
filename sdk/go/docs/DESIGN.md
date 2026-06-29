@@ -1,0 +1,366 @@
+# d-im Go SDK 重设计
+
+## 定位
+
+Go SDK 面向业务后端服务使用，提供一组稳定、类型安全、可测试的 HTTP 操作封装。它是“业务服务端内部操作 IM”的能力层，不负责前端登录态、多端在线、refresh token 自动续期，也不内置业务集成快捷 facade。
+
+业务系统如果需要“一行发送订单消息”“审核机器人发群消息”等快捷能力，应在自己的业务层封装。SDK 只提供清晰、可组合的底层 IM 操作。
+
+---
+
+## 设计原则
+
+| 原则 | 说明 |
+|------|------|
+| 职责单一 | `Client` 管配置与 integration 能力，`Session` 表示“以某个用户身份操作”，领域 Service 只管自己的资源 |
+| 显式流转 | `Client.EnsureUser(ctx, user)` 写资料，`Client.Login(ctx, userID)` 创建 `Session`，所有用户态操作都从 `Session` 发起 |
+| 不隐藏业务流程 | SDK 不内置“确保用户、创建会话、发送消息”的业务组合；组合流程由业务方决定 |
+| 上下文优先 | 所有网络方法第一个参数都是 `context.Context` |
+| 值构造器 | 消息类型用 `TextMessage()` / `CardMessage()` 等纯函数构造，不为每种消息膨胀发送方法 |
+| 参数结构化 | 复杂查询优先使用 Params struct，避免过多函数式 option 导致调用含义分散 |
+| 可测试 | 对外类型职责稳定，业务侧可围绕小接口自行 mock |
+
+---
+
+## 非目标
+
+以下能力不放进第一版 SDK 重构范围：
+
+- 不管理 refresh token、自动续期、多设备登录生命周期。
+- 不做 Web/APP/小程序登录态协调。
+- 不提供设备管理 UI 或设备列表能力。
+- 不内置业务快捷 facade，例如 `SendOrderMessage`、`SendAuditMessage`。
+- 不直接暴露内部系统事件消息的构造与发送，例如“xxx 创建了群聊”“xxx 加入了群聊”。
+
+SDK 可以接收后端返回的 `refresh_token` / `session_id` 字段以保持响应结构完整，但不主动使用这些字段做续期逻辑。
+
+---
+
+## 类型职责总览
+
+```text
+Client        — 持有 BaseURL、APIKey、HTTPClient；负责 integration 用户 upsert、登录等服务端集成能力
+Session       — 持有 access token；代表“以某个 IM 用户身份操作”
+  ├── Conversations() — 会话创建、查询、列表、激活、已读
+  ├── Messages()      — 消息发送、消息列表
+  ├── Users()         — 当前用户、用户资料查询
+  └── Groups()        — 群组创建、详情、成员管理
+
+MessageInput  — 消息请求值对象，由纯函数构造
+```
+
+| 类型 | 职责 | 不做什么 |
+|------|------|---------|
+| `Client` | 初始化配置、integration API、用户资料 upsert、创建 `Session` | 不直接发送用户消息、不操作用户态会话 |
+| `Session` | 保存 access token，提供领域 Service 入口 | 不管理 refresh token，不做自动重登 |
+| `ConversationService` | 会话 CRUD、列表、搜索、激活、已读 | 不发送消息 |
+| `MessageService` | 消息发送、消息列表 | 不创建会话、不构造业务流程 |
+| `GroupService` | 群创建、详情、成员邀请/踢出/退出 | 不发送消息 |
+| `UserService` | 当前用户、用户资料查询 | 不做 integration upsert |
+
+---
+
+## API 设计
+
+### 1. 初始化
+
+业务启动时创建一次 `Client`，复用底层 `http.Client`。
+
+```go
+imClient := im.New(
+    im.WithBaseURL("http://localhost:8901"),
+    im.WithAPIKey("secret-xxx"),
+    im.WithHTTPClient(httpClient),
+)
+```
+
+### 2. Integration 用户写入
+
+后端需要新增独立 integration user upsert endpoint，SDK 暴露显式 upsert 方法。`EnsureUser(s)` 是用户资料写入语义，必须幂等，重复调用只更新资料，不创建登录态。
+
+```go
+err := imClient.EnsureUser(ctx, im.UserInput{
+    ID:       "user_b",
+    Nickname: "Brock",
+    Avatar:   "https://example.com/avatar.png",
+    Type:     im.UserTypeHuman,
+})
+
+err = imClient.EnsureUsers(ctx,
+    im.UserInput{ID: "user_a", Nickname: "Alice"},
+    im.UserInput{ID: "user_b", Nickname: "Brock"},
+)
+```
+
+`UserInput.Type` 应保留。它决定账号的业务能力和交互语义，例如普通用户、通知账号、可交互机器人。SDK 不应该只靠 ID 前缀推断类型；ID 前缀最多作为服务端兼容兜底，不作为长期主设计。
+
+### 3. 创建 Session
+
+`Login` 只根据已有用户 ID 换取用户态 access token，不写入或更新用户资料。SDK 不负责 refresh token 续期；业务方如果需要长期会话，应重新调用 integration 登录或自行管理后端返回字段。
+
+```go
+session, err := imClient.Login(ctx, "audit_bot")
+if err != nil {
+    return err
+}
+```
+
+如果用户不存在，`Login` 应返回明确错误，例如 `ErrUserNotFound`。不要让 `Login` 隐式创建用户，否则“认证”和“资料写入”会重新耦合，后续用户类型、头像昵称、机器人能力都会变得不可控。
+
+`Session` 可以暴露基础元信息：
+
+```go
+token := session.Token()
+sessionID := session.SessionID()
+expiresIn := session.ExpiresIn()
+```
+
+### 4. 用户态分步操作
+
+所有用户态操作都从 `Session` 下的领域 Service 进入。
+
+```go
+conv, err := session.Conversations().GetOrCreatePrivate(ctx, "user_b")
+if err != nil {
+    return err
+}
+
+msg, err := session.Messages().Send(ctx, conv.ID, im.TextMessage("你好"))
+if err != nil {
+    return err
+}
+```
+
+列表类接口使用 Params struct：
+
+```go
+messages, err := session.Messages().List(ctx, conv.ID, im.ListMessagesParams{
+    Limit:    50,
+    BeforeID: "msg-id",
+})
+
+page, err := session.Conversations().List(ctx, im.ListConversationsParams{
+    Limit:                20,
+    Query:                "brock",
+    ActiveConversationID: conv.ID,
+})
+```
+
+### 5. 群组能力
+
+群聊不是 peer-user 模型，SDK 应明确提供群组 Service，而不是把群聊塞进私聊快捷方法。
+
+```go
+group, err := session.Groups().Create(ctx, im.CreateGroupParams{
+    Name:      "项目讨论",
+    MemberIDs: []string{"user_c", "user_d"},
+})
+if err != nil {
+    return err
+}
+
+err = session.Groups().Invite(ctx, group.Group.ID, []string{"user_e"})
+err = session.Groups().Kick(ctx, group.Group.ID, []string{"user_d"})
+
+msg, err := session.Messages().Send(ctx, group.Group.ConversationID, im.TextMessage("大家好"))
+```
+
+对于“内容审核群”这类全局或业务唯一群，不应通过“某个机器人只能创建一个群”的隐式规则实现，而应显式建模为带业务唯一键的 get-or-create：
+
+```go
+group, err := session.Groups().GetOrCreate(ctx, im.GetOrCreateGroupParams{
+    UniqueKey: "content_audit",
+    Name:      "内容审核群",
+    MemberIDs: nil,
+})
+```
+
+建议语义：
+
+- `owner_id + unique_key` 唯一；同一机器人、同一业务键只返回一个群。
+- `MemberIDs` 允许为空；创建者自动成为 owner/member，所以群内至少有机器人自己。
+- 不限制机器人只能创建一个群；机器人可以为不同业务键创建多个群。
+- 后端需要为 `owner_id + unique_key` 建唯一索引，字段名建议使用 `unique_key`。
+
+审核机器人仍然可以给具体用户发私聊通知：
+
+```go
+conv, err := session.Conversations().GetOrCreatePrivate(ctx, "user_a")
+if err != nil {
+    return err
+}
+
+_, err = session.Messages().Send(ctx, conv.ID, im.TextMessage("内容已审核通过"))
+```
+
+用户也可以按机器人 ID 拉取与该机器人的通知会话。
+
+### 6. 用户类型规划
+
+当前 `system` / `bot` 命名不够直观，容易把展示、能否回复、能否发起会话、能否建群等能力混在一个词里。长期建议改成更贴近业务语义的类型：
+
+| 类型 | 语义 |
+|------|------|
+| `human` | 普通用户，可以正常收发消息 |
+| `notification` | 通知账号，只能主动发消息；用户不能回复，不能主动向它发起会话 |
+| `bot` | 可交互机器人，可以主动发起会话，也可以被用户发起会话/回复，可以创建群 |
+
+第一版可以先使用类型控制主要行为；后续如果权限变复杂，再拆成能力矩阵，例如 `can_receive_reply`、`can_be_contacted`、`can_create_group`。用户类型命名和能力矩阵作为单独专题继续讨论，不阻塞 SDK 结构设计。
+
+---
+
+## 消息类型
+
+统一用 `MessageService.Send` 发送，用纯函数构造 `MessageInput`。
+
+```go
+func (s *MessageService) Send(ctx context.Context, conversationID string, msg MessageInput) (*Message, error)
+
+func TextMessage(content string) MessageInput
+func CardMessage(input CardInput) MessageInput
+func ImageMessage(url string) MessageInput
+func VideoMessage(url string) MessageInput
+func AudioMessage(url string) MessageInput
+func LinkMessage(input LinkInput) MessageInput
+```
+
+`MessageInput` 应支持幂等字段，便于业务方避免重复发送：
+
+```go
+msg := im.CardMessage(im.CardInput{
+    Title:       "租车订单已提交",
+    Description: "等待商家确认",
+    URL:         "https://example.com/order/123",
+}).WithClientMessageID("order-123-submitted")
+```
+
+系统事件消息由后端内部流程产生，不作为普通 SDK 构造器暴露。
+
+---
+
+## 推荐业务封装方式
+
+SDK 不提供业务快捷 facade，但业务系统可以在自己的代码中组合：
+
+```go
+func SendOrderMessage(ctx context.Context, imClient *im.Client, order Order) error {
+    err := imClient.EnsureUser(ctx, im.UserInput{
+        ID:       "order_notification",
+        Nickname: "订单消息",
+        Type:     im.UserTypeNotification,
+    })
+    if err != nil {
+        return err
+    }
+
+    session, err := imClient.Login(ctx, "order_notification")
+    if err != nil {
+        return err
+    }
+
+    conv, err := session.Conversations().GetOrCreatePrivate(ctx, order.UserID)
+    if err != nil {
+        return err
+    }
+
+    _, err = session.Messages().Send(ctx, conv.ID, im.CardMessage(im.CardInput{
+        Title:       "租车订单已提交",
+        Description: "等待商家确认",
+        URL:         order.URL,
+    }).WithClientMessageID("order-" + order.ID + "-submitted"))
+    return err
+}
+```
+
+这样 SDK 保持稳定，业务语义留在业务系统。
+
+---
+
+## 与旧设计对比
+
+| 维度 | 旧 | 新 |
+|------|-----|-----|
+| Client 类型 | `IntegrationClient` + `UserClient` 两个入口 | `Client` + `Session` 两层入口 |
+| 认证 | `Config` 同时混放 APIKey 和 Token | `Client` 持 APIKey，`Session` 持 access token |
+| 服务组织 | 方法扁平在 client 上 | 按领域分 service: `.Conversations().List()` |
+| 参数传递 | 多个散落 Options struct | 统一 Params struct，语义更稳定 |
+| 发消息 | 每类型一个方法，如 `SendCardMessage` | 统一 `Messages().Send()` + 构造器 |
+| 群聊 | 挂在 `UserClient` 上 | 独立 `Groups()` 服务 |
+| Session 流转 | 手动 `NewUserClient(token)` | `Client.Login(ctx, userID)` 返回 `Session` |
+| 业务快捷 | 示例直接写在 SDK 层 | 由业务系统自行封装 |
+
+---
+
+## 示例：旧到新
+
+```go
+// 旧
+integrationClient := dim.NewIntegrationClient(dim.Config{
+    BaseURL: apiBase,
+    APIKey:  integrationKey,
+})
+login, err := integrationClient.Login(ctx, dim.LoginRequest{
+    User: dim.User{ID: "system_order", Nickname: "订单消息", Type: "system"},
+})
+if err != nil {
+    return err
+}
+
+userClient := dim.NewUserClient(dim.Config{
+    BaseURL: apiBase,
+    Token:   login.Token,
+})
+
+conv, err := userClient.CreatePrivateConversation(ctx, "user_b")
+if err != nil {
+    return err
+}
+
+_, err = userClient.SendCardMessage(ctx, conv.ID, dim.Payload{
+    Title:       "租车订单已提交",
+    Description: "您的租车订单已成功提交，请耐心等待商家确认。",
+    URL:         "https://www.example.com/order/detail",
+})
+```
+
+```go
+// 新
+imClient := im.New(
+    im.WithBaseURL(apiBase),
+    im.WithAPIKey(integrationKey),
+)
+
+session, err := imClient.Login(ctx, "audit_bot")
+if err != nil {
+    return err
+}
+
+conv, err := session.Conversations().GetOrCreatePrivate(ctx, "user_b")
+if err != nil {
+    return err
+}
+
+_, err = session.Messages().Send(ctx, conv.ID, im.CardMessage(im.CardInput{
+    Title:       "租车订单已提交",
+    Description: "您的租车订单已成功提交，请耐心等待商家确认。",
+    URL:         "https://www.example.com/order/detail",
+}).WithClientMessageID("order-123-submitted"))
+```
+
+---
+
+## 已确认决策
+
+1. 新增独立 integration 用户 upsert endpoint，SDK 提供 `EnsureUser(s)`，并支持显式传入用户类型。
+2. `Login` 只接收用户 ID，不写用户资料；用户不存在时返回明确错误。
+3. 私聊会话方法命名为 `GetOrCreatePrivate`，避免 `CreatePrivate` 造成“必定新建”的误解。
+4. SDK 不提供业务快捷 facade，订单消息、审核消息等组合流程由业务系统自行封装。
+5. SDK 不管理 refresh token、多设备登录和自动续期；相关字段只作为响应数据保留。
+6. 群成员管理第一版提供 `Create`、`Detail`、`Invite`、`Kick`、`Leave`。
+7. 业务唯一群使用 `Groups().GetOrCreate(ctx, params)`，通过 `owner_id + unique_key` 唯一约束实现。
+
+## 后续专题
+
+1. 用户类型命名从 `system/bot` 调整为 `human/notification/bot`，以及是否引入能力矩阵。
+2. `MessageInput.WithClientMessageID` 使用链式方法还是构造参数；当前文档先按链式方法表达。
+3. `CreatePrivateConversationSession` 是否继续保留为低层 integration API。若仍用于前端跳转，可以保留但不作为推荐主流程。

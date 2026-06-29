@@ -50,7 +50,7 @@ const AvatarSuffix = "?x-oss-process=image/resize,m_fill,w_200,h_200"
 var USER_SYSTEM_NOTICE = dim.User{
 	ID:       "system_notice",
 	Nickname: "系统通知",
-	Avatar:   "https://oss.21rv.com/uploads/avatar/21.jpg" + AvatarSuffix,
+	Avatar:   "https://img02.wanfangche.com/uploads/avatar/21.jpg" + AvatarSuffix,
 	Type:     "system",
 }
 
@@ -58,7 +58,7 @@ var USER_SYSTEM_NOTICE = dim.User{
 var USER_SYSTEM_OPS = dim.User{
 	ID:       "system_ops",
 	Nickname: "系统运维",
-	Avatar:   "https://oss.21rv.com/uploads/avatar/23.jpg" + AvatarSuffix,
+	Avatar:   "https://img02.wanfangche.com/uploads/avatar/23.jpg" + AvatarSuffix,
 	Type:     "system",
 }
 
@@ -68,7 +68,7 @@ var USER_SYSTEM_OPS = dim.User{
 var USER_SYSTEM_ORDER = dim.User{
 	ID:       "system_order",
 	Nickname: "订单消息",
-	Avatar:   "https://oss.21rv.com/uploads/avatar/22.jpg" + AvatarSuffix,
+	Avatar:   "https://img02.wanfangche.com/uploads/avatar/22.jpg" + AvatarSuffix,
 	Type:     "system",
 }
 
@@ -76,7 +76,7 @@ var USER_SYSTEM_ORDER = dim.User{
 var USER_SYSTEM_PAYMENT = dim.User{
 	ID:       "system_payment",
 	Nickname: "支付消息",
-	Avatar:   "https://oss.21rv.com/uploads/avatar/27.jpg" + AvatarSuffix,
+	Avatar:   "https://img02.wanfangche.com/uploads/avatar/27.jpg" + AvatarSuffix,
 	Type:     "system",
 }
 
@@ -84,7 +84,7 @@ var USER_SYSTEM_PAYMENT = dim.User{
 var USER_SYSTEM_LOGISTICS = dim.User{
 	ID:       "system_logistics",
 	Nickname: "物流消息",
-	Avatar:   "https://oss.21rv.com/uploads/avatar/28.jpg" + AvatarSuffix,
+	Avatar:   "https://img02.wanfangche.com/uploads/avatar/28.jpg" + AvatarSuffix,
 	Type:     "system",
 }
 
@@ -94,7 +94,7 @@ var USER_SYSTEM_LOGISTICS = dim.User{
 var USER_SYSTEM_INTERACTION = dim.User{
 	ID:       "system_interaction",
 	Nickname: "互动消息",
-	Avatar:   "https://oss.21rv.com/uploads/avatar/24.jpg" + AvatarSuffix,
+	Avatar:   "https://img02.wanfangche.com/uploads/avatar/24.jpg" + AvatarSuffix,
 	Type:     "system",
 }
 
@@ -104,7 +104,7 @@ var USER_SYSTEM_INTERACTION = dim.User{
 var USER_SYSTEM_SERVICE = dim.User{
 	ID:       "system_service",
 	Nickname: "客服消息",
-	Avatar:   "https://oss.21rv.com/uploads/avatar/29.jpg" + AvatarSuffix,
+	Avatar:   "https://img02.wanfangche.com/uploads/avatar/29.jpg" + AvatarSuffix,
 	Type:     "bot",
 }
 
@@ -112,7 +112,7 @@ var USER_SYSTEM_SERVICE = dim.User{
 var USER_SYSTEM_REMINDER = dim.User{
 	ID:       "system_reminder",
 	Nickname: "提醒通知",
-	Avatar:   "https://oss.21rv.com/uploads/avatar/30.jpg" + AvatarSuffix,
+	Avatar:   "https://img02.wanfangche.com/uploads/avatar/30.jpg" + AvatarSuffix,
 	Type:     "system",
 }
 
@@ -120,7 +120,7 @@ var USER_SYSTEM_REMINDER = dim.User{
 var USER_SYSTEM_AUDIT = dim.User{
 	ID:       "system_audit",
 	Nickname: "审核消息",
-	Avatar:   "https://oss.21rv.com/uploads/avatar/23.jpg" + AvatarSuffix,
+	Avatar:   "https://img02.wanfangche.com/uploads/avatar/23.jpg" + AvatarSuffix,
 	Type:     "bot",
 }
 
@@ -130,6 +130,6 @@ var USER_SYSTEM_AUDIT = dim.User{
 var USER_SYSTEM_REPORT = dim.User{
 	ID:       "system_report",
 	Nickname: "数据报告",
-	Avatar:   "https://oss.21rv.com/uploads/avatar/32.jpg" + AvatarSuffix,
+	Avatar:   "https://img02.wanfangche.com/uploads/avatar/32.jpg" + AvatarSuffix,
 	Type:     "system",
 }
