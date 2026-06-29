@@ -38,7 +38,7 @@ export enum MessageType {
     description?: string
     url?: string
     image_url?: string
-    price?: string
+    price_text?: string
     meta?: Record<string, string>
     event_type?: string
     operator_id?: string
@@ -208,7 +208,7 @@ export enum MessageType {
       description: payload.description,
       url: payload.url,
       image_url: payload.image_url,
-      price: payload.price,
+      price_text: payload.price_text,
       meta: payload.meta,
     }
   }
@@ -718,14 +718,14 @@ export enum MessageType {
       description?: string,
       url?: string,
       imageUrl?: string,
-      price?: string
+      priceText?: string
     ): Promise<Message> {
       return this.sendMessage(conversationId, MessageType.Card, '', {
         title,
         description,
         url,
         image_url: imageUrl,
-        price,
+        price_text: priceText,
       });
     }
   

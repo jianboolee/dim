@@ -63,7 +63,7 @@ type Payload struct {
 	Description   string            `json:"description,omitempty"`
 	URL           string            `json:"url,omitempty"`
 	ImageURL      string            `json:"image_url,omitempty"`
-	Price         string            `json:"price,omitempty"`
+	PriceText     string            `json:"price_text,omitempty"`
 	Meta          map[string]string `json:"meta,omitempty"`
 	EventType     string            `json:"event_type,omitempty"`
 	OperatorID    string            `json:"operator_id,omitempty"`

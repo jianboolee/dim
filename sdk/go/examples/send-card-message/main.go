@@ -60,7 +60,7 @@ func main() {
 		Description: "暑期出行，租车低至899元/天起，支持全国取还车，随时随地畅享自驾乐趣。",
 		ImageURL:    "https://img02.wanfangche.com/uploads/im/images/20260628/bqks3c09hnp9lms7z264xahx533m7fhr.jpg?x-oss-process=image/resize,w_960,m_lfit",
 		URL:         "https://code.visualstudio.com/docs/agents/overview",
-		Price:       "￥899元/天起",
+		PriceText:   "￥899元/天起",
 	}
 
 	message, err := userClient.SendCardMessage(ctx, session.ConversationID, payload)

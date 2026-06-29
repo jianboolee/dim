@@ -16,7 +16,7 @@ Go SDK 面向业务后端服务使用，提供一组稳定、类型安全、可�
 | 显式流转 | `Client.EnsureUser(ctx, user)` 写资料，`Client.Login(ctx, userID)` 创建 `Session`，所有用户态操作都从 `Session` 发起 |
 | 不隐藏业务流程 | SDK 不内置“确保用户、创建会话、发送消息”的业务组合；组合流程由业务方决定 |
 | 上下文优先 | 所有网络方法第一个参数都是 `context.Context` |
-| 值构造器 | 消息类型用 `TextMessage()` / `CardMessage()` 等纯函数构造，不为每种消息膨胀发送方法 |
+| 值构造器 | 消息 body 用 `TextMessage()` / `CardMessage()` 等纯函数构造，不为每种消息膨胀发送方法 |
 | 参数结构化 | 复杂查询优先使用 Params struct，避免过多函数式 option 导致调用含义分散 |
 | 可测试 | 对外类型职责稳定，业务侧可围绕小接口自行 mock |
 
@@ -46,7 +46,7 @@ Session       — 持有 access token；代表“以某个 IM 用户身份操作
   ├── Users()         — 当前用户、用户资料查询
   └── Groups()        — 群组创建、详情、成员管理
 
-MessageInput  — 消息请求值对象，由纯函数构造
+MessageInput  — 消息请求 envelope，承载幂等字段和具体消息 body
 ```
 
 | 类型 | 职责 | 不做什么 |
@@ -83,7 +83,7 @@ err := imClient.EnsureUser(ctx, im.UserInput{
     ID:       "user_b",
     Nickname: "Brock",
     Avatar:   "https://example.com/avatar.png",
-    Type:     im.UserTypeHuman,
+    Type:     im.UserTypeNormal,
 })
 
 err = imClient.EnsureUsers(ctx,
@@ -92,7 +92,14 @@ err = imClient.EnsureUsers(ctx,
 )
 ```
 
-`UserInput.Type` 应保留。它决定账号的业务能力和交互语义，例如普通用户、通知账号、可交互机器人。SDK 不应该只靠 ID 前缀推断类型；ID 前缀最多作为服务端兼容兜底，不作为长期主设计。
+`UserInput.Type` 应保留。它决定账号的业务能力和交互语义，例如普通用户、系统账号、可交互机器人。SDK 不应该只靠 ID 前缀推断类型；ID 前缀最多作为服务端兼容兜底，不作为长期主设计。
+
+upsert 语义：
+
+- `ID` 必填，`Type` 只允许 `normal` / `system` / `bot`，不传默认为 `normal`。
+- 空 `Nickname`、空 `Avatar` 不覆盖旧值，避免局部更新时误清资料。
+- 非空字段按新值覆盖旧值，重复 ID 以请求中的最后一个非空值为准。
+- 批量 `EnsureUsers` 建议服务端按单次请求原子处理；若任一用户非法，整批返回错误。
 
 ### 3. 创建 Session
 
@@ -111,6 +118,9 @@ if err != nil {
 
 ```go
 token := session.Token()
+userID := session.UserID()
+redirectURL := session.RedirectURL() // 跳转到 IM 首页
+conversationURL := session.RedirectURL(im.WithConversationID(conversationID)) // 跳转到指定会话
 sessionID := session.SessionID()
 expiresIn := session.ExpiresIn()
 ```
@@ -177,10 +187,12 @@ group, err := session.Groups().GetOrCreate(ctx, im.GetOrCreateGroupParams{
 
 建议语义：
 
-- `owner_id + unique_key` 唯一；同一机器人、同一业务键只返回一个群。
+- `scope_user_id + unique_key + status(active)` 唯一；同一机器人、同一业务键只返回一个活跃群。
+- `scope_user_id` 默认为创建者 ID，创建后不可变；即使未来发生群主转让，也不影响唯一键语义。
 - `MemberIDs` 允许为空；创建者自动成为 owner/member，所以群内至少有机器人自己。
 - 不限制机器人只能创建一个群；机器人可以为不同业务键创建多个群。
-- 后端需要为 `owner_id + unique_key` 建唯一索引，字段名建议使用 `unique_key`。
+- 群解散后允许使用相同 `scope_user_id + unique_key` 重建新群。
+- 后端需要为活跃群建立 `scope_user_id + unique_key` 的唯一约束；MongoDB 可使用 partial unique index，例如只约束 `status=active`。
 
 审核机器人仍然可以给具体用户发私聊通知：
 
@@ -195,17 +207,19 @@ _, err = session.Messages().Send(ctx, conv.ID, im.TextMessage("内容已审核�
 
 用户也可以按机器人 ID 拉取与该机器人的通知会话。
 
-### 6. 用户类型规划
+### 6. 用户类型
 
-当前 `system` / `bot` 命名不够直观，容易把展示、能否回复、能否发起会话、能否建群等能力混在一个词里。长期建议改成更贴近业务语义的类型：
+沿用当前 `normal` / `system` / `bot` 三种类型，不引入新命名和能力矩阵：
 
 | 类型 | 语义 |
 |------|------|
-| `human` | 普通用户，可以正常收发消息 |
-| `notification` | 通知账号，只能主动发消息；用户不能回复，不能主动向它发起会话 |
+| `normal` | 普通用户，可以正常收发消息；默认不传即为该类型 |
+| `system` | 系统账号，只能主动发消息；用户不能回复，不能主动向它发起会话 |
 | `bot` | 可交互机器人，可以主动发起会话，也可以被用户发起会话/回复，可以创建群 |
 
-第一版可以先使用类型控制主要行为；后续如果权限变复杂，再拆成能力矩阵，例如 `can_receive_reply`、`can_be_contacted`、`can_create_group`。用户类型命名和能力矩阵作为单独专题继续讨论，不阻塞 SDK 结构设计。
+`UserInput.Type` 由业务方显式传入，不靠 ID 前缀推断。`system` 和 `bot` 都允许通过 `Login(ctx, userID)` 创建服务端操作 session，因为它们需要以自身身份发送消息、创建会话或创建群。
+
+落地时需要同步修正后端语义：`bot` 不应被当作只读系统账号处理，用户可以向 `bot` 发起会话并回复；`system` 才禁止用户发起会话和回复。
 
 ---
 
@@ -224,15 +238,32 @@ func AudioMessage(url string) MessageInput
 func LinkMessage(input LinkInput) MessageInput
 ```
 
-`MessageInput` 应支持幂等字段，便于业务方避免重复发送：
+`MessageInput` 应支持幂等字段，便于业务方避免重复发送。`ClientMessageID` 属于消息 envelope，不属于卡片、图片、文本等 payload：
 
 ```go
-msg := im.CardMessage(im.CardInput{
-    Title:       "租车订单已提交",
-    Description: "等待商家确认",
-    URL:         "https://example.com/order/123",
-}).WithClientMessageID("order-123-submitted")
+msg := im.MessageInput{
+    ClientMessageID: "order-123-submitted",
+    Body: im.CardMessage(im.CardInput{
+        Title:       "租车订单已提交",
+        Description: "等待商家确认",
+        URL:         "https://example.com/order/123",
+    }),
+})
 ```
+
+卡片消息的价格字段是展示文案，不参与金额计算。为避免 `price` 被误解为数值金额，接口字段建议命名为 `price_text`，Go 字段命名为 `PriceText`：
+
+```go
+type CardInput struct {
+    Title       string
+    Description string
+    URL         string
+    ImageURL    string
+    PriceText   string // JSON: price_text，例如 "￥899元/天起"、"待确认"
+}
+```
+
+落地时后端、前端、SDK 统一从 `price` 调整为 `price_text`，不保留双字段兼容，避免新旧字段并存造成歧义。
 
 系统事件消息由后端内部流程产生，不作为普通 SDK 构造器暴露。
 
@@ -247,7 +278,7 @@ func SendOrderMessage(ctx context.Context, imClient *im.Client, order Order) err
     err := imClient.EnsureUser(ctx, im.UserInput{
         ID:       "order_notification",
         Nickname: "订单消息",
-        Type:     im.UserTypeNotification,
+        Type:     im.UserTypeSystem,
     })
     if err != nil {
         return err
@@ -263,11 +294,15 @@ func SendOrderMessage(ctx context.Context, imClient *im.Client, order Order) err
         return err
     }
 
-    _, err = session.Messages().Send(ctx, conv.ID, im.CardMessage(im.CardInput{
-        Title:       "租车订单已提交",
-        Description: "等待商家确认",
-        URL:         order.URL,
-    }).WithClientMessageID("order-" + order.ID + "-submitted"))
+    _, err = session.Messages().Send(ctx, conv.ID, im.MessageInput{
+        ClientMessageID: "order-" + order.ID + "-submitted",
+        Body: im.CardMessage(im.CardInput{
+            Title:       "订单已提交",
+            Description: "等待商家确认",
+            URL:         order.URL,
+            PriceText:   order.PriceText,
+        }),
+    })
     return err
 }
 ```
@@ -276,91 +311,61 @@ func SendOrderMessage(ctx context.Context, imClient *im.Client, order Order) err
 
 ---
 
-## 与旧设计对比
-
-| 维度 | 旧 | 新 |
-|------|-----|-----|
-| Client 类型 | `IntegrationClient` + `UserClient` 两个入口 | `Client` + `Session` 两层入口 |
-| 认证 | `Config` 同时混放 APIKey 和 Token | `Client` 持 APIKey，`Session` 持 access token |
-| 服务组织 | 方法扁平在 client 上 | 按领域分 service: `.Conversations().List()` |
-| 参数传递 | 多个散落 Options struct | 统一 Params struct，语义更稳定 |
-| 发消息 | 每类型一个方法，如 `SendCardMessage` | 统一 `Messages().Send()` + 构造器 |
-| 群聊 | 挂在 `UserClient` 上 | 独立 `Groups()` 服务 |
-| Session 流转 | 手动 `NewUserClient(token)` | `Client.Login(ctx, userID)` 返回 `Session` |
-| 业务快捷 | 示例直接写在 SDK 层 | 由业务系统自行封装 |
-
----
-
-## 示例：旧到新
+## 示例
 
 ```go
-// 旧
-integrationClient := dim.NewIntegrationClient(dim.Config{
-    BaseURL: apiBase,
-    APIKey:  integrationKey,
-})
-login, err := integrationClient.Login(ctx, dim.LoginRequest{
-    User: dim.User{ID: "system_order", Nickname: "订单消息", Type: "system"},
-})
-if err != nil {
-    return err
-}
-
-userClient := dim.NewUserClient(dim.Config{
-    BaseURL: apiBase,
-    Token:   login.Token,
-})
-
-conv, err := userClient.CreatePrivateConversation(ctx, "user_b")
-if err != nil {
-    return err
-}
-
-_, err = userClient.SendCardMessage(ctx, conv.ID, dim.Payload{
-    Title:       "租车订单已提交",
-    Description: "您的租车订单已成功提交，请耐心等待商家确认。",
-    URL:         "https://www.example.com/order/detail",
-})
-```
-
-```go
-// 新
 imClient := im.New(
     im.WithBaseURL(apiBase),
     im.WithAPIKey(integrationKey),
 )
 
-session, err := imClient.Login(ctx, "audit_bot")
+// 1. 确保用户资料存在
+_ = imClient.EnsureUser(ctx, im.UserInput{
+    ID:       "system_order",
+    Nickname: "订单消息",
+    Type:     im.UserTypeSystem,
+})
+_ = imClient.EnsureUser(ctx, im.UserInput{
+    ID:       "user_b",
+    Nickname: "Brock",
+})
+
+// 2. 以订单消息身份登录
+session, err := imClient.Login(ctx, "system_order")
 if err != nil {
     return err
 }
 
+// 3. 打开/创建与 user_b 的私聊
 conv, err := session.Conversations().GetOrCreatePrivate(ctx, "user_b")
 if err != nil {
     return err
 }
 
-_, err = session.Messages().Send(ctx, conv.ID, im.CardMessage(im.CardInput{
-    Title:       "租车订单已提交",
-    Description: "您的租车订单已成功提交，请耐心等待商家确认。",
-    URL:         "https://www.example.com/order/detail",
-}).WithClientMessageID("order-123-submitted"))
+// 4. 发送卡片消息
+_, err = session.Messages().Send(ctx, conv.ID, im.MessageInput{
+    ClientMessageID: "order-123-submitted",
+    Body: im.CardMessage(im.CardInput{
+        Title:       "租车订单已提交",
+        Description: "您的租车订单已成功提交，请耐心等待商家确认。",
+        URL:         "https://www.example.com/order/detail",
+        PriceText:   "待确认",
+    }),
+})
 ```
 
 ---
 
 ## 已确认决策
 
-1. 新增独立 integration 用户 upsert endpoint，SDK 提供 `EnsureUser(s)`，并支持显式传入用户类型。
+1. 新增独立 integration 用户 upsert endpoint（后端需新增 `POST /im/api/integration/users`），SDK 提供 `EnsureUser(s)`，并支持显式传入用户类型。
 2. `Login` 只接收用户 ID，不写用户资料；用户不存在时返回明确错误。
 3. 私聊会话方法命名为 `GetOrCreatePrivate`，避免 `CreatePrivate` 造成“必定新建”的误解。
 4. SDK 不提供业务快捷 facade，订单消息、审核消息等组合流程由业务系统自行封装。
 5. SDK 不管理 refresh token、多设备登录和自动续期；相关字段只作为响应数据保留。
 6. 群成员管理第一版提供 `Create`、`Detail`、`Invite`、`Kick`、`Leave`。
-7. 业务唯一群使用 `Groups().GetOrCreate(ctx, params)`，通过 `owner_id + unique_key` 唯一约束实现。
-
-## 后续专题
-
-1. 用户类型命名从 `system/bot` 调整为 `human/notification/bot`，以及是否引入能力矩阵。
-2. `MessageInput.WithClientMessageID` 使用链式方法还是构造参数；当前文档先按链式方法表达。
-3. `CreatePrivateConversationSession` 是否继续保留为低层 integration API。若仍用于前端跳转，可以保留但不作为推荐主流程。
+7. 业务唯一群使用 `Groups().GetOrCreate(ctx, params)`，通过 `scope_user_id + unique_key + active` 唯一约束实现；群解散后允许重建。
+8. `MessageInput.ClientMessageID` 放在消息 envelope，作为构造参数直接传入，不使用链式方法。
+9. 用户类型沿用 `normal` / `system` / `bot`，不引入新命名和能力矩阵。
+10. 不保留 `CreatePrivateConversationSession`；前端跳转地址通过 `Session.RedirectURL()` 获取，进入指定会话使用 `Session.RedirectURL(im.WithConversationID(conversationID))`。
+11. 卡片消息价格字段使用展示语义命名 `price_text` / `PriceText`，不使用容易被误解为数值金额的 `price`。

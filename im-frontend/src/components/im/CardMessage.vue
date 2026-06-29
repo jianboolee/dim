@@ -28,8 +28,8 @@
       <div class="card-info">
         <div class="card-title">{{ message.payload?.title || '' }}</div>
         <div class="card-desc">{{ message.payload?.description }}</div>
-        <div class="card-price" v-if="message.payload?.price">
-          <span class="price-amount">{{ message.payload.price }}</span>
+        <div class="card-price" v-if="message.payload?.price_text">
+          <span class="price-amount">{{ message.payload.price_text }}</span>
         </div>
       </div>
     </div>

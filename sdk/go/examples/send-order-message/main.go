@@ -60,7 +60,7 @@ func main() {
 	// 	Description: "您的租车订单已成功提交，请耐心等待商家确认。商家确认后我们将第一时间通知您。",
 	// 	ImageURL:    "https://img02.wanfangche.com/uploads/im/images/20260628/bqks3c09hnp9lms7z264xahx533m7fhr.jpg?x-oss-process=image/resize,w_960,m_lfit",
 	// 	URL:         "https://www.example.com/order/detail",
-	// 	Price:       "待确认",
+	// 	PriceText:   "待确认",
 	// }
 
 	var payload = dim.Payload{
@@ -68,7 +68,7 @@ func main() {
 		Description: "您的租车订单商家已确认。",
 		ImageURL:    "https://img02.wanfangche.com/uploads/im/images/20260629/qsj3rve45p0rqcckj0x7byyinywolyw2.jpg?x-oss-process=image/resize,w_960,m_lfit",
 		URL:         "https://www.example.com/order/detail",
-		Price:       "￥899元/天起",
+		PriceText:   "￥899元/天起",
 	}
 
 	message, err := userClient.SendCardMessage(ctx, session.ConversationID, payload)

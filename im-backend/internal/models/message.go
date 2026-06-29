@@ -91,7 +91,7 @@ type Payload struct {
 	Description   string            `bson:"description,omitempty" json:"description,omitempty"`
 	URL           string            `bson:"url,omitempty" json:"url,omitempty"`
 	ImageURL      string            `bson:"image_url,omitempty" json:"image_url,omitempty"`
-	Price         string            `bson:"price,omitempty" json:"price,omitempty"`
+	PriceText     string            `bson:"price_text,omitempty" json:"price_text,omitempty"`
 	Meta          map[string]string `bson:"meta,omitempty" json:"meta,omitempty"`
 	EventType     string            `bson:"event_type,omitempty" json:"event_type,omitempty"`
 	OperatorID    string            `bson:"operator_id,omitempty" json:"operator_id,omitempty"`
