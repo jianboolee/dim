@@ -213,7 +213,6 @@ import {
   getPeerUserId,
   isGroupConversation as isGroupConversationModel,
 } from '@/utils/im/conversation'
-import { collectSystemEventUserIds } from '@/utils/im/systemEvent'
 import { readImageDimensions, getFileFormat } from '@/utils/file'
 import { uploadIMFile } from '@/utils/upload'
 
@@ -237,7 +236,7 @@ const {
   ensureConversationInList,
   requestScrollToConversation,
 } = useConversationList()
-const { userMap, fetchUser, fetchUsers, mergeUsers } = useUserProfiles()
+const { userMap, fetchUser, mergeUsers } = useUserProfiles()
 
 const messageText = ref('')
 const messages = ref<ChatMessage[]>([])
@@ -334,19 +333,6 @@ const getMessageSenderName = (message: ChatMessage) => (
   || message.from_id
   || ''
 )
-
-const collectMessageUserIds = (items: ChatMessage[]) => {
-  const ids = new Set<string>()
-  for (const message of items) {
-    if (message.from_id && !message.sender_profile) ids.add(message.from_id)
-    if (isSystemEventMessage(message)) {
-      for (const userId of collectSystemEventUserIds(message)) {
-        ids.add(userId)
-      }
-    }
-  }
-  return [...ids]
-}
 
 watch(pageTitle, (title) => {
   setBaseTitle(title)
@@ -544,9 +530,6 @@ const syncConversationByMessage = (message: ChatMessage, shouldScroll = false) =
 const handleNewMessage = async (message: ChatMessage) => {
   if (!isCurrentChatMessage(message)) return
 
-  if (isGroupConversation.value) {
-    await fetchUsers(collectMessageUserIds([message]))
-  }
   mergeMessages([message])
   syncConversationByMessage(message, message.from_id === currentUserId.value)
   scrollToBottom(true, message.from_id === currentUserId.value)
@@ -638,9 +621,7 @@ const fetchHistoryMessages = async (loadMore = false) => {
     const newMessages = response.sort(
       (a, b) => new Date(a.created_at ?? 0).getTime() - new Date(b.created_at ?? 0).getTime(),
     )
-    if (isGroupConversation.value) {
-      await fetchUsers(collectMessageUserIds(newMessages))
-    }
+    mergeUsers(newMessages.map((message) => message.sender_profile))
 
     if (loadMore) {
       mergeMessages(newMessages)
@@ -705,9 +686,6 @@ const syncLatestMessages = async () => {
     }
 
     mergeMessages(incoming)
-    if (isGroupConversation.value) {
-      await fetchUsers(collectMessageUserIds(incoming))
-    }
 
     await syncUnreadState()
     scrollToBottom(true, wasNearBottom)
