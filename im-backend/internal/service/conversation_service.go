@@ -329,9 +329,14 @@ func emptyConversationList() *dto.ConversationListResponse {
 // UpdateLastMessage 更新会话的最后一条消息快照
 func (s *ConversationService) UpdateLastMessage(ctx context.Context, conversationID primitive.ObjectID, message *models.Message) error {
 	snapshot := &models.LastMessageSnapshot{
-		Content:   message.Content,
-		Type:      string(message.Type),
-		CreatedAt: message.CreatedAt,
+		ID:             message.ID,
+		ConversationID: message.ConversationID,
+		Seq:            message.Seq,
+		SenderID:       message.SenderID,
+		Type:           string(message.Type),
+		Content:        message.Content,
+		PreviewText:    message.PreviewText,
+		CreatedAt:      message.CreatedAt,
 	}
 
 	update := bson.M{
@@ -432,12 +437,20 @@ func (s *ConversationService) toConversationDTO(ctx context.Context, conversatio
 
 func (s *ConversationService) toConversationDTOs(ctx context.Context, conversations []*models.Conversation, currentUserID string, membersByConversationID map[primitive.ObjectID]*models.ConversationMember) []*dto.ConversationDTO {
 	peerIDs := make([]string, 0, len(conversations))
+	senderIDs := make([]string, 0, len(conversations))
 	groupIDs := make([]primitive.ObjectID, 0, len(conversations))
 	seen := map[string]struct{}{}
+	seenSenders := map[string]struct{}{}
 
 	for _, conversation := range conversations {
 		if conversation.Type == models.ConversationTypeGroup && conversation.GroupID != nil {
 			groupIDs = append(groupIDs, *conversation.GroupID)
+		}
+		if conversation.LastMessage != nil && conversation.LastMessage.SenderID != "" {
+			if _, ok := seenSenders[conversation.LastMessage.SenderID]; !ok {
+				seenSenders[conversation.LastMessage.SenderID] = struct{}{}
+				senderIDs = append(senderIDs, conversation.LastMessage.SenderID)
+			}
 		}
 		for _, participantID := range conversation.Participants {
 			if participantID == currentUserID {
@@ -452,8 +465,9 @@ func (s *ConversationService) toConversationDTOs(ctx context.Context, conversati
 	}
 
 	usersByID := map[string]*models.User{}
-	if s.userRepo != nil && len(peerIDs) > 0 {
-		users, err := s.userRepo.FindByIDs(ctx, peerIDs)
+	userIDs := append(peerIDs, senderIDs...)
+	if s.userRepo != nil && len(userIDs) > 0 {
+		users, err := s.userRepo.FindByIDs(ctx, userIDs)
 		if err != nil {
 			logger.Error("Find conversation users", zap.Error(err))
 		} else {
@@ -469,7 +483,7 @@ func (s *ConversationService) toConversationDTOs(ctx context.Context, conversati
 			ID:              conversation.ID,
 			Type:            conversation.Type,
 			Participants:    conversation.Participants,
-			LastMessage:     conversation.LastMessage,
+			LastMessage:     dto.ConvertToLastMessageDTO(conversation.LastMessage, userInfoDTOByID(usersByID, lastMessageSenderID(conversation))),
 			DisplayName:     conversation.DisplayName,
 			DisplayAvatar:   "",
 			GroupID:         conversation.GroupID,
@@ -534,53 +548,32 @@ func (s *ConversationService) loadGroupSummaries(ctx context.Context, groupIDs [
 			continue
 		}
 
-		members, err := s.groupMemberRepo.ListActiveByGroup(ctx, groupID)
-		if err != nil {
-			logger.Error("List group members for summary", zap.String("group_id", groupID.Hex()), zap.Error(err))
-			continue
-		}
-
-		briefMembers := make([]dto.GroupMemberBriefDTO, 0, min(len(members), 4))
-		userIDs := make([]string, 0, min(len(members), 4))
-		for i, member := range members {
-			if i >= 4 {
-				break
-			}
-			userIDs = append(userIDs, member.UserID)
-		}
-
-		usersByID := map[string]*models.User{}
-		if s.userRepo != nil && len(userIDs) > 0 {
-			if users, err := s.userRepo.FindByIDs(ctx, userIDs); err == nil {
-				usersByID = users
-			}
-		}
-
-		for i, member := range members {
-			if i >= 4 {
-				break
-			}
-			brief := dto.GroupMemberBriefDTO{
-				UserID:        member.UserID,
-				Role:          member.Role,
-				GroupNickname: member.GroupNickname,
-			}
-			if user := usersByID[member.UserID]; user != nil {
-				brief.UserInfo = dto.ConvertToUserInfoDto(user)
-			}
-			briefMembers = append(briefMembers, brief)
-		}
-
 		results[groupID.Hex()] = &dto.GroupSummaryDTO{
 			ID:          group.ID,
 			Name:        group.Name,
 			AvatarURL:   group.AvatarURL,
 			MemberCount: group.MemberCount,
-			Members:     briefMembers,
 		}
 	}
 
 	return results
+}
+
+func lastMessageSenderID(conversation *models.Conversation) string {
+	if conversation == nil || conversation.LastMessage == nil {
+		return ""
+	}
+	return conversation.LastMessage.SenderID
+}
+
+func userInfoDTOByID(users map[string]*models.User, userID string) *dto.UserInfoDto {
+	if userID == "" {
+		return nil
+	}
+	if user := users[userID]; user != nil {
+		return dto.ConvertToUserInfoDto(user)
+	}
+	return nil
 }
 
 func (s *ConversationService) ActivateConversation(ctx context.Context, id primitive.ObjectID, currentUserID string) (*dto.ConversationDTO, error) {

@@ -67,9 +67,10 @@ type Message struct {
 	Type            MessageType        `bson:"type" json:"type"`                                               // 消息类型
 
 	// 内容与扩展字段
-	Content    string   `bson:"content,omitempty" json:"content,omitempty"` // 文本内容 / 摘要
-	RawPayload bson.Raw `bson:"raw_payload,omitempty" json:"-"`             // 原始结构体，用于多类型消息
-	Payload    *Payload `bson:"payload,omitempty" json:"payload"`           // 解码后的动态结构，前端使用
+	Content     string   `bson:"content,omitempty" json:"content,omitempty"`           // 文本内容 / 摘要
+	PreviewText string   `bson:"preview_text,omitempty" json:"preview_text,omitempty"` // 列表/通知展示摘要
+	RawPayload  bson.Raw `bson:"raw_payload,omitempty" json:"-"`                       // 原始结构体，用于多类型消息
+	Payload     *Payload `bson:"payload,omitempty" json:"payload"`                     // 解码后的动态结构，前端使用
 
 	// 回复/引用关系
 	ParentMessageID *primitive.ObjectID `bson:"parent_message_id,omitempty" json:"parent_message_id,omitempty"` // 回复的消息（用于评论、子消息）
@@ -104,44 +105,53 @@ type Payload struct {
 
 // 解析消息的Payload
 
-// GenerateDigest 根据消息类型和 Payload 生成展示用摘要，写入 Content 字段。
+// GenerateDigest 根据消息类型和 Payload 生成展示用摘要。
 func (m *Message) GenerateDigest() {
+	previewText := m.Content
 	switch m.Type {
 	case MessageTypeText, MessageTypeQuote, MessageTypeSystem, MessageTypeSystemEvent, MessageTypePost:
-		// 文本类：保留原始 content
-		return
+		// 文本类：保留原始 content 作为摘要
 	case MessageTypeImage:
-		m.Content = "[图片]"
+		previewText = "[图片]"
 	case MessageTypeVideo:
-		m.Content = "[视频]"
+		previewText = "[视频]"
 	case MessageTypeAudio:
-		m.Content = "[语音]"
+		previewText = "[语音]"
 	case MessageTypeFile:
-		m.Content = "[文件]"
+		previewText = "[文件]"
 	case MessageTypeEmoji:
-		m.Content = "[表情]"
+		previewText = "[表情]"
 	case MessageTypeCard:
 		if m.Payload != nil && m.Payload.Title != "" {
-			m.Content = m.Payload.Title
+			previewText = m.Payload.Title
 		} else {
-			m.Content = "[卡片]"
+			previewText = "[卡片]"
 		}
 	case MessageTypeLink:
 		if m.Payload != nil && m.Payload.Title != "" {
-			m.Content = "[链接] " + m.Payload.Title
+			previewText = m.Payload.Title
 		} else {
-			m.Content = "[链接]"
+			previewText = "[链接]"
 		}
 	default:
-		m.Content = "[消息]"
+		previewText = "[消息]"
+	}
+	m.PreviewText = previewText
+	if m.Type != MessageTypeText && m.Type != MessageTypeQuote && m.Type != MessageTypeSystem && m.Type != MessageTypeSystemEvent && m.Type != MessageTypePost {
+		m.Content = previewText
 	}
 }
 
 // LastMessageSnapshot 会话列表用的最后一条消息快照，仅保留展示必要字段。
 type LastMessageSnapshot struct {
-	Content   string    `bson:"content" json:"content"`
-	Type      string    `bson:"type" json:"type"`
-	CreatedAt time.Time `bson:"created_at" json:"created_at"`
+	ID             primitive.ObjectID `bson:"id,omitempty" json:"id,omitempty"`
+	ConversationID primitive.ObjectID `bson:"conversation_id,omitempty" json:"conversation_id,omitempty"`
+	Seq            int64              `bson:"seq,omitempty" json:"seq,omitempty"`
+	SenderID       string             `bson:"sender_id,omitempty" json:"sender_id,omitempty"`
+	Type           string             `bson:"type" json:"type"`
+	Content        string             `bson:"content" json:"content"`
+	PreviewText    string             `bson:"preview_text,omitempty" json:"preview_text,omitempty"`
+	CreatedAt      time.Time          `bson:"created_at" json:"created_at"`
 }
 
 // 解析消息的Payload

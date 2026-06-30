@@ -53,19 +53,11 @@ type GroupMemberDTO struct {
 	UserInfo      *UserInfoDto             `json:"user_info,omitempty"`
 }
 
-type GroupMemberBriefDTO struct {
-	UserID        string                 `json:"user_id"`
-	Role          models.GroupMemberRole `json:"role"`
-	GroupNickname string                 `json:"group_nickname,omitempty"`
-	UserInfo      *UserInfoDto           `json:"user_info,omitempty"`
-}
-
 type GroupSummaryDTO struct {
-	ID          primitive.ObjectID    `json:"id"`
-	Name        string                `json:"name"`
-	AvatarURL   string                `json:"avatar_url,omitempty"`
-	MemberCount int                   `json:"member_count"`
-	Members     []GroupMemberBriefDTO `json:"members,omitempty"`
+	ID          primitive.ObjectID `json:"id"`
+	Name        string             `json:"name"`
+	AvatarURL   string             `json:"avatar_url,omitempty"`
+	MemberCount int                `json:"member_count"`
 }
 
 type GroupDetailResponse struct {

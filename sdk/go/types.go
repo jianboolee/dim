@@ -52,8 +52,10 @@ type Message struct {
 	ConversationID  string    `json:"conversation_id,omitempty"`
 	Seq             int64     `json:"seq,omitempty"`
 	SenderID        string    `json:"sender_id,omitempty"`
+	SenderProfile   *User     `json:"sender_profile,omitempty"`
 	Type            string    `json:"type"`
 	Content         string    `json:"content"`
+	PreviewText     string    `json:"preview_text,omitempty"`
 	Status          string    `json:"status,omitempty"`
 	Payload         *Payload  `json:"payload,omitempty"`
 	CreatedAt       time.Time `json:"created_at,omitempty"`
@@ -61,9 +63,15 @@ type Message struct {
 }
 
 type LastMessageSnapshot struct {
-	Content   string    `json:"content"`
-	Type      string    `json:"type"`
-	CreatedAt time.Time `json:"created_at"`
+	ID             string    `json:"id,omitempty"`
+	ConversationID string    `json:"conversation_id,omitempty"`
+	Seq            int64     `json:"seq,omitempty"`
+	SenderID       string    `json:"sender_id,omitempty"`
+	SenderProfile  *User     `json:"sender_profile,omitempty"`
+	Type           string    `json:"type"`
+	Content        string    `json:"content"`
+	PreviewText    string    `json:"preview_text,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type Payload struct {
@@ -192,17 +200,9 @@ type GroupMember struct {
 	UserInfo      *User     `json:"user_info,omitempty"`
 }
 
-type GroupMemberBrief struct {
-	UserID        string `json:"user_id"`
-	Role          string `json:"role"`
-	GroupNickname string `json:"group_nickname,omitempty"`
-	UserInfo      *User  `json:"user_info,omitempty"`
-}
-
 type GroupSummary struct {
-	ID          string             `json:"id"`
-	Name        string             `json:"name"`
-	AvatarURL   string             `json:"avatar_url,omitempty"`
-	MemberCount int                `json:"member_count"`
-	Members     []GroupMemberBrief `json:"members,omitempty"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
+	MemberCount int    `json:"member_count"`
 }

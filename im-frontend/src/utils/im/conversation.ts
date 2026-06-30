@@ -3,7 +3,13 @@ import { normalizeUnreadCount } from '@/utils/im/format'
 
 function toSnapshot(message: Message): LastMessageSnapshot {
   return {
+    id: message.id,
+    conversation_id: message.conversation_id,
+    seq: message.seq,
+    sender_id: message.sender_id ?? message.from_id,
+    sender_profile: message.sender_profile,
     content: message.content,
+    preview_text: message.preview_text,
     type: message.type,
     created_at: message.created_at ?? new Date().toISOString(),
   }

@@ -27,7 +27,13 @@ export enum MessageType {
   
   // 会话列表最后一条消息快照
   export interface LastMessageSnapshot {
+    id?: string
+    conversation_id?: string
+    seq?: number
+    sender_id?: string
+    sender_profile?: UserInfo
     content: string
+    preview_text?: string
     type: string
     created_at: string
   }
@@ -55,9 +61,12 @@ export enum MessageType {
     client_message_id?: string;
     conversation_id?: string;
     seq?: number;
+    sender_id?: string;
     from_id?: string;
+    sender_profile?: UserInfo;
     type: MessageType;
     content: string;
+    preview_text?: string;
     status?: MessageStatus;
     payload?: Payload;
     created_at?: string;
@@ -75,19 +84,40 @@ export enum MessageType {
     type?: string;
   }
 
-  export interface GroupMemberBrief {
-    user_id: string;
-    role: string;
-    group_nickname?: string;
-    user_info?: UserInfo;
-  }
-
   export interface GroupSummary {
     id: string;
     name: string;
     avatar_url?: string;
     member_count: number;
-    members?: GroupMemberBrief[];
+  }
+
+  export interface Group {
+    id: string;
+    conversation_id: string;
+    name: string;
+    avatar_url?: string;
+    owner_id: string;
+    member_count: number;
+    status: string;
+    created_at: string;
+    updated_at: string;
+  }
+
+  export interface GroupMember {
+    id: string;
+    group_id: string;
+    user_id: string;
+    role: string;
+    status: string;
+    group_nickname?: string;
+    joined_at: string;
+    invited_by?: string;
+    user_info?: UserInfo;
+  }
+
+  export interface GroupDetailResponse {
+    group: Group;
+    members?: GroupMember[];
   }
 
   export interface ConversationMemberState {
@@ -192,9 +222,12 @@ export enum MessageType {
       client_message_id: raw.client_message_id == null ? undefined : String(raw.client_message_id),
       conversation_id: raw.conversation_id == null ? undefined : String(raw.conversation_id),
       seq: raw.seq == null ? undefined : Number(raw.seq),
+      sender_id: String(raw.sender_id ?? raw.from_id ?? ''),
       from_id: String(raw.sender_id ?? raw.from_id ?? ''),
+      sender_profile: raw.sender_profile as UserInfo | undefined,
       type: (raw.type as MessageType) ?? MessageType.Text,
       content: String(raw.content ?? ''),
+      preview_text: raw.preview_text == null ? undefined : String(raw.preview_text),
       status: raw.status as MessageStatus | undefined,
       payload,
       created_at: raw.created_at as string | undefined,
@@ -539,6 +572,14 @@ export enum MessageType {
       );
 
       return normalizeConversation(data);
+    }
+
+    async getGroup(groupId: string): Promise<GroupDetailResponse> {
+      return apiRequest<GroupDetailResponse>(
+        this.baseURL,
+        `/im/api/groups/${groupId}`,
+        this.token,
+      );
     }
 
     async markConversationRead(conversationId: string): Promise<void> {

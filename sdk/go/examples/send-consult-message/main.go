@@ -13,7 +13,7 @@ import (
 	"d-im-go-sdk/examples/demo"
 )
 
-var User = demo.USER_G
+var User = demo.USER_A
 var PeerUser = demo.USER_CUSTOMER_SERVICE
 
 type output struct {

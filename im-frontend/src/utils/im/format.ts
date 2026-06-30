@@ -1,5 +1,5 @@
 import dayjs from 'dayjs'
-import type { LastMessageSnapshot } from '@/sdk/im'
+import type { Conversation, LastMessageSnapshot } from '@/sdk/im'
 
 const EMPTY_TIME = '0001-01-01T00:00:00Z'
 
@@ -16,10 +16,25 @@ export function formatConversationTime(time?: string): string {
   return date.format('YYYY-MM-DD')
 }
 
-/** 会话列表最后一条消息预览文案 — 后端 Content 已是摘要，直接使用 */
-export function formatLastMessagePreview(snapshot?: LastMessageSnapshot): string {
+/** 会话列表最后一条消息预览文案 — 消息摘要由后端生成，前端只处理会话上下文前缀 */
+export function formatLastMessagePreview(
+  snapshot: LastMessageSnapshot | undefined,
+  conversation?: Conversation,
+  currentUserId?: string,
+): string {
   if (!snapshot) return ''
-  return snapshot.content || ''
+  const previewText = snapshot.preview_text || snapshot.content || ''
+  if (
+    conversation &&
+    conversation.type === 'group' &&
+    snapshot.sender_id &&
+    snapshot.sender_id !== currentUserId &&
+    snapshot.type !== 'system_event'
+  ) {
+    const senderName = snapshot.sender_profile?.nickname || snapshot.sender_id
+    return senderName ? `${senderName}: ${previewText}` : previewText
+  }
+  return previewText
 }
 
 /** 将未读数规范为非负整数 */

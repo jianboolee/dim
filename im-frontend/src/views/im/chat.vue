@@ -120,6 +120,9 @@
               >
             </div>
             <div class="message-wrapper">
+              <div v-if="shouldShowSenderName(item.message)" class="message-sender-name">
+                {{ getMessageSenderName(item.message) }}
+              </div>
               <component
                 :is="MessageComponents[item.message.type || MessageType.Text] ?? MessageComponents[MessageType.Text]"
                 :message="item.message"
@@ -199,7 +202,7 @@ import { useIMTabStore } from '@/stores/imTab'
 import { useConversationList } from '@/composables/useConversationList'
 import { useUserProfiles } from '@/composables/useUserProfiles'
 import { MessageType } from '@/sdk/im'
-import type { Payload } from '@/sdk/im'
+import type { GroupMember, Payload } from '@/sdk/im'
 import type { ChatMessage, Conversation, UploadState } from '@/types/im'
 import type { UserInfo } from '@/types/user'
 import { MessageComponents } from '@/components/im'
@@ -248,6 +251,7 @@ const sidebarMenuRef = ref<HTMLElement | null>(null)
 const showSidebarMenu = ref(false)
 const showConversationSearch = ref(false)
 const showConversationInfoDrawer = ref(false)
+const groupDetailMembers = ref<GroupMember[]>([])
 const isMobileViewport = ref(false)
 let cleanupViewportListener: (() => void) | null = null
 const pendingUploadMessageIds = new WeakMap<File, string>()
@@ -279,7 +283,7 @@ const conversationTitle = computed(() => (
 const conversationInfoParticipants = computed<UserInfo[]>(() => {
   const currentId = currentUserId.value
   if (isGroupConversation.value) {
-    return (conversation.value?.group_info?.members ?? [])
+    return groupDetailMembers.value
       .map((member) => member.user_info ?? userMap.value[member.user_id] ?? { id: member.user_id })
       .filter((user) => user.id)
   }
@@ -309,7 +313,6 @@ const { setBaseTitle } = usePageTitleNotification('消息')
 const mergeConversationUsers = (item: Conversation) => {
   mergeUsers([
     item.peer_user_info,
-    ...(item.group_info?.members ?? []).map((member) => member.user_info),
   ])
 }
 
@@ -318,17 +321,30 @@ const getMessageAvatar = (message: ChatMessage) => {
     return userStore.userInfo?.avatar || ''
   }
   if (isGroupConversation.value) {
-    return userMap.value[message.from_id || '']?.avatar || ''
+    return message.sender_profile?.avatar || userMap.value[message.from_id || '']?.avatar || ''
   }
-  return targetUser.value?.avatar || ''
+  return message.sender_profile?.avatar || targetUser.value?.avatar || ''
 }
 
 const isSystemEventMessage = (message: ChatMessage) => message.type === MessageType.SystemEvent
 
+const shouldShowSenderName = (message: ChatMessage) => (
+  isGroupConversation.value
+  && message.from_id !== currentUserId.value
+  && !isSystemEventMessage(message)
+)
+
+const getMessageSenderName = (message: ChatMessage) => (
+  message.sender_profile?.nickname
+  || userMap.value[message.from_id || '']?.nickname
+  || message.from_id
+  || ''
+)
+
 const collectMessageUserIds = (items: ChatMessage[]) => {
   const ids = new Set<string>()
   for (const message of items) {
-    if (message.from_id) ids.add(message.from_id)
+    if (message.from_id && !message.sender_profile) ids.add(message.from_id)
     if (isSystemEventMessage(message)) {
       for (const userId of collectSystemEventUserIds(message)) {
         ids.add(userId)
@@ -395,9 +411,20 @@ const openConversationSearch = () => {
   showSidebarMenu.value = false
 }
 
-const openConversationInfo = () => {
+const openConversationInfo = async () => {
   showConversationInfoDrawer.value = true
   showSidebarMenu.value = false
+  if (!isGroupConversation.value || !conversation.value?.group_id || !imStore.imSDK) {
+    return
+  }
+  try {
+    const detail = await imStore.imSDK.getGroup(conversation.value.group_id)
+    groupDetailMembers.value = detail.members ?? []
+    mergeUsers(groupDetailMembers.value.map((member) => member.user_info))
+  } catch (error) {
+    console.error('获取群信息失败:', error)
+    showToast('群信息加载失败')
+  }
 }
 
 const handleSearchInConversation = () => {
@@ -480,6 +507,7 @@ const createClientMessageId = () => {
 
 const mergeMessages = (incoming: ChatMessage[]) => {
   if (incoming.length === 0) return
+  mergeUsers(incoming.map((message) => message.sender_profile))
 
   const next = [...messages.value]
 
@@ -1032,6 +1060,7 @@ const resetChatState = () => {
   messages.value = []
   targetUser.value = null
   conversation.value = null
+  groupDetailMembers.value = []
 }
 
 const restoreMessageDraft = (id: string) => {
@@ -1556,6 +1585,13 @@ onUnmounted(() => {
   align-items: flex-start;
   flex-grow: 1;
   min-width: 0;
+}
+
+.message-sender-name {
+  margin: 0 0 4px 2px;
+  color: #8a93a3;
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 .message-mine .message-wrapper {

@@ -132,7 +132,7 @@ const {
   pendingScrollRequest,
 } = useConversationList()
 
-const { userMap, fetchUsers, mergeUsers } = useUserProfiles()
+const { userMap, mergeUsers } = useUserProfiles()
 const rootRef = ref<HTMLElement | null>(null)
 let searchTimer: number | undefined
 
@@ -179,7 +179,7 @@ const conversationItems = computed(() => {
       conversation,
       avatar: getConversationDisplayAvatar(conversation) || profile?.avatar,
       displayName: getConversationDisplayName(conversation, uid),
-      lastMessagePreview: formatLastMessagePreview(conversation.last_message),
+      lastMessagePreview: formatLastMessagePreview(conversation.last_message, conversation, uid),
       time: formatConversationTime(
         conversation.last_message?.created_at ?? conversation.updated_at,
       ),
@@ -193,7 +193,7 @@ const conversationItems = computed(() => {
 const mergeConversationUsers = (items: Conversation[]) => {
   const users = items.flatMap((conversation) => [
     conversation.peer_user_info,
-    ...(conversation.group_info?.members ?? []).map((member) => member.user_info),
+    conversation.last_message?.sender_profile,
   ])
   mergeUsers(users)
 }
@@ -245,10 +245,7 @@ const selectConversation = async (item: { id: string; peerId: string; conversati
 }
 
 const onIncomingMessage = async (message: Parameters<typeof handleIncomingMessage>[0]) => {
-  const peerIds = [message.from_id].filter(
-    (id): id is string => Boolean(id) && id !== currentUserId.value,
-  )
-  await fetchUsers(peerIds)
+  mergeUsers([message.sender_profile])
   await handleIncomingMessage(message, props.activeConversationId || undefined)
   mergeConversationUsers(conversations.value)
 }

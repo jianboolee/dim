@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
 
+	"d-im/internal/dto"
 	"d-im/internal/models"
 	"d-im/internal/repository"
 	"d-im/pkg/logger"
@@ -61,13 +62,13 @@ func NewMessageService(
 }
 
 // SendMessageToConversationHTTP 通过 HTTP 发送会话消息，并异步推送给会话成员。
-func (s *MessageService) SendMessageToConversationHTTP(ctx context.Context, senderID string, conversationID primitive.ObjectID, clientMessageID string, content string, msgType *models.MessageType, payload *models.Payload) (*models.Message, error) {
+func (s *MessageService) SendMessageToConversationHTTP(ctx context.Context, senderID string, conversationID primitive.ObjectID, clientMessageID string, content string, msgType *models.MessageType, payload *models.Payload) (*dto.MessageDTO, error) {
 	message, created, err := s.SendMessageToConversation(ctx, senderID, conversationID, clientMessageID, content, msgType, payload)
 	if err != nil {
 		return nil, err
 	}
 	if !created {
-		return message, nil
+		return s.toMessageDTO(ctx, message), nil
 	}
 
 	go func(msg *models.Message) {
@@ -77,7 +78,7 @@ func (s *MessageService) SendMessageToConversationHTTP(ctx context.Context, send
 		}
 	}(message)
 
-	return message, nil
+	return s.toMessageDTO(ctx, message), nil
 }
 
 // SendMessageToConversation 发送会话消息。单聊和群聊统一按 conversation_members 做权限与未读控制。
@@ -125,6 +126,7 @@ func (s *MessageService) SendMessageToConversation(
 		existing, err := s.repo.FindByClientMessageID(ctx, conversation.ID, senderID, clientMessageID)
 		if err == nil {
 			existing.DecodePayload()
+			existing.GenerateDigest()
 			return existing, false, nil
 		}
 		if err != mongo.ErrNoDocuments {
@@ -170,6 +172,7 @@ func (s *MessageService) SendMessageToConversation(
 			existing, findErr := s.repo.FindByClientMessageID(ctx, conversation.ID, senderID, clientMessageID)
 			if findErr == nil {
 				existing.DecodePayload()
+				existing.GenerateDigest()
 				return existing, false, nil
 			}
 		}
@@ -229,6 +232,7 @@ func (s *MessageService) FanoutMessage(ctx context.Context, message *models.Mess
 	if err != nil {
 		return err
 	}
+	messageDTO := s.toMessageDTO(ctx, message)
 
 	// 按成员推送，服务端携带该成员在当前会话的权威未读数
 	seen := map[string]struct{}{}
@@ -242,7 +246,7 @@ func (s *MessageService) FanoutMessage(ctx context.Context, message *models.Mess
 		seen[member.UserID] = struct{}{}
 
 		payload := WSPushPayload{
-			Message:         message,
+			Message:         messageDTO,
 			UnreadCount:     member.UnreadCount,
 			PreviewImageURL: conversation.PreviewImageURL,
 		}
@@ -304,6 +308,7 @@ func (s *MessageService) CreateSystemEvent(
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
+	message.GenerateDigest()
 
 	result, err := s.repo.Save(ctx, message)
 	if err != nil {
@@ -346,7 +351,7 @@ func (s *MessageService) pushToUser(ctx context.Context, userID string, messageB
 }
 
 // FindMessagesByConversationID 根据会话ID获取消息列表
-func (s *MessageService) FindMessagesByConversationID(ctx context.Context, conversationID primitive.ObjectID, currentUserID string, beforeID *primitive.ObjectID, afterID *primitive.ObjectID, limit int64) ([]models.Message, error) {
+func (s *MessageService) FindMessagesByConversationID(ctx context.Context, conversationID primitive.ObjectID, currentUserID string, beforeID *primitive.ObjectID, afterID *primitive.ObjectID, limit int64) ([]dto.MessageDTO, error) {
 	if _, err := s.memberRepo.GetActive(ctx, conversationID, currentUserID); err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, ErrConversationAccessDenied
@@ -360,8 +365,50 @@ func (s *MessageService) FindMessagesByConversationID(ctx context.Context, conve
 	}
 	for i := range messages {
 		messages[i].DecodePayload()
+		messages[i].GenerateDigest()
 	}
-	return messages, nil
+	return s.toMessageDTOs(ctx, messages), nil
+}
+
+func (s *MessageService) toMessageDTO(ctx context.Context, message *models.Message) *dto.MessageDTO {
+	if message == nil {
+		return nil
+	}
+	profiles := s.loadSenderProfiles(ctx, []string{message.SenderID})
+	return dto.ConvertToMessageDTO(message, userInfoDTOByID(profiles, message.SenderID))
+}
+
+func (s *MessageService) toMessageDTOs(ctx context.Context, messages []models.Message) []dto.MessageDTO {
+	senderIDs := make([]string, 0, len(messages))
+	seen := map[string]struct{}{}
+	for _, message := range messages {
+		if message.SenderID == "" {
+			continue
+		}
+		if _, ok := seen[message.SenderID]; ok {
+			continue
+		}
+		seen[message.SenderID] = struct{}{}
+		senderIDs = append(senderIDs, message.SenderID)
+	}
+	profiles := s.loadSenderProfiles(ctx, senderIDs)
+	results := make([]dto.MessageDTO, 0, len(messages))
+	for i := range messages {
+		results = append(results, *dto.ConvertToMessageDTO(&messages[i], userInfoDTOByID(profiles, messages[i].SenderID)))
+	}
+	return results
+}
+
+func (s *MessageService) loadSenderProfiles(ctx context.Context, userIDs []string) map[string]*models.User {
+	if s.userRepo == nil || len(userIDs) == 0 {
+		return map[string]*models.User{}
+	}
+	users, err := s.userRepo.FindByIDs(ctx, userIDs)
+	if err != nil {
+		logger.Error("Find message sender profiles", zap.Error(err))
+		return map[string]*models.User{}
+	}
+	return users
 }
 
 // ProcessWebSocketMessage 处理 WebSocket 消息
