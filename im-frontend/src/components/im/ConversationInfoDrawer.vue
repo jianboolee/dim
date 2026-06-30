@@ -58,7 +58,7 @@
               </button>
               <button v-if="isGroup" type="button" class="drawer-row action-row" @click="handleInvite">
                 <span>邀请成员</span>
-                <i class="ri-add-line"></i>
+                <i class="ri-arrow-right-s-line"></i>
               </button>
               <button type="button" class="drawer-row action-row" @click="emit('search')">
                 <span>查找聊天内容</span>
@@ -345,7 +345,7 @@ onUnmounted(() => {
 }
 
 .group-name-value {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-color-dark);
   word-break: break-all;
