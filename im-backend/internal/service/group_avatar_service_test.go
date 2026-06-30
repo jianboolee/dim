@@ -29,7 +29,7 @@ func TestFallbackAvatarIsDeterministic(t *testing.T) {
 
 func TestGroupAvatarPublicURL(t *testing.T) {
 	groupID := primitive.NewObjectID()
-	service := NewGroupAvatarService(nil, nil, nil, nil, GroupAvatarOptions{
+	service := NewGroupAvatarService(nil, nil, nil, GroupAvatarOptions{
 		PublicBaseURL: "https://im.example.com/",
 	})
 
@@ -48,7 +48,7 @@ func TestCleanupOldVersionsKeepsNewestFiles(t *testing.T) {
 		}
 	}
 
-	service := NewGroupAvatarService(nil, nil, nil, nil, GroupAvatarOptions{KeepVersions: 2})
+	service := NewGroupAvatarService(nil, nil, nil, GroupAvatarOptions{KeepVersions: 2})
 	service.cleanupOldVersions(dir)
 
 	if _, err := os.Stat(filepath.Join(dir, "100.png")); !os.IsNotExist(err) {

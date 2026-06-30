@@ -18,18 +18,18 @@ const (
 
 // Conversation 表示一个会话
 type Conversation struct {
-	ID           primitive.ObjectID   `bson:"_id" json:"id"`
-	HashID       string               `bson:"hash_id" json:"hash_id"` // 会话ID的哈希值, 根据参与者生成唯一、稳定的 ObjectID（顺序无关 + 去重）
-	Type         ConversationType     `bson:"type" json:"type"`       // 会话类型
-	GroupID      *primitive.ObjectID  `bson:"group_id,omitempty" json:"group_id,omitempty"`
-	MessageSeq   int64                `bson:"message_seq" json:"message_seq"`
-	Participants []string             `bson:"participants" json:"participants"` // 参与者的用户ID列表
-	LastMessage  *LastMessageSnapshot `bson:"last_message,omitempty" json:"last_message"`
-	ImageURL     string               `bson:"image_url" json:"image_url"` // 会话图片
-	DisplayName  string               `bson:"display_name,omitempty" json:"display_name,omitempty"`
-	LastActivity time.Time            `json:"last_activity" bson:"-"`
-	CreatedAt    time.Time            `bson:"created_at" json:"created_at"`
-	UpdatedAt    time.Time            `bson:"updated_at" json:"updated_at"`
+	ID              primitive.ObjectID   `bson:"_id" json:"id"`
+	HashID          string               `bson:"hash_id" json:"hash_id"` // 会话ID的哈希值, 根据参与者生成唯一、稳定的 ObjectID（顺序无关 + 去重）
+	Type            ConversationType     `bson:"type" json:"type"`       // 会话类型
+	GroupID         *primitive.ObjectID  `bson:"group_id,omitempty" json:"group_id,omitempty"`
+	MessageSeq      int64                `bson:"message_seq" json:"message_seq"`
+	Participants    []string             `bson:"participants" json:"participants"` // 参与者的用户ID列表
+	LastMessage     *LastMessageSnapshot `bson:"last_message,omitempty" json:"last_message"`
+	PreviewImageURL string               `bson:"preview_image_url,omitempty" json:"preview_image_url,omitempty"` // 会话业务预览图
+	DisplayName     string               `bson:"display_name,omitempty" json:"display_name,omitempty"`
+	LastActivity    time.Time            `json:"last_activity" bson:"-"`
+	CreatedAt       time.Time            `bson:"created_at" json:"created_at"`
+	UpdatedAt       time.Time            `bson:"updated_at" json:"updated_at"`
 
 	// 新增字段 👇
 	RefType     string            `bson:"ref_type,omitempty" json:"ref_type,omitempty"`         // 引用类型，如 "used_car"、"listing"

@@ -343,7 +343,7 @@ func (s *ConversationService) UpdateLastMessage(ctx context.Context, conversatio
 
 	// 仅卡片消息更新会话预览图
 	if message.Type == models.MessageTypeCard && message.Payload != nil && message.Payload.ImageURL != "" {
-		update["$set"].(bson.M)["image_url"] = message.Payload.ImageURL
+		update["$set"].(bson.M)["preview_image_url"] = message.Payload.ImageURL
 	}
 
 	return s.repo.UpdateConversation(ctx, conversationID, update)
@@ -466,17 +466,17 @@ func (s *ConversationService) toConversationDTOs(ctx context.Context, conversati
 	results := make([]*dto.ConversationDTO, 0, len(conversations))
 	for _, conversation := range conversations {
 		item := &dto.ConversationDTO{
-			ID:            conversation.ID,
-			Type:          conversation.Type,
-			Participants:  conversation.Participants,
-			LastMessage:   conversation.LastMessage,
-			DisplayName:   conversation.DisplayName,
-			DisplayAvatar: conversation.ImageURL,
-			GroupID:       conversation.GroupID,
-			ImageURL:      conversation.ImageURL,
-			LastActivity:  conversation.LastActivity,
-			CreatedAt:     conversation.CreatedAt,
-			UpdatedAt:     conversation.UpdatedAt,
+			ID:              conversation.ID,
+			Type:            conversation.Type,
+			Participants:    conversation.Participants,
+			LastMessage:     conversation.LastMessage,
+			DisplayName:     conversation.DisplayName,
+			DisplayAvatar:   "",
+			GroupID:         conversation.GroupID,
+			PreviewImageURL: conversation.PreviewImageURL,
+			LastActivity:    conversation.LastActivity,
+			CreatedAt:       conversation.CreatedAt,
+			UpdatedAt:       conversation.UpdatedAt,
 		}
 		if member := membersByConversationID[conversation.ID]; member != nil {
 			item.MemberState = &dto.ConversationMemberStateDTO{

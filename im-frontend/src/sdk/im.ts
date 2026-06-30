@@ -64,6 +64,8 @@ export enum MessageType {
     updated_at?: string;
     /** 服务端通过 WS 推送的权威未读数（仅 WS 消息携带，不从 API 返回） */
     _ws_unread_count?: number;
+    /** 服务端通过 WS 推送的会话业务预览图（仅 WS 消息携带，不从消息 payload 推导） */
+    _ws_preview_image_url?: string;
   }
   
   export interface UserInfo {
@@ -110,7 +112,7 @@ export enum MessageType {
     group_info?: GroupSummary;
     peer_user_info?: UserInfo;
     member_state?: ConversationMemberState;
-    image_url: string;
+    preview_image_url?: string;
     created_at: string;
     updated_at: string;
     last_activity: string;
@@ -337,6 +339,9 @@ export enum MessageType {
             const message = normalizeMessage(raw.message as Record<string, unknown>);
             if (typeof raw.unread_count === 'number') {
               message._ws_unread_count = raw.unread_count;
+            }
+            if (typeof raw.preview_image_url === 'string') {
+              message._ws_preview_image_url = raw.preview_image_url;
             }
             if (message.type === MessageType.Ping || message.type === MessageType.Pong) {
               return;

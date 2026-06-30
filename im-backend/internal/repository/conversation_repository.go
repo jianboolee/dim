@@ -51,7 +51,6 @@ func (r *ConversationRepository) CreateGroupConversation(
 	ctx context.Context,
 	groupID primitive.ObjectID,
 	name string,
-	imageURL string,
 	participants []string,
 ) (*models.Conversation, error) {
 	now := time.Now()
@@ -61,7 +60,6 @@ func (r *ConversationRepository) CreateGroupConversation(
 		GroupID:      &groupID,
 		Participants: participants,
 		DisplayName:  name,
-		ImageURL:     imageURL,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}

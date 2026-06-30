@@ -100,7 +100,7 @@ func (s *GroupService) createGroup(ctx context.Context, creatorID string, req dt
 	if len(memberIDs) > maxGroupMembers {
 		return nil, ErrGroupMemberLimit
 	}
-	conversation, err := s.conversationRepo.CreateGroupConversation(ctx, groupID, name, "", memberIDs)
+	conversation, err := s.conversationRepo.CreateGroupConversation(ctx, groupID, name, memberIDs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create group conversation: %w", err)
 	}

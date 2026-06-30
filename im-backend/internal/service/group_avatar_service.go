@@ -22,7 +22,6 @@ import (
 	"d-im/internal/models"
 	"d-im/internal/repository"
 
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -40,22 +39,20 @@ type GroupAvatarOptions struct {
 }
 
 type GroupAvatarService struct {
-	groupRepo        *repository.GroupRepository
-	memberRepo       *repository.GroupMemberRepository
-	userRepo         *repository.UserRepository
-	conversationRepo *repository.ConversationRepository
-	directory        string
-	publicBaseURL    string
-	size             int
-	keepVersions     int
-	httpClient       *http.Client
+	groupRepo     *repository.GroupRepository
+	memberRepo    *repository.GroupMemberRepository
+	userRepo      *repository.UserRepository
+	directory     string
+	publicBaseURL string
+	size          int
+	keepVersions  int
+	httpClient    *http.Client
 }
 
 func NewGroupAvatarService(
 	groupRepo *repository.GroupRepository,
 	memberRepo *repository.GroupMemberRepository,
 	userRepo *repository.UserRepository,
-	conversationRepo *repository.ConversationRepository,
 	options GroupAvatarOptions,
 ) *GroupAvatarService {
 	size := options.Size
@@ -71,15 +68,14 @@ func NewGroupAvatarService(
 		directory = "./storage/group-avatars"
 	}
 	return &GroupAvatarService{
-		groupRepo:        groupRepo,
-		memberRepo:       memberRepo,
-		userRepo:         userRepo,
-		conversationRepo: conversationRepo,
-		directory:        directory,
-		publicBaseURL:    strings.TrimRight(strings.TrimSpace(options.PublicBaseURL), "/"),
-		size:             size,
-		keepVersions:     keepVersions,
-		httpClient:       &http.Client{Timeout: 4 * time.Second},
+		groupRepo:     groupRepo,
+		memberRepo:    memberRepo,
+		userRepo:      userRepo,
+		directory:     directory,
+		publicBaseURL: strings.TrimRight(strings.TrimSpace(options.PublicBaseURL), "/"),
+		size:          size,
+		keepVersions:  keepVersions,
+		httpClient:    &http.Client{Timeout: 4 * time.Second},
 	}
 }
 
@@ -90,10 +86,6 @@ func (s *GroupAvatarService) Directory() string {
 func (s *GroupAvatarService) Regenerate(ctx context.Context, groupID primitive.ObjectID) error {
 	if s == nil {
 		return nil
-	}
-	group, err := s.groupRepo.Get(ctx, groupID)
-	if err != nil {
-		return err
 	}
 	members, err := s.memberRepo.ListActiveByGroup(ctx, groupID)
 	if err != nil {
@@ -152,14 +144,6 @@ func (s *GroupAvatarService) Regenerate(ctx context.Context, groupID primitive.O
 	now := time.Now()
 	if err := s.groupRepo.SetAvatar(ctx, groupID, avatarURL, filePath, version, now); err != nil {
 		return err
-	}
-	if s.conversationRepo != nil {
-		if err := s.conversationRepo.UpdateConversation(ctx, group.ConversationID, bson.M{"$set": bson.M{
-			"image_url":  avatarURL,
-			"updated_at": now,
-		}}); err != nil {
-			return err
-		}
 	}
 	s.cleanupOldVersions(groupDir)
 	return nil

@@ -17,6 +17,7 @@ type WSPushEvent struct {
 // WSPushPayload WebSocket 推送给前端客户端的消息信封，
 // 包含原始消息和服务端权威的接收者未读数。
 type WSPushPayload struct {
-	Message     *models.Message `json:"message"`
-	UnreadCount int64           `json:"unread_count"`
+	Message         *models.Message `json:"message"`
+	UnreadCount     int64           `json:"unread_count"`
+	PreviewImageURL string          `json:"preview_image_url,omitempty"`
 }

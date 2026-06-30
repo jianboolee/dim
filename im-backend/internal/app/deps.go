@@ -79,7 +79,7 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 		cfg.App.FrontendBaseURL,
 	)
 	uploadHandler := newUploadHandler(cfg)
-	groupAvatarService := service.NewGroupAvatarService(groupRepo, groupMemberRepo, userRepo, conversationRepo, service.GroupAvatarOptions{
+	groupAvatarService := service.NewGroupAvatarService(groupRepo, groupMemberRepo, userRepo, service.GroupAvatarOptions{
 		Directory:     cfg.GroupAvatar.Directory,
 		PublicBaseURL: cfg.App.PublicBaseURL,
 		Size:          cfg.GroupAvatar.Size,

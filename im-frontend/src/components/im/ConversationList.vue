@@ -185,7 +185,7 @@ const conversationItems = computed(() => {
       ),
       unreadCount,
       unreadBadge: formatUnreadBadge(unreadCount),
-      previewImage: conversation.image_url,
+      previewImage: conversation.preview_image_url,
     }
   })
 })

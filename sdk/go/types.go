@@ -19,20 +19,20 @@ const (
 type UserInput = User
 
 type Conversation struct {
-	ID            string                   `json:"id"`
-	Type          string                   `json:"type"`
-	Participants  []string                 `json:"participants"`
-	LastMessage   *LastMessageSnapshot     `json:"last_message,omitempty"`
-	DisplayName   string                   `json:"display_name,omitempty"`
-	DisplayAvatar string                   `json:"display_avatar,omitempty"`
-	GroupID       string                   `json:"group_id,omitempty"`
-	GroupInfo     *GroupSummary            `json:"group_info,omitempty"`
-	PeerUserInfo  *User                    `json:"peer_user_info,omitempty"`
-	ImageURL      string                   `json:"image_url,omitempty"`
-	MemberState   *ConversationMemberState `json:"member_state,omitempty"`
-	LastActivity  time.Time                `json:"last_activity"`
-	CreatedAt     time.Time                `json:"created_at"`
-	UpdatedAt     time.Time                `json:"updated_at"`
+	ID              string                   `json:"id"`
+	Type            string                   `json:"type"`
+	Participants    []string                 `json:"participants"`
+	LastMessage     *LastMessageSnapshot     `json:"last_message,omitempty"`
+	DisplayName     string                   `json:"display_name,omitempty"`
+	DisplayAvatar   string                   `json:"display_avatar,omitempty"`
+	GroupID         string                   `json:"group_id,omitempty"`
+	GroupInfo       *GroupSummary            `json:"group_info,omitempty"`
+	PeerUserInfo    *User                    `json:"peer_user_info,omitempty"`
+	PreviewImageURL string                   `json:"preview_image_url,omitempty"`
+	MemberState     *ConversationMemberState `json:"member_state,omitempty"`
+	LastActivity    time.Time                `json:"last_activity"`
+	CreatedAt       time.Time                `json:"created_at"`
+	UpdatedAt       time.Time                `json:"updated_at"`
 }
 
 type ConversationMemberState struct {

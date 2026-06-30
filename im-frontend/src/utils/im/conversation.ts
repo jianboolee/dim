@@ -67,7 +67,7 @@ export function buildConversationFromMessage(message: Message, currentUserId: st
     type: 'private',
     participants: [fromId, currentUserId].filter(Boolean),
     last_message: toSnapshot(message),
-    image_url: '',
+    preview_image_url: undefined,
     member_state: {
       status: 'active',
       last_read_seq: 0,
@@ -117,6 +117,7 @@ export function applyIncomingMessage(
   const updated: Conversation = {
     ...existing,
     last_message: toSnapshot(message),
+    preview_image_url: message._ws_preview_image_url ?? existing.preview_image_url,
     updated_at: message.created_at ?? existing.updated_at,
     last_activity: maxTime(message.created_at, existing.last_activity, existing.updated_at),
     member_state: shouldUpdateUnread

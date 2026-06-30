@@ -220,7 +220,7 @@ func (s *MessageService) FanoutMessage(ctx context.Context, message *models.Mess
 		return nil
 	}
 
-	_, err := s.conversationRepo.GetConversation(ctx, message.ConversationID)
+	conversation, err := s.conversationRepo.GetConversation(ctx, message.ConversationID)
 	if err != nil {
 		return fmt.Errorf("failed to get conversation for fanout: %w", err)
 	}
@@ -242,8 +242,9 @@ func (s *MessageService) FanoutMessage(ctx context.Context, message *models.Mess
 		seen[member.UserID] = struct{}{}
 
 		payload := WSPushPayload{
-			Message:     message,
-			UnreadCount: member.UnreadCount,
+			Message:         message,
+			UnreadCount:     member.UnreadCount,
+			PreviewImageURL: conversation.PreviewImageURL,
 		}
 		payloadBytes, err := json.Marshal(payload)
 		if err != nil {
