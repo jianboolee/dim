@@ -8,6 +8,12 @@ var USER_AUDITOR = dim.User{
 	Avatar:   "https://img01.wanfangche.com/uploads/avatar/6.jpg" + AvatarSuffix,
 }
 
+var USER_CUSTOMER_SERVICE = dim.User{
+	ID:       "user_customer_service",
+	Nickname: "客服",
+	Avatar:   "https://img01.wanfangche.com/uploads/avatar/7.jpg" + AvatarSuffix,
+}
+
 var USER_DEMO = dim.User{
 	ID:       "user_demo",
 	Nickname: "Demo",
@@ -18,6 +24,12 @@ var USER_JIANBO = dim.User{
 	ID:       "jianbo",
 	Nickname: "Jianbo",
 	Avatar:   "https://img01.wanfangche.com/uploads/avatar/3.jpg" + AvatarSuffix,
+}
+
+var USER_SELLER_A = dim.User{
+	ID:       "user_seller_a",
+	Nickname: "瑞弗房车",
+	Avatar:   "https://img01.wanfangche.com/public/upload/202404/15/661ca5f5cea0e.png" + AvatarSuffix,
 }
 
 var USER_A = dim.User{
