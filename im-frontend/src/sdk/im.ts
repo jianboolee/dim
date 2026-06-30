@@ -120,6 +120,10 @@ export enum MessageType {
     members?: GroupMember[];
   }
 
+  export interface GroupUpdatePatch {
+    name?: string;
+  }
+
   export interface GroupMemberPage {
     items: GroupMember[];
     next_cursor?: string;
@@ -604,6 +608,18 @@ export enum MessageType {
         this.baseURL,
         `/im/api/groups/${groupId}`,
         this.token,
+      );
+    }
+
+    async updateGroup(groupId: string, patch: GroupUpdatePatch): Promise<GroupDetailResponse> {
+      return apiRequest<GroupDetailResponse>(
+        this.baseURL,
+        `/im/api/groups/${groupId}`,
+        this.token,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(patch),
+        },
       );
     }
 

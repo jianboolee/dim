@@ -45,6 +45,12 @@
             </section>
 
             <section class="drawer-section action-section">
+              <GroupNameEditor
+                v-if="isGroup"
+                :model-value="groupName || ''"
+                :saving="savingGroupName"
+                @save="emit('update-group-name', $event)"
+              />
               <button v-if="isGroup" type="button" class="drawer-row action-row" @click="handleInvite">
                 <span>邀请成员</span>
                 <i class="ri-add-line"></i>
@@ -96,6 +102,7 @@
 
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
+import GroupNameEditor from '@/components/im/GroupNameEditor.vue'
 import type { UserInfo } from '@/types/user'
 
 const props = defineProps<{
@@ -103,6 +110,8 @@ const props = defineProps<{
   participants: UserInfo[]
   isGroup?: boolean
   groupId?: string
+  groupName?: string
+  savingGroupName?: boolean
   pinned?: boolean
   muted?: boolean
   hasMoreParticipants?: boolean
@@ -115,6 +124,7 @@ const emit = defineEmits<{
   invite: []
   leave: []
   'load-more-members': []
+  'update-group-name': [name: string]
   'update-setting': [settings: { pinned?: boolean; muted?: boolean }]
 }>()
 

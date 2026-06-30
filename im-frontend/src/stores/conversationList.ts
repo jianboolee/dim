@@ -68,6 +68,26 @@ export const useConversationListStore = defineStore('conversationList', () => {
     )))
   }
 
+  function updateConversationGroupInfo(conversationId: string, group: NonNullable<Conversation['group_info']>) {
+    if (!conversationId || !group?.id) return
+
+    const applyGroupInfo = (conversation: Conversation) => {
+      if (conversation.id !== conversationId) return conversation
+      return {
+        ...conversation,
+        display_name: group.name || conversation.display_name,
+        display_avatar: group.avatar_url || conversation.display_avatar,
+        group_info: {
+          ...conversation.group_info,
+          ...group,
+        },
+      }
+    }
+
+    conversations.value = sortConversationsByActivity(conversations.value.map(applyGroupInfo))
+    searchResults.value = sortConversationsByActivity(searchResults.value.map(applyGroupInfo))
+  }
+
   function removeConversation(conversationId: string) {
     if (!conversationId) return
     conversations.value = conversations.value.filter((conversation) => conversation.id !== conversationId)
@@ -401,6 +421,7 @@ export const useConversationListStore = defineStore('conversationList', () => {
     clearUnreadForConversation,
     upsertConversation,
     updateConversationMemberState,
+    updateConversationGroupInfo,
     removeConversation,
     ensureConversationInList,
     requestScrollToConversation,

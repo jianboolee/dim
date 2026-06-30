@@ -570,7 +570,7 @@ func (s *GroupService) formatSystemEventMessage(ctx context.Context, payload *mo
 		return "群聊已解散"
 	case models.SystemEventGroupNameUpdated:
 		if payload.AfterValue != "" {
-			return "群名修改为 " + payload.AfterValue
+			return actor + " 修改了群名为 " + payload.AfterValue
 		}
 		return "修改了群名"
 	case models.SystemEventGroupAvatarUpdated:

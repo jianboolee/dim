@@ -4,6 +4,8 @@
     :participants="displayParticipants"
     :is-group="isGroup"
     :group-id="conversation?.group_id"
+    :group-name="groupName"
+    :saving-group-name="savingGroupName"
     :pinned="conversation?.member_state?.pinned"
     :muted="conversation?.member_state?.muted"
     :has-more-participants="groupMembersHasMore"
@@ -12,6 +14,7 @@
     @invite="emit('invite')"
     @search="showMessageSearch = true"
     @load-more-members="loadMoreGroupMembers"
+    @update-group-name="handleUpdateGroupName"
     @update-setting="handleUpdateConversationSetting"
     @leave="showLeaveConfirm = true"
   />
@@ -58,13 +61,15 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const imStore = useIMStore()
-const { updateConversationMemberState, removeConversation } = useConversationList()
+const { updateConversationMemberState, updateConversationGroupInfo, removeConversation } = useConversationList()
 const { userMap, mergeUsers } = useUserProfiles()
 
 const groupDetailMembers = ref<GroupMember[]>([])
+const groupName = ref('')
 const groupMembersNextCursor = ref<string | undefined>()
 const groupMembersHasMore = ref(false)
 const loadingGroupMembers = ref(false)
+const savingGroupName = ref(false)
 const showMessageSearch = ref(false)
 const showLeaveConfirm = ref(false)
 const leavingGroup = ref(false)
@@ -80,6 +85,7 @@ const displayParticipants = computed<UserInfo[]>(() => {
 
 const resetGroupState = () => {
   groupDetailMembers.value = []
+  groupName.value = ''
   groupMembersNextCursor.value = undefined
   groupMembersHasMore.value = false
 }
@@ -90,9 +96,11 @@ const loadInitialGroupMembers = async () => {
     return
   }
 
+  groupName.value = props.conversation.group_info?.name ?? props.conversation.display_name ?? groupName.value
   try {
     loadingGroupMembers.value = true
     const detail = await imStore.imSDK.getGroup(props.conversation.group_id)
+    groupName.value = detail.group?.name ?? props.conversation.group_info?.name ?? props.conversation.display_name ?? ''
     groupDetailMembers.value = detail.members ?? []
     groupMembersNextCursor.value = groupDetailMembers.value[groupDetailMembers.value.length - 1]?.id
     groupMembersHasMore.value = groupDetailMembers.value.length < (detail.group?.member_count ?? 0)
@@ -124,6 +132,35 @@ const loadMoreGroupMembers = async () => {
     showToast('成员加载失败')
   } finally {
     loadingGroupMembers.value = false
+  }
+}
+
+const handleUpdateGroupName = async (name: string) => {
+  const groupId = props.conversation?.group_id
+  const conversationId = props.conversation?.id
+  if (!groupId || !conversationId || !imStore.imSDK || savingGroupName.value) return
+
+  const previousName = groupName.value
+  try {
+    savingGroupName.value = true
+    groupName.value = name
+    const detail = await imStore.imSDK.updateGroup(groupId, { name })
+    if (detail.group) {
+      groupName.value = detail.group.name
+      updateConversationGroupInfo(conversationId, {
+        id: detail.group.id,
+        name: detail.group.name,
+        avatar_url: detail.group.avatar_url,
+        member_count: detail.group.member_count,
+      })
+    }
+    showToast('群名称已更新')
+  } catch (error) {
+    console.error('修改群名失败:', error)
+    groupName.value = previousName
+    showToast('修改失败')
+  } finally {
+    savingGroupName.value = false
   }
 }
 
