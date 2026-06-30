@@ -29,9 +29,10 @@
             text=""
             aspect="1:1"
           />
-          <span v-if="item.unreadCount > 0" class="unread-badge">
+          <span v-if="item.unreadCount > 0 && !item.muted" class="unread-badge">
             {{ item.unreadBadge }}
           </span>
+          <span v-else-if="item.unreadCount > 0" class="unread-dot"></span>
         </div>
 
         <div class="conversation-info">
@@ -39,7 +40,10 @@
             <span class="nickname">{{ item.displayName }}</span>
             <span class="time">{{ item.time }}</span>
           </div>
-          <div class="last-message">{{ item.lastMessagePreview }}</div>
+          <div class="last-message-row">
+            <div class="last-message">{{ item.lastMessagePreview }}</div>
+            <i v-if="item.muted" class="ri-notification-off-line muted-icon" aria-label="消息免打扰"></i>
+          </div>
         </div>
 
         <div v-if="item.previewImage" class="conversation-image">
@@ -185,6 +189,7 @@ const conversationItems = computed(() => {
       ),
       unreadCount,
       unreadBadge: formatUnreadBadge(unreadCount),
+      muted: Boolean(conversation.member_state?.muted),
       previewImage: conversation.preview_image_url,
     }
   })
@@ -477,6 +482,17 @@ defineExpose({ refresh })
   justify-content: center;
 }
 
+.unread-dot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--error-color);
+}
+
 .conversation-info {
   flex: 1;
   min-width: 0;
@@ -523,12 +539,28 @@ defineExpose({ refresh })
   object-fit: cover;
 }
 
+.last-message-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .last-message {
+  min-width: 0;
+  flex: 1;
   color: var(--text-color-secondary);
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.muted-icon {
+  flex-shrink: 0;
+  color: var(--text-color-light);
+  font-size: 15px;
+  line-height: 1;
 }
 
 .empty-state {

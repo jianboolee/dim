@@ -1,0 +1,187 @@
+<template>
+  <ConversationInfoDrawer
+    :model-value="modelValue"
+    :participants="displayParticipants"
+    :is-group="isGroup"
+    :group-id="conversation?.group_id"
+    :pinned="conversation?.member_state?.pinned"
+    :muted="conversation?.member_state?.muted"
+    :has-more-participants="groupMembersHasMore"
+    :loading-participants="loadingGroupMembers"
+    @update:modelValue="emit('update:modelValue', $event)"
+    @invite="emit('invite')"
+    @search="showMessageSearch = true"
+    @load-more-members="loadMoreGroupMembers"
+    @update-setting="handleUpdateConversationSetting"
+    @leave="showLeaveConfirm = true"
+  />
+
+  <ConversationMessageSearchModal
+    v-model="showMessageSearch"
+    :conversation-id="conversation?.id || ''"
+  />
+
+  <ConfirmModal
+    v-model="showLeaveConfirm"
+    danger
+    title="退出群聊"
+    message="退出后将不再显示这个群聊，也不会继续接收群消息。确定要退出吗？"
+    confirm-text="退出"
+    loading-text="退出中..."
+    :loading="leavingGroup"
+    @confirm="handleLeaveGroup"
+  />
+</template>
+
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { showToast } from '@/plugins/toast'
+import { useIMStore } from '@/stores/im'
+import { useConversationList } from '@/composables/useConversationList'
+import { useUserProfiles } from '@/composables/useUserProfiles'
+import ConversationInfoDrawer from '@/components/im/ConversationInfoDrawer.vue'
+import ConversationMessageSearchModal from '@/components/im/ConversationMessageSearchModal.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import type { Conversation, ConversationMemberState, GroupMember, UserInfo } from '@/sdk/im'
+
+const props = defineProps<{
+  modelValue: boolean
+  conversation: Conversation | null
+  participants: UserInfo[]
+}>()
+
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  invite: []
+}>()
+
+const router = useRouter()
+const imStore = useIMStore()
+const { updateConversationMemberState, removeConversation } = useConversationList()
+const { userMap, mergeUsers } = useUserProfiles()
+
+const groupDetailMembers = ref<GroupMember[]>([])
+const groupMembersNextCursor = ref<string | undefined>()
+const groupMembersHasMore = ref(false)
+const loadingGroupMembers = ref(false)
+const showMessageSearch = ref(false)
+const showLeaveConfirm = ref(false)
+const leavingGroup = ref(false)
+
+const isGroup = computed(() => props.conversation?.type === 'group')
+const displayParticipants = computed<UserInfo[]>(() => {
+  if (!isGroup.value) return props.participants
+
+  return groupDetailMembers.value
+    .map((member) => member.user_info ?? userMap.value[member.user_id] ?? { id: member.user_id })
+    .filter((user) => user.id)
+})
+
+const resetGroupState = () => {
+  groupDetailMembers.value = []
+  groupMembersNextCursor.value = undefined
+  groupMembersHasMore.value = false
+}
+
+const loadInitialGroupMembers = async () => {
+  if (!props.conversation?.group_id || !imStore.imSDK || !isGroup.value) {
+    resetGroupState()
+    return
+  }
+
+  try {
+    loadingGroupMembers.value = true
+    const detail = await imStore.imSDK.getGroup(props.conversation.group_id)
+    groupDetailMembers.value = detail.members ?? []
+    groupMembersNextCursor.value = groupDetailMembers.value[groupDetailMembers.value.length - 1]?.id
+    groupMembersHasMore.value = groupDetailMembers.value.length < (detail.group?.member_count ?? 0)
+    mergeUsers(groupDetailMembers.value.map((member) => member.user_info))
+  } catch (error) {
+    console.error('获取群信息失败:', error)
+    showToast('群信息加载失败')
+  } finally {
+    loadingGroupMembers.value = false
+  }
+}
+
+const loadMoreGroupMembers = async () => {
+  const groupId = props.conversation?.group_id
+  if (!groupId || !imStore.imSDK || loadingGroupMembers.value || !groupMembersHasMore.value) return
+
+  try {
+    loadingGroupMembers.value = true
+    const page = await imStore.imSDK.getGroupMembers(groupId, {
+      limit: 100,
+      cursor: groupMembersNextCursor.value,
+    })
+    groupDetailMembers.value = [...groupDetailMembers.value, ...(page.items ?? [])]
+    groupMembersNextCursor.value = page.next_cursor
+    groupMembersHasMore.value = page.has_more
+    mergeUsers(page.items.map((member) => member.user_info))
+  } catch (error) {
+    console.error('加载群成员失败:', error)
+    showToast('成员加载失败')
+  } finally {
+    loadingGroupMembers.value = false
+  }
+}
+
+const handleUpdateConversationSetting = async (settings: { pinned?: boolean; muted?: boolean }) => {
+  const conversation = props.conversation
+  if (!imStore.imSDK || !conversation?.id || !conversation.member_state) return
+
+  const previous = conversation.member_state
+  const optimistic: ConversationMemberState = { ...previous, ...settings }
+  updateConversationMemberState(conversation.id, optimistic)
+
+  try {
+    const memberState = await imStore.imSDK.updateConversationSettings(conversation.id, settings)
+    updateConversationMemberState(conversation.id, memberState)
+  } catch (error) {
+    console.error('更新会话设置失败:', error)
+    updateConversationMemberState(conversation.id, previous)
+    showToast('设置失败')
+  }
+}
+
+const handleLeaveGroup = async () => {
+  const groupId = props.conversation?.group_id
+  const conversationId = props.conversation?.id
+  if (!imStore.imSDK || !groupId || !conversationId || leavingGroup.value) return
+
+  try {
+    leavingGroup.value = true
+    await imStore.imSDK.leaveGroup(groupId)
+    removeConversation(conversationId)
+    showLeaveConfirm.value = false
+    emit('update:modelValue', false)
+    router.replace({ name: 'im-home' })
+  } catch (error) {
+    console.error('退出群聊失败:', error)
+    showToast('退出失败')
+  } finally {
+    leavingGroup.value = false
+  }
+}
+
+watch(
+  () => [props.modelValue, props.conversation?.id, props.conversation?.group_id] as const,
+  ([visible]) => {
+    if (!visible) {
+      showMessageSearch.value = false
+      showLeaveConfirm.value = false
+      resetGroupState()
+      return
+    }
+
+    if (isGroup.value) {
+      void loadInitialGroupMembers()
+      return
+    }
+
+    resetGroupState()
+  },
+  { immediate: true },
+)
+</script>
