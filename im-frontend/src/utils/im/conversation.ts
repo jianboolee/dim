@@ -46,6 +46,9 @@ export function getUnreadCount(conversation: Conversation, currentUserId: string
 
 export function sortConversationsByActivity(conversations: Conversation[]): Conversation[] {
   return [...conversations].sort((a, b) => {
+    const pinnedA = Boolean(a.member_state?.pinned)
+    const pinnedB = Boolean(b.member_state?.pinned)
+    if (pinnedA !== pinnedB) return pinnedA ? -1 : 1
     const timeA = a.last_activity || a.last_message?.created_at || a.updated_at
     const timeB = b.last_activity || b.last_message?.created_at || b.updated_at
     return new Date(timeB).getTime() - new Date(timeA).getTime()

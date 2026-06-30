@@ -120,6 +120,12 @@ export enum MessageType {
     members?: GroupMember[];
   }
 
+  export interface GroupMemberPage {
+    items: GroupMember[];
+    next_cursor?: string;
+    has_more: boolean;
+  }
+
   export interface ConversationMemberState {
     status: string;
     last_read_seq: number;
@@ -128,7 +134,9 @@ export enum MessageType {
     unread_count: number;
     mention_count?: number;
     muted?: boolean;
+    muted_at?: string;
     pinned?: boolean;
+    pinned_at?: string;
   }
 
   export interface Conversation {
@@ -175,6 +183,23 @@ export enum MessageType {
     start_time?: string;
     end_time?: string;
     limit?: number;
+  }
+
+  export interface MessageSearchParams {
+    q: string;
+    limit?: number;
+    cursor?: string;
+  }
+
+  export interface MessageSearchPage {
+    items: Message[];
+    next_cursor?: string;
+    has_more: boolean;
+  }
+
+  export interface ConversationSettingsPatch {
+    pinned?: boolean;
+    muted?: boolean;
   }
 
   interface ApiResponse<T> {
@@ -582,6 +607,30 @@ export enum MessageType {
       );
     }
 
+    async getGroupMembers(
+      groupId: string,
+      params: { limit?: number; cursor?: string } = {},
+    ): Promise<GroupMemberPage> {
+      const queryParams = new URLSearchParams();
+      if (params.limit) queryParams.append('limit', params.limit.toString());
+      if (params.cursor) queryParams.append('cursor', params.cursor);
+      const suffix = queryParams.toString() ? `?${queryParams}` : '';
+      return apiRequest<GroupMemberPage>(
+        this.baseURL,
+        `/im/api/groups/${groupId}/members${suffix}`,
+        this.token,
+      );
+    }
+
+    async leaveGroup(groupId: string): Promise<void> {
+      await apiRequest<void>(
+        this.baseURL,
+        `/im/api/groups/${groupId}/leave`,
+        this.token,
+        { method: 'POST' },
+      );
+    }
+
     async markConversationRead(conversationId: string): Promise<void> {
       await apiRequest<void>(
         this.baseURL,
@@ -589,6 +638,46 @@ export enum MessageType {
         this.token,
         { method: 'PUT' },
       );
+    }
+
+    async updateConversationSettings(
+      conversationId: string,
+      settings: ConversationSettingsPatch,
+    ): Promise<ConversationMemberState> {
+      return apiRequest<ConversationMemberState>(
+        this.baseURL,
+        `/im/api/conversations/${conversationId}/settings`,
+        this.token,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(settings),
+        },
+      );
+    }
+
+    async searchConversationMessages(
+      conversationId: string,
+      params: MessageSearchParams,
+    ): Promise<MessageSearchPage> {
+      const queryParams = new URLSearchParams();
+      queryParams.append('q', params.q);
+      if (params.limit) queryParams.append('limit', params.limit.toString());
+      if (params.cursor) queryParams.append('cursor', params.cursor);
+      const data = await apiRequest<{
+        items?: Record<string, unknown>[];
+        next_cursor?: string;
+        has_more?: boolean;
+      }>(
+        this.baseURL,
+        `/im/api/conversations/${conversationId}/messages/search?${queryParams}`,
+        this.token,
+      );
+
+      return {
+        items: (data.items ?? []).map((item) => normalizeMessage(item)),
+        next_cursor: data.next_cursor,
+        has_more: Boolean(data.has_more),
+      };
     }
   
     /**

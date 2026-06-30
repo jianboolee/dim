@@ -23,10 +23,6 @@
             </header> -->
 
             <section class="drawer-section participants-section">
-              <div v-if="isGroup && groupId" class="group-meta-row">
-                <span>群 ID</span>
-                <strong>{{ groupId }}</strong>
-              </div>
               <div class="participant-list">
                 <div
                   v-for="user in displayParticipants"
@@ -37,6 +33,15 @@
                   <span class="participant-name">{{ user.nickname || user.id }}</span>
                 </div>
               </div>
+              <button
+                v-if="isGroup && hasMoreParticipants"
+                type="button"
+                class="load-members-btn"
+                :disabled="loadingParticipants"
+                @click="emit('load-more-members')"
+              >
+                {{ loadingParticipants ? '加载中...' : '查看更多成员' }}
+              </button>
             </section>
 
             <section class="drawer-section action-section">
@@ -44,10 +49,38 @@
                 <span>邀请成员</span>
                 <i class="ri-add-line"></i>
               </button>
-              <button type="button" class="drawer-row action-row" @click="handleSearch">
+              <button type="button" class="drawer-row action-row" @click="showSearch = !showSearch">
                 <span>查找聊天内容</span>
                 <i class="ri-arrow-right-s-line"></i>
               </button>
+              <div v-if="showSearch" class="search-panel">
+                <div class="search-input-row">
+                  <input
+                    v-model="searchKeyword"
+                    type="search"
+                    placeholder="搜索聊天内容"
+                    @keydown.enter="handleSearch"
+                  >
+                  <button type="button" @click="handleSearch">搜索</button>
+                </div>
+                <div v-if="searchingMessages" class="search-state">搜索中...</div>
+                <div v-else-if="displaySearchResults.length > 0" class="search-results">
+                  <div v-for="item in displaySearchResults" :key="item.id" class="search-result-item">
+                    <span>{{ item.preview_text || item.content }}</span>
+                    <small>{{ formatSearchTime(item.created_at) }}</small>
+                  </div>
+                  <button
+                    v-if="hasMoreSearchResults"
+                    type="button"
+                    class="load-search-btn"
+                    :disabled="searchingMessages"
+                    @click="emit('load-more-search-results')"
+                  >
+                    {{ searchingMessages ? '加载中...' : '加载更多' }}
+                  </button>
+                </div>
+                <div v-else-if="hasSearched" class="search-state">没有找到相关内容</div>
+              </div>
             </section>
 
             <section class="drawer-section setting-section">
@@ -58,7 +91,7 @@
                   class="switch-control"
                   :class="{ 'is-on': pinned }"
                   :aria-pressed="pinned"
-                  @click="pinned = !pinned"
+                  @click="togglePinned"
                 >
                   <span></span>
                 </button>
@@ -70,7 +103,7 @@
                   class="switch-control"
                   :class="{ 'is-on': muted }"
                   :aria-pressed="muted"
-                  @click="muted = !muted"
+                  @click="toggleMuted"
                 >
                   <span></span>
                 </button>
@@ -78,8 +111,8 @@
             </section>
 
             <section class="drawer-section danger-section">
-              <button type="button" class="clear-history-btn" @click="handleClear">
-                清空聊天记录
+              <button v-if="isGroup" type="button" class="clear-history-btn" @click="emit('leave')">
+                退出群聊
               </button>
             </section>
           </aside>
@@ -91,42 +124,83 @@
 
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
+import dayjs from 'dayjs'
 import type { UserInfo } from '@/types/user'
+import type { Message } from '@/sdk/im'
 
 const props = defineProps<{
   modelValue: boolean
   participants: UserInfo[]
   isGroup?: boolean
   groupId?: string
+  pinned?: boolean
+  muted?: boolean
+  hasMoreParticipants?: boolean
+  loadingParticipants?: boolean
+  searchResults?: Message[]
+  hasMoreSearchResults?: boolean
+  searchingMessages?: boolean
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
-  search: []
-  clear: []
+  search: [keyword: string]
   invite: []
+  leave: []
+  'load-more-members': []
+  'load-more-search-results': []
+  'update-setting': [settings: { pinned?: boolean; muted?: boolean }]
 }>()
 
 const pinned = ref(false)
 const muted = ref(false)
+const showSearch = ref(false)
+const searchKeyword = ref('')
+const hasSearched = ref(false)
 
 const displayParticipants = computed(() => props.participants.filter((user) => user.id))
+const displaySearchResults = computed(() => props.searchResults ?? [])
 
 const close = () => {
   emit('update:modelValue', false)
 }
 
 const handleSearch = () => {
-  emit('search')
+  const keyword = searchKeyword.value.trim()
+  if (!keyword) return
+  hasSearched.value = true
+  emit('search', keyword)
 }
 
 const handleInvite = () => {
   emit('invite')
 }
 
-const handleClear = () => {
-  emit('clear')
+const togglePinned = () => {
+  emit('update-setting', { pinned: !pinned.value })
 }
+
+const toggleMuted = () => {
+  emit('update-setting', { muted: !muted.value })
+}
+
+const formatSearchTime = (value?: string) => value ? dayjs(value).format('MM-DD HH:mm') : ''
+
+watch(
+  () => props.pinned,
+  (value) => {
+    pinned.value = Boolean(value)
+  },
+  { immediate: true },
+)
+
+watch(
+  () => props.muted,
+  (value) => {
+    muted.value = Boolean(value)
+  },
+  { immediate: true },
+)
 
 watch(
   () => props.modelValue,
@@ -265,6 +339,23 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
+.load-members-btn {
+  width: 100%;
+  margin-top: 14px;
+  border: none;
+  border-radius: 8px;
+  background: #f4f6fa;
+  color: var(--text-color-secondary);
+  padding: 9px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.load-members-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
 .action-section,
 .setting-section,
 .danger-section {
@@ -296,6 +387,90 @@ onUnmounted(() => {
   color: #a2a9b6;
   font-size: 22px;
   line-height: 1;
+}
+
+.search-panel {
+  padding: 0 16px 14px;
+  background: #fff;
+}
+
+.search-input-row {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.search-input-row input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border-color-light);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  outline: none;
+}
+
+.search-input-row button {
+  border: none;
+  border-radius: 8px;
+  background: #4b86f8;
+  color: white;
+  padding: 0 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.search-state {
+  padding: 14px 2px 0;
+  color: var(--text-color-light);
+  font-size: 12px;
+}
+
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+}
+
+.search-result-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border-radius: 8px;
+  background: #f7f8fb;
+  padding: 8px 10px;
+  color: var(--text-color-dark);
+  font-size: 13px;
+}
+
+.search-result-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result-item small {
+  flex-shrink: 0;
+  color: var(--text-color-light);
+  font-size: 11px;
+}
+
+.load-search-btn {
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  background: #eef3ff;
+  color: #4b70c8;
+  padding: 8px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.load-search-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .switch-row {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -368,6 +369,54 @@ func (s *MessageService) FindMessagesByConversationID(ctx context.Context, conve
 		messages[i].GenerateDigest()
 	}
 	return s.toMessageDTOs(ctx, messages), nil
+}
+
+func (s *MessageService) SearchMessages(ctx context.Context, conversationID primitive.ObjectID, currentUserID string, keyword string, limit int64, cursor string) (*dto.MessageSearchResponse, error) {
+	if _, err := s.memberRepo.GetActive(ctx, conversationID, currentUserID); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrConversationAccessDenied
+		}
+		return nil, err
+	}
+	keyword = strings.TrimSpace(keyword)
+	if keyword == "" {
+		return &dto.MessageSearchResponse{Items: []dto.MessageDTO{}, HasMore: false}, nil
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	var cursorID primitive.ObjectID
+	if strings.TrimSpace(cursor) != "" {
+		id, err := primitive.ObjectIDFromHex(strings.TrimSpace(cursor))
+		if err != nil {
+			return nil, ErrInvalidConversationCursor
+		}
+		cursorID = id
+	}
+	messages, err := s.repo.SearchMessages(ctx, conversationID, keyword, cursorID, limit+1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search messages: %w", err)
+	}
+	for i := range messages {
+		messages[i].DecodePayload()
+		messages[i].GenerateDigest()
+	}
+	hasMore := int64(len(messages)) > limit
+	if hasMore {
+		messages = messages[:limit]
+	}
+	nextCursor := ""
+	if hasMore && len(messages) > 0 {
+		nextCursor = messages[len(messages)-1].ID.Hex()
+	}
+	return &dto.MessageSearchResponse{
+		Items:      s.toMessageDTOs(ctx, messages),
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+	}, nil
 }
 
 func (s *MessageService) toMessageDTO(ctx context.Context, message *models.Message) *dto.MessageDTO {

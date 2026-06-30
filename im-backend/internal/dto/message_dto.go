@@ -21,6 +21,12 @@ type ConversationMessageQuery struct {
 	Limit          int64  `form:"limit,omitempty"`
 }
 
+type ConversationMessageSearchQuery struct {
+	Keyword string `form:"q"`
+	Limit   int64  `form:"limit,omitempty"`
+	Cursor  string `form:"cursor,omitempty"`
+}
+
 type MessageDTO struct {
 	ID              primitive.ObjectID   `json:"id,omitempty"`
 	ClientMessageID string               `json:"client_message_id,omitempty"`
@@ -47,6 +53,12 @@ type LastMessageDTO struct {
 	Content        string             `json:"content"`
 	PreviewText    string             `json:"preview_text,omitempty"`
 	CreatedAt      time.Time          `json:"created_at"`
+}
+
+type MessageSearchResponse struct {
+	Items      []MessageDTO `json:"items"`
+	NextCursor string       `json:"next_cursor,omitempty"`
+	HasMore    bool         `json:"has_more"`
 }
 
 func ConvertToMessageDTO(message *models.Message, senderProfile *UserInfoDto) *MessageDTO {

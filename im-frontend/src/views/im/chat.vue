@@ -185,9 +185,19 @@
       :participants="conversationInfoParticipants"
       :is-group="isGroupConversation"
       :group-id="conversation?.group_id"
+      :pinned="conversation?.member_state?.pinned"
+      :muted="conversation?.member_state?.muted"
+      :has-more-participants="groupMembersHasMore"
+      :loading-participants="loadingGroupMembers"
+      :search-results="messageSearchResults"
+      :has-more-search-results="messageSearchHasMore"
+      :searching-messages="searchingMessages"
       @invite="handleInviteMembers"
       @search="handleSearchInConversation"
-      @clear="handleClearConversationHistory"
+      @load-more-members="loadMoreGroupMembers"
+      @load-more-search-results="loadMoreMessageSearchResults"
+      @update-setting="handleUpdateConversationSetting"
+      @leave="handleLeaveGroup"
     />
   </div>
 </template>
@@ -202,7 +212,7 @@ import { useIMTabStore } from '@/stores/imTab'
 import { useConversationList } from '@/composables/useConversationList'
 import { useUserProfiles } from '@/composables/useUserProfiles'
 import { MessageType } from '@/sdk/im'
-import type { GroupMember, Payload } from '@/sdk/im'
+import type { ConversationMemberState, GroupMember, Message, Payload } from '@/sdk/im'
 import type { ChatMessage, Conversation, UploadState } from '@/types/im'
 import type { UserInfo } from '@/types/user'
 import { MessageComponents } from '@/components/im'
@@ -237,6 +247,8 @@ const {
   clearUnreadForPeer,
   clearUnreadForConversation,
   handleIncomingMessage: updateConversationByMessage,
+  updateConversationMemberState,
+  removeConversation,
   ensureConversationInList,
   requestScrollToConversation,
 } = useConversationList()
@@ -252,6 +264,14 @@ const showSidebarMenu = ref(false)
 const showConversationSearch = ref(false)
 const showConversationInfoDrawer = ref(false)
 const groupDetailMembers = ref<GroupMember[]>([])
+const groupMembersNextCursor = ref<string | undefined>()
+const groupMembersHasMore = ref(false)
+const loadingGroupMembers = ref(false)
+const messageSearchResults = ref<Message[]>([])
+const searchingMessages = ref(false)
+const messageSearchKeyword = ref('')
+const messageSearchNextCursor = ref<string | undefined>()
+const messageSearchHasMore = ref(false)
 const isMobileViewport = ref(false)
 let cleanupViewportListener: (() => void) | null = null
 const pendingUploadMessageIds = new WeakMap<File, string>()
@@ -414,12 +434,13 @@ const openConversationSearch = () => {
 const openConversationInfo = async () => {
   showConversationInfoDrawer.value = true
   showSidebarMenu.value = false
-  if (!isGroupConversation.value || !conversation.value?.group_id || !imStore.imSDK) {
-    return
-  }
+  messageSearchResults.value = []
+  if (!isGroupConversation.value || !conversation.value?.group_id || !imStore.imSDK) return
   try {
     const detail = await imStore.imSDK.getGroup(conversation.value.group_id)
     groupDetailMembers.value = detail.members ?? []
+    groupMembersNextCursor.value = groupDetailMembers.value[groupDetailMembers.value.length - 1]?.id
+    groupMembersHasMore.value = groupDetailMembers.value.length < (detail.group?.member_count ?? 0)
     mergeUsers(groupDetailMembers.value.map((member) => member.user_info))
   } catch (error) {
     console.error('获取群信息失败:', error)
@@ -427,12 +448,100 @@ const openConversationInfo = async () => {
   }
 }
 
-const handleSearchInConversation = () => {
-  showToast('查找聊天内容稍后开放')
+const loadMoreGroupMembers = async () => {
+  if (!conversation.value?.group_id || !imStore.imSDK || loadingGroupMembers.value || !groupMembersHasMore.value) return
+  try {
+    loadingGroupMembers.value = true
+    const page = await imStore.imSDK.getGroupMembers(conversation.value.group_id, {
+      limit: 100,
+      cursor: groupMembersNextCursor.value,
+    })
+    groupDetailMembers.value = [...groupDetailMembers.value, ...(page.items ?? [])]
+    groupMembersNextCursor.value = page.next_cursor
+    groupMembersHasMore.value = page.has_more
+    mergeUsers(page.items.map((member) => member.user_info))
+  } catch (error) {
+    console.error('加载群成员失败:', error)
+    showToast('成员加载失败')
+  } finally {
+    loadingGroupMembers.value = false
+  }
 }
 
-const handleClearConversationHistory = () => {
-  showToast('清空聊天记录稍后开放')
+const handleSearchInConversation = async (keyword: string) => {
+  if (!imStore.imSDK || !conversationId.value) return
+  try {
+    searchingMessages.value = true
+    const page = await imStore.imSDK.searchConversationMessages(conversationId.value, {
+      q: keyword,
+      limit: 20,
+    })
+    messageSearchKeyword.value = keyword
+    messageSearchResults.value = page.items
+    messageSearchNextCursor.value = page.next_cursor
+    messageSearchHasMore.value = page.has_more
+    mergeUsers(page.items.map((message) => message.sender_profile))
+  } catch (error) {
+    console.error('搜索聊天内容失败:', error)
+    showToast('搜索失败')
+  } finally {
+    searchingMessages.value = false
+  }
+}
+
+const loadMoreMessageSearchResults = async () => {
+  if (!imStore.imSDK || !conversationId.value || !messageSearchKeyword.value || !messageSearchHasMore.value) return
+  try {
+    searchingMessages.value = true
+    const page = await imStore.imSDK.searchConversationMessages(conversationId.value, {
+      q: messageSearchKeyword.value,
+      limit: 20,
+      cursor: messageSearchNextCursor.value,
+    })
+    messageSearchResults.value = [...messageSearchResults.value, ...page.items]
+    messageSearchNextCursor.value = page.next_cursor
+    messageSearchHasMore.value = page.has_more
+    mergeUsers(page.items.map((message) => message.sender_profile))
+  } catch (error) {
+    console.error('加载更多搜索结果失败:', error)
+    showToast('加载失败')
+  } finally {
+    searchingMessages.value = false
+  }
+}
+
+const handleUpdateConversationSetting = async (settings: { pinned?: boolean; muted?: boolean }) => {
+  if (!imStore.imSDK || !conversationId.value || !conversation.value) return
+  const previous = conversation.value.member_state
+  if (!previous) return
+  const optimistic: ConversationMemberState = { ...previous, ...settings }
+  const currentConversation = conversation.value
+  conversation.value = { ...currentConversation, member_state: optimistic }
+  updateConversationMemberState(conversationId.value, optimistic)
+  try {
+    const memberState = await imStore.imSDK.updateConversationSettings(conversationId.value, settings)
+    conversation.value = { ...currentConversation, member_state: memberState }
+    updateConversationMemberState(conversationId.value, memberState)
+  } catch (error) {
+    console.error('更新会话设置失败:', error)
+    conversation.value = { ...currentConversation, member_state: previous }
+    updateConversationMemberState(conversationId.value, previous)
+    showToast('设置失败')
+  }
+}
+
+const handleLeaveGroup = async () => {
+  if (!imStore.imSDK || !conversation.value?.group_id) return
+  if (!window.confirm('确定退出群聊吗？')) return
+  try {
+    await imStore.imSDK.leaveGroup(conversation.value.group_id)
+    removeConversation(conversationId.value)
+    showConversationInfoDrawer.value = false
+    router.replace({ name: 'im-home' })
+  } catch (error) {
+    console.error('退出群聊失败:', error)
+    showToast('退出失败')
+  }
 }
 
 const handleInviteMembers = () => {
@@ -1061,6 +1170,12 @@ const resetChatState = () => {
   targetUser.value = null
   conversation.value = null
   groupDetailMembers.value = []
+  groupMembersNextCursor.value = undefined
+  groupMembersHasMore.value = false
+  messageSearchResults.value = []
+  messageSearchKeyword.value = ''
+  messageSearchNextCursor.value = undefined
+  messageSearchHasMore.value = false
 }
 
 const restoreMessageDraft = (id: string) => {

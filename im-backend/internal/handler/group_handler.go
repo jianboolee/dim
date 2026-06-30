@@ -88,8 +88,13 @@ func (h *GroupHandler) GetMembers(c *gin.Context) {
 	if !ok {
 		return
 	}
+	var query dto.GroupMemberQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 
-	result, err := h.groupService.ListMembers(c.Request.Context(), groupID, contextx.MustGetUserID(c))
+	result, err := h.groupService.ListMembersPage(c.Request.Context(), groupID, contextx.MustGetUserID(c), query.Limit, query.Cursor)
 	if err != nil {
 		h.handleError(c, err)
 		return

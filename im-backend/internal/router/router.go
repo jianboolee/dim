@@ -63,10 +63,12 @@ func SetupAPI(
 
 		api.GET("/conversations", conversationHandler.GetUserConversations)
 		api.GET("/conversations/:id/messages", messageHandler.GetMessagesByConversationID)
+		api.GET("/conversations/:id/messages/search", messageHandler.SearchMessages)
 		api.POST("/conversations/:id/messages", messageHandler.SendMessageToConversation)
 		api.POST("/conversations", conversationHandler.CreateConversation)
 		api.POST("/conversations/:id/activate", conversationHandler.ActivateConversation)
 		api.PUT("/conversations/:id/read", conversationHandler.MarkConversationRead)
+		api.PATCH("/conversations/:id/settings", conversationHandler.UpdateSettings)
 		api.GET("/conversations/:id", conversationHandler.GetConversation)
 
 		api.POST("/groups", groupHandler.CreateGroup)

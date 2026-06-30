@@ -95,3 +95,20 @@ func (s *MessageService) List(ctx context.Context, conversationID string, params
 	}
 	return out, nil
 }
+
+func (s *MessageService) Search(ctx context.Context, conversationID string, params SearchMessagesParams) (*MessageSearchPage, error) {
+	values := url.Values{}
+	values.Set("q", params.Query)
+	if params.Limit > 0 {
+		values.Set("limit", strconv.Itoa(params.Limit))
+	}
+	if params.Cursor != "" {
+		values.Set("cursor", params.Cursor)
+	}
+	path := "/im/api/conversations/" + url.PathEscape(conversationID) + "/messages/search?" + values.Encode()
+	var out MessageSearchPage
+	if err := s.client.do(ctx, http.MethodGet, path, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}

@@ -79,6 +79,38 @@ func (h *MessageHandler) GetMessagesByConversationID(c *gin.Context) {
 
 }
 
+func (h *MessageHandler) SearchMessages(c *gin.Context) {
+	conversationIDStr := c.Param("id")
+	conversationID, err := primitive.ObjectIDFromHex(conversationIDStr)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, http.StatusBadRequest, "Invalid conversation ID")
+		return
+	}
+
+	var query dto.ConversationMessageSearchQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	currentUserID := contextx.MustGetUserID(c)
+	result, err := h.messageService.SearchMessages(c.Request.Context(), conversationID, currentUserID, query.Keyword, query.Limit, query.Cursor)
+	if err != nil {
+		if errors.Is(err, service.ErrConversationAccessDenied) {
+			response.Error(c, http.StatusForbidden, http.StatusForbidden, "Forbidden")
+			return
+		}
+		if errors.Is(err, service.ErrInvalidConversationCursor) {
+			response.BadRequest(c, "Invalid cursor")
+			return
+		}
+		response.Error(c, http.StatusInternalServerError, http.StatusInternalServerError, "Failed to search messages")
+		return
+	}
+
+	response.Success(c, "success", result)
+}
+
 // GetUnreadCount 获取未读消息数
 func (h *MessageHandler) GetUnreadCount(c *gin.Context) {
 	userID := contextx.MustGetUserID(c)

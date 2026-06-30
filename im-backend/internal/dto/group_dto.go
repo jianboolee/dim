@@ -27,6 +27,11 @@ type GroupSetAdminRequest struct {
 	UserID string `json:"user_id" binding:"required"`
 }
 
+type GroupMemberQuery struct {
+	Limit  int64  `form:"limit,omitempty"`
+	Cursor string `form:"cursor,omitempty"`
+}
+
 type GroupDTO struct {
 	ID             primitive.ObjectID `json:"id"`
 	ConversationID primitive.ObjectID `json:"conversation_id"`
@@ -63,6 +68,12 @@ type GroupSummaryDTO struct {
 type GroupDetailResponse struct {
 	Group   *GroupDTO        `json:"group"`
 	Members []GroupMemberDTO `json:"members,omitempty"`
+}
+
+type GroupMemberListResponse struct {
+	Items      []GroupMemberDTO `json:"items"`
+	NextCursor string           `json:"next_cursor,omitempty"`
+	HasMore    bool             `json:"has_more"`
 }
 
 func ConvertToGroupDTO(group *models.Group) *GroupDTO {

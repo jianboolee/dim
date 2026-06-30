@@ -33,7 +33,14 @@ type ConversationMemberStateDTO struct {
 	UnreadCount     int64                           `json:"unread_count"`
 	MentionCount    int64                           `json:"mention_count"`
 	Muted           bool                            `json:"muted"`
+	MutedAt         time.Time                       `json:"muted_at,omitempty"`
 	Pinned          bool                            `json:"pinned"`
+	PinnedAt        time.Time                       `json:"pinned_at,omitempty"`
+}
+
+type ConversationSettingsPatchRequest struct {
+	Pinned *bool `json:"pinned,omitempty"`
+	Muted  *bool `json:"muted,omitempty"`
 }
 
 // ConversationQuery 会话查询参数

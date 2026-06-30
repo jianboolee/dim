@@ -14,6 +14,8 @@ export function useConversationList() {
     clearUnreadForPeer: store.clearUnreadForPeer,
     clearUnreadForConversation: store.clearUnreadForConversation,
     upsertConversation: store.upsertConversation,
+    updateConversationMemberState: store.updateConversationMemberState,
+    removeConversation: store.removeConversation,
     ensureConversationInList: store.ensureConversationInList,
     requestScrollToConversation: store.requestScrollToConversation,
     getPeerUserIds: store.getPeerUserIds,

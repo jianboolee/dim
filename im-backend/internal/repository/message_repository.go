@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"regexp"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -94,4 +95,34 @@ func (r *MessageRepository) FindMessagesByConversationID(ctx context.Context, co
 	}
 
 	return messages, nil
+}
+
+func (r *MessageRepository) SearchMessages(ctx context.Context, conversationID primitive.ObjectID, keyword string, cursorID primitive.ObjectID, limit int64) ([]models.Message, error) {
+	escaped := regexp.QuoteMeta(keyword)
+	filter := bson.M{
+		"conversation_id": conversationID,
+		"$or": []bson.M{
+			{"content": bson.M{"$regex": escaped, "$options": "i"}},
+			{"preview_text": bson.M{"$regex": escaped, "$options": "i"}},
+			{"payload.title": bson.M{"$regex": escaped, "$options": "i"}},
+			{"payload.description": bson.M{"$regex": escaped, "$options": "i"}},
+		},
+	}
+	if !cursorID.IsZero() {
+		filter["_id"] = bson.M{"$lt": cursorID}
+	}
+	opts := options.Find().SetSort(bson.D{{Key: "_id", Value: -1}})
+	if limit > 0 {
+		opts.SetLimit(limit)
+	}
+	cursor, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var messages []models.Message
+	if err := cursor.All(ctx, &messages); err != nil {
+		return nil, err
+	}
+	return messages, cursor.Err()
 }

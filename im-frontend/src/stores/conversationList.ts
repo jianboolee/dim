@@ -59,6 +59,21 @@ export const useConversationListStore = defineStore('conversationList', () => {
     conversations.value = sortConversationsByActivity([...byId.values()])
   }
 
+  function updateConversationMemberState(conversationId: string, memberState: Conversation['member_state']) {
+    if (!conversationId || !memberState) return
+    conversations.value = sortConversationsByActivity(conversations.value.map((conversation) => (
+      conversation.id === conversationId
+        ? { ...conversation, member_state: { ...conversation.member_state, ...memberState } }
+        : conversation
+    )))
+  }
+
+  function removeConversation(conversationId: string) {
+    if (!conversationId) return
+    conversations.value = conversations.value.filter((conversation) => conversation.id !== conversationId)
+    searchResults.value = searchResults.value.filter((conversation) => conversation.id !== conversationId)
+  }
+
   async function loadConversations(options: { reset?: boolean; activeConversationId?: string } = {}) {
     if (loadPromise) {
       return loadPromise
@@ -385,6 +400,8 @@ export const useConversationListStore = defineStore('conversationList', () => {
     clearUnreadForPeer,
     clearUnreadForConversation,
     upsertConversation,
+    updateConversationMemberState,
+    removeConversation,
     ensureConversationInList,
     requestScrollToConversation,
     getPeerUserIds,

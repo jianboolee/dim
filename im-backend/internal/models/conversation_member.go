@@ -28,7 +28,9 @@ type ConversationMember struct {
 	UnreadCount       int64                    `bson:"unread_count" json:"unread_count"`
 	MentionCount      int64                    `bson:"mention_count" json:"mention_count"`
 	Muted             bool                     `bson:"muted" json:"muted"`
+	MutedAt           time.Time                `bson:"muted_at,omitempty" json:"muted_at,omitempty"`
 	Pinned            bool                     `bson:"pinned" json:"pinned"`
+	PinnedAt          time.Time                `bson:"pinned_at,omitempty" json:"pinned_at,omitempty"`
 	JoinedAt          time.Time                `bson:"joined_at" json:"joined_at"`
 	CreatedAt         time.Time                `bson:"created_at" json:"created_at"`
 	UpdatedAt         time.Time                `bson:"updated_at" json:"updated_at"`

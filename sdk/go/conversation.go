@@ -40,6 +40,14 @@ func (s *ConversationService) MarkRead(ctx context.Context, conversationID strin
 	return s.client.do(ctx, http.MethodPut, "/im/api/conversations/"+url.PathEscape(conversationID)+"/read", nil, nil)
 }
 
+func (s *ConversationService) UpdateSettings(ctx context.Context, conversationID string, patch ConversationSettingsPatch) (*ConversationMemberState, error) {
+	var out ConversationMemberState
+	if err := s.client.do(ctx, http.MethodPatch, "/im/api/conversations/"+url.PathEscape(conversationID)+"/settings", patch, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 func (s *ConversationService) List(ctx context.Context, params ListConversationsParams) (*ConversationPage, error) {
 	values := url.Values{}
 	if params.Limit > 0 {

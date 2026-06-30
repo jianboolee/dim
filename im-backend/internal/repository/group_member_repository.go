@@ -102,6 +102,35 @@ func (r *GroupMemberRepository) ListActiveByGroup(ctx context.Context, groupID p
 	return members, cursor.Err()
 }
 
+func (r *GroupMemberRepository) ListActiveByGroupPage(ctx context.Context, groupID primitive.ObjectID, limit int64, cursorID primitive.ObjectID) ([]*models.GroupMember, error) {
+	filter := bson.M{
+		"group_id": groupID,
+		"status":   models.GroupMemberStatusActive,
+	}
+	if !cursorID.IsZero() {
+		filter["_id"] = bson.M{"$gt": cursorID}
+	}
+	opts := options.Find().SetSort(bson.D{{Key: "joined_at", Value: 1}, {Key: "_id", Value: 1}})
+	if limit > 0 {
+		opts.SetLimit(limit)
+	}
+	cursor, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var members []*models.GroupMember
+	for cursor.Next(ctx) {
+		var member models.GroupMember
+		if err := cursor.Decode(&member); err != nil {
+			return nil, err
+		}
+		members = append(members, &member)
+	}
+	return members, cursor.Err()
+}
+
 func (r *GroupMemberRepository) ListActiveUserIDs(ctx context.Context, groupID primitive.ObjectID) ([]string, error) {
 	members, err := r.ListActiveByGroup(ctx, groupID)
 	if err != nil {

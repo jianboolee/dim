@@ -40,6 +40,7 @@ var ErrConversationAccessDenied = errors.New("conversation access denied")
 var ErrCannotStartConversationWithSystemUser = errors.New("cannot start conversation with system user")
 
 type conversationCursor struct {
+	Pinned bool      `json:"pinned"`
 	SortAt time.Time `json:"sort_at"`
 	ID     string    `json:"id"`
 }
@@ -145,6 +146,7 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, senderID
 
 	var cursorSortAt time.Time
 	var cursorID primitive.ObjectID
+	var cursorPinned bool
 	if cursorValue != "" {
 		cursor, err := decodeConversationCursor(cursorValue)
 		if err != nil {
@@ -154,6 +156,7 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, senderID
 		if err != nil {
 			return nil, fmt.Errorf("%w: invalid cursor id", ErrInvalidConversationCursor)
 		}
+		cursorPinned = cursor.Pinned
 		cursorSortAt = cursor.SortAt
 		cursorID = cursorObjectID
 	}
@@ -168,7 +171,7 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, senderID
 		}
 	}
 
-	memberPage, err := s.memberRepo.ListByUser(ctx, senderID, limit+1, cursorSortAt, cursorID)
+	memberPage, err := s.memberRepo.ListByUser(ctx, senderID, limit+1, cursorPinned, cursorSortAt, cursorID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversation members: %w", err)
 	}
@@ -230,6 +233,7 @@ func (s *ConversationService) searchUserConversations(
 
 	var cursorSortAt time.Time
 	var cursorID primitive.ObjectID
+	var cursorPinned bool
 	if cursorValue != "" {
 		cursor, err := decodeConversationCursor(cursorValue)
 		if err != nil {
@@ -239,6 +243,7 @@ func (s *ConversationService) searchUserConversations(
 		if err != nil {
 			return nil, fmt.Errorf("%w: invalid cursor id", ErrInvalidConversationCursor)
 		}
+		cursorPinned = cursor.Pinned
 		cursorSortAt = cursor.SortAt
 		cursorID = cursorObjectID
 	}
@@ -271,7 +276,7 @@ func (s *ConversationService) searchUserConversations(
 	}
 
 	// 3. 取当前用户在这些会话中的 member 记录
-	memberPage, err := s.memberRepo.ListByUserAndConversationIDs(ctx, senderID, convIDs, limit+1, cursorSortAt, cursorID)
+	memberPage, err := s.memberRepo.ListByUserAndConversationIDs(ctx, senderID, convIDs, limit+1, cursorPinned, cursorSortAt, cursorID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversation members: %w", err)
 	}
@@ -369,6 +374,28 @@ func (s *ConversationService) MarkConversationRead(ctx context.Context, conversa
 	return s.memberRepo.MarkRead(ctx, conversationID, userID, conversation.MessageSeq, primitive.NilObjectID, time.Now())
 }
 
+func (s *ConversationService) UpdateSettings(ctx context.Context, conversationID primitive.ObjectID, userID string, req dto.ConversationSettingsPatchRequest) (*dto.ConversationMemberStateDTO, error) {
+	member, err := s.memberRepo.UpdateSettings(ctx, conversationID, userID, req.Pinned, req.Muted)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrConversationAccessDenied
+		}
+		return nil, err
+	}
+	return &dto.ConversationMemberStateDTO{
+		Status:          member.Status,
+		LastReadSeq:     member.LastReadSeq,
+		LastReadAt:      member.LastReadAt,
+		LastActivatedAt: member.LastActivatedAt,
+		UnreadCount:     member.UnreadCount,
+		MentionCount:    member.MentionCount,
+		Muted:           member.Muted,
+		MutedAt:         member.MutedAt,
+		Pinned:          member.Pinned,
+		PinnedAt:        member.PinnedAt,
+	}, nil
+}
+
 // GetConversations 获取会话列表
 func (s *ConversationService) GetConversations(ctx context.Context, userID string) ([]*dto.ConversationDTO, error) {
 	response, err := s.GetUserConversations(ctx, userID, 100, "", "", "")
@@ -401,6 +428,7 @@ func encodeConversationCursor(conversation *models.Conversation) string {
 
 func encodeConversationMemberCursor(member *models.ConversationMember) string {
 	payload, err := json.Marshal(conversationCursor{
+		Pinned: member.Pinned,
 		SortAt: member.SortAt,
 		ID:     member.ID.Hex(),
 	})
@@ -501,7 +529,9 @@ func (s *ConversationService) toConversationDTOs(ctx context.Context, conversati
 				UnreadCount:     member.UnreadCount,
 				MentionCount:    member.MentionCount,
 				Muted:           member.Muted,
+				MutedAt:         member.MutedAt,
 				Pinned:          member.Pinned,
+				PinnedAt:        member.PinnedAt,
 			}
 		}
 

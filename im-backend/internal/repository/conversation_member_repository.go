@@ -122,6 +122,7 @@ func (r *ConversationMemberRepository) ListByUser(
 	ctx context.Context,
 	userID string,
 	limit int64,
+	cursorPinned bool,
 	cursorSortAt time.Time,
 	cursorID primitive.ObjectID,
 ) ([]*models.ConversationMember, error) {
@@ -131,15 +132,20 @@ func (r *ConversationMemberRepository) ListByUser(
 	}
 	if !cursorSortAt.IsZero() && !cursorID.IsZero() {
 		filter["$or"] = []bson.M{
-			{"sort_at": bson.M{"$lt": cursorSortAt}},
+			{"pinned": bson.M{"$lt": cursorPinned}},
 			{
+				"pinned":  cursorPinned,
+				"sort_at": bson.M{"$lt": cursorSortAt},
+			},
+			{
+				"pinned":  cursorPinned,
 				"sort_at": cursorSortAt,
 				"_id":     bson.M{"$lt": cursorID},
 			},
 		}
 	}
 
-	opts := options.Find().SetSort(bson.D{{Key: "sort_at", Value: -1}, {Key: "_id", Value: -1}})
+	opts := options.Find().SetSort(bson.D{{Key: "pinned", Value: -1}, {Key: "sort_at", Value: -1}, {Key: "_id", Value: -1}})
 	if limit > 0 {
 		opts.SetLimit(limit)
 	}
@@ -167,6 +173,7 @@ func (r *ConversationMemberRepository) ListByUserAndConversationIDs(
 	userID string,
 	conversationIDs []primitive.ObjectID,
 	limit int64,
+	cursorPinned bool,
 	cursorSortAt time.Time,
 	cursorID primitive.ObjectID,
 ) ([]*models.ConversationMember, error) {
@@ -181,14 +188,19 @@ func (r *ConversationMemberRepository) ListByUserAndConversationIDs(
 	}
 	if !cursorSortAt.IsZero() && !cursorID.IsZero() {
 		filter["$or"] = []bson.M{
-			{"sort_at": bson.M{"$lt": cursorSortAt}},
+			{"pinned": bson.M{"$lt": cursorPinned}},
 			{
+				"pinned":  cursorPinned,
+				"sort_at": bson.M{"$lt": cursorSortAt},
+			},
+			{
+				"pinned":  cursorPinned,
 				"sort_at": cursorSortAt,
 				"_id":     bson.M{"$lt": cursorID},
 			},
 		}
 	}
-	opts := options.Find().SetSort(bson.D{{Key: "sort_at", Value: -1}, {Key: "_id", Value: -1}})
+	opts := options.Find().SetSort(bson.D{{Key: "pinned", Value: -1}, {Key: "sort_at", Value: -1}, {Key: "_id", Value: -1}})
 	if limit > 0 {
 		opts.SetLimit(limit)
 	}
@@ -208,6 +220,36 @@ func (r *ConversationMemberRepository) ListByUserAndConversationIDs(
 		members = append(members, &member)
 	}
 	return members, cursor.Err()
+}
+
+func (r *ConversationMemberRepository) UpdateSettings(ctx context.Context, conversationID primitive.ObjectID, userID string, pinned *bool, muted *bool) (*models.ConversationMember, error) {
+	now := time.Now()
+	set := bson.M{"updated_at": now}
+	if pinned != nil {
+		set["pinned"] = *pinned
+		if *pinned {
+			set["pinned_at"] = now
+		} else {
+			set["pinned_at"] = time.Time{}
+		}
+	}
+	if muted != nil {
+		set["muted"] = *muted
+		if *muted {
+			set["muted_at"] = now
+		} else {
+			set["muted_at"] = time.Time{}
+		}
+	}
+	_, err := r.collection.UpdateOne(ctx, bson.M{
+		"conversation_id": conversationID,
+		"user_id":         userID,
+		"status":          models.ConversationMemberStatusActive,
+	}, bson.M{"$set": set})
+	if err != nil {
+		return nil, err
+	}
+	return r.GetActive(ctx, conversationID, userID)
 }
 
 func (r *ConversationMemberRepository) SetStatus(ctx context.Context, conversationID primitive.ObjectID, userID string, status models.ConversationMemberStatus) error {

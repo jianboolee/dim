@@ -18,6 +18,8 @@ import (
 )
 
 const maxGroupMembers = 500
+const defaultGroupMemberPageSize = int64(10)
+const maxGroupMemberPageSize = int64(100)
 
 var (
 	ErrGroupNotFound          = errors.New("group not found")
@@ -155,7 +157,7 @@ func (s *GroupService) GetGroup(ctx context.Context, groupID primitive.ObjectID,
 	if err != nil {
 		return nil, err
 	}
-	members, err := s.memberRepo.ListActiveByGroup(ctx, group.ID)
+	members, err := s.memberRepo.ListActiveByGroupPage(ctx, group.ID, defaultGroupMemberPageSize, primitive.NilObjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -175,6 +177,38 @@ func (s *GroupService) ListMembers(ctx context.Context, groupID primitive.Object
 		return nil, err
 	}
 	return s.toMemberDTOs(ctx, members), nil
+}
+
+func (s *GroupService) ListMembersPage(ctx context.Context, groupID primitive.ObjectID, currentUserID string, limit int64, cursor string) (*dto.GroupMemberListResponse, error) {
+	group, err := s.getActiveAccessibleGroup(ctx, groupID, currentUserID)
+	if err != nil {
+		return nil, err
+	}
+	limit = normalizeGroupMemberLimit(limit)
+	var cursorID primitive.ObjectID
+	if strings.TrimSpace(cursor) != "" {
+		cursorID, err = primitive.ObjectIDFromHex(strings.TrimSpace(cursor))
+		if err != nil {
+			return nil, ErrInvalidConversationCursor
+		}
+	}
+	members, err := s.memberRepo.ListActiveByGroupPage(ctx, group.ID, limit+1, cursorID)
+	if err != nil {
+		return nil, err
+	}
+	hasMore := int64(len(members)) > limit
+	if hasMore {
+		members = members[:limit]
+	}
+	nextCursor := ""
+	if hasMore && len(members) > 0 {
+		nextCursor = members[len(members)-1].ID.Hex()
+	}
+	return &dto.GroupMemberListResponse{
+		Items:      s.toMemberDTOs(ctx, members),
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+	}, nil
 }
 
 func (s *GroupService) UpdateGroup(ctx context.Context, groupID primitive.ObjectID, currentUserID string, req dto.GroupUpdateRequest) (*dto.GroupDetailResponse, error) {
@@ -549,6 +583,16 @@ func normalizeGroupMemberIDs(ids []string) []string {
 		result = append(result, id)
 	}
 	return result
+}
+
+func normalizeGroupMemberLimit(limit int64) int64 {
+	if limit <= 0 {
+		return defaultGroupMemberPageSize
+	}
+	if limit > maxGroupMemberPageSize {
+		return maxGroupMemberPageSize
+	}
+	return limit
 }
 
 func buildGroupEventContent(eventType string, value string) string {

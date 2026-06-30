@@ -43,7 +43,9 @@ type ConversationMemberState struct {
 	UnreadCount     int64     `json:"unread_count"`
 	MentionCount    int64     `json:"mention_count,omitempty"`
 	Muted           bool      `json:"muted,omitempty"`
+	MutedAt         time.Time `json:"muted_at,omitempty"`
 	Pinned          bool      `json:"pinned,omitempty"`
+	PinnedAt        time.Time `json:"pinned_at,omitempty"`
 }
 
 type Message struct {
@@ -115,6 +117,18 @@ type ListMessagesParams struct {
 	AfterID  string
 }
 
+type SearchMessagesParams struct {
+	Query  string
+	Limit  int
+	Cursor string
+}
+
+type MessageSearchPage struct {
+	Items      []Message `json:"items"`
+	NextCursor string    `json:"next_cursor,omitempty"`
+	HasMore    bool      `json:"has_more"`
+}
+
 type ListConversationsParams struct {
 	Limit                int
 	Cursor               string
@@ -126,6 +140,11 @@ type ConversationPage struct {
 	Items      []Conversation `json:"items"`
 	NextCursor string         `json:"next_cursor,omitempty"`
 	HasMore    bool           `json:"has_more"`
+}
+
+type ConversationSettingsPatch struct {
+	Pinned *bool `json:"pinned,omitempty"`
+	Muted  *bool `json:"muted,omitempty"`
 }
 
 type CreatePrivateConversationRequest struct {
@@ -172,6 +191,12 @@ type GetOrCreateGroupParams = CreateGroupRequest
 type GroupDetailResponse struct {
 	Group   *Group        `json:"group"`
 	Members []GroupMember `json:"members,omitempty"`
+}
+
+type GroupMemberPage struct {
+	Items      []GroupMember `json:"items"`
+	NextCursor string        `json:"next_cursor,omitempty"`
+	HasMore    bool          `json:"has_more"`
 }
 
 type Group struct {
