@@ -523,7 +523,6 @@ func (s *GroupService) emitGroupEvent(
 	if s.messageService == nil || eventType == "" {
 		return nil
 	}
-	content := buildGroupEventContent(eventType, afterValue)
 	payload := &models.Payload{
 		EventType:     eventType,
 		OperatorID:    operatorID,
@@ -533,7 +532,104 @@ func (s *GroupService) emitGroupEvent(
 		BeforeValue:   beforeValue,
 		AfterValue:    afterValue,
 	}
+	content := s.formatSystemEventMessage(ctx, payload)
 	return s.messageService.CreateSystemEvent(ctx, group.ConversationID, operatorID, content, payload)
+}
+
+func (s *GroupService) formatSystemEventMessage(ctx context.Context, payload *models.Payload) string {
+	if payload == nil {
+		return "群聊状态已更新"
+	}
+
+	usersByID := s.loadSystemEventUsers(ctx, payload)
+	operatorName := displaySystemEventUserName(payload.OperatorID, usersByID)
+	targetNames := displaySystemEventUserNames(payload.TargetUserIDs, usersByID)
+	actor := operatorName
+	if actor == "" {
+		actor = targetNames
+	}
+
+	switch payload.EventType {
+	case models.SystemEventGroupCreated:
+		if actor != "" {
+			return actor + "创建了群聊"
+		}
+	case models.SystemEventMemberJoined:
+		if targetNames != "" {
+			return targetNames + "加入了群聊"
+		}
+	case models.SystemEventMemberKicked:
+		if targetNames != "" {
+			return targetNames + "被移出群聊"
+		}
+	case models.SystemEventMemberLeft:
+		if actor != "" {
+			return actor + "退出了群聊"
+		}
+	case models.SystemEventGroupDissolved:
+		return "群聊已解散"
+	case models.SystemEventGroupNameUpdated:
+		if payload.AfterValue != "" {
+			return "群名修改为 " + payload.AfterValue
+		}
+		return "修改了群名"
+	case models.SystemEventGroupAvatarUpdated:
+		if actor != "" {
+			return actor + "修改了群头像"
+		}
+	case models.SystemEventAdminAdded:
+		if targetNames != "" {
+			return targetNames + "被设置为管理员"
+		}
+	case models.SystemEventAdminRemoved:
+		if targetNames != "" {
+			return targetNames + "被取消管理员"
+		}
+	}
+	return "群聊状态已更新"
+}
+
+func (s *GroupService) loadSystemEventUsers(ctx context.Context, payload *models.Payload) map[string]*models.User {
+	if s.userRepo == nil || payload == nil {
+		return map[string]*models.User{}
+	}
+
+	userIDs := make([]string, 0, len(payload.TargetUserIDs)+1)
+	if payload.OperatorID != "" {
+		userIDs = append(userIDs, payload.OperatorID)
+	}
+	userIDs = append(userIDs, payload.TargetUserIDs...)
+	userIDs = utils.NormalizeParticipantIDs(userIDs)
+	if len(userIDs) == 0 {
+		return map[string]*models.User{}
+	}
+
+	users, err := s.userRepo.FindByIDs(ctx, userIDs)
+	if err != nil {
+		return map[string]*models.User{}
+	}
+	return users
+}
+
+func displaySystemEventUserName(userID string, usersByID map[string]*models.User) string {
+	if userID == "" {
+		return ""
+	}
+	if user := usersByID[userID]; user != nil && strings.TrimSpace(user.Nickname) != "" {
+		return strings.TrimSpace(user.Nickname)
+	}
+	return userID
+}
+
+func displaySystemEventUserNames(userIDs []string, usersByID map[string]*models.User) string {
+	names := make([]string, 0, len(userIDs))
+	for _, userID := range userIDs {
+		name := displaySystemEventUserName(userID, usersByID)
+		if name != "" {
+			names = append(names, name)
+		}
+	}
+	return strings.Join(names, "、")
 }
 
 func (s *GroupService) toMemberDTOs(ctx context.Context, members []*models.GroupMember) []dto.GroupMemberDTO {
@@ -593,32 +689,4 @@ func normalizeGroupMemberLimit(limit int64) int64 {
 		return maxGroupMemberPageSize
 	}
 	return limit
-}
-
-func buildGroupEventContent(eventType string, value string) string {
-	switch eventType {
-	case models.SystemEventGroupCreated:
-		return "创建了群聊"
-	case models.SystemEventMemberJoined:
-		return "加入了群聊"
-	case models.SystemEventMemberKicked:
-		return "被移出群聊"
-	case models.SystemEventMemberLeft:
-		return "退出了群聊"
-	case models.SystemEventGroupDissolved:
-		return "群聊已解散"
-	case models.SystemEventGroupNameUpdated:
-		if value != "" {
-			return "群名修改为 " + value
-		}
-		return "修改了群名"
-	case models.SystemEventGroupAvatarUpdated:
-		return "修改了群头像"
-	case models.SystemEventAdminAdded:
-		return "设置了管理员"
-	case models.SystemEventAdminRemoved:
-		return "取消了管理员"
-	default:
-		return "群聊状态已更新"
-	}
 }

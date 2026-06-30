@@ -265,7 +265,7 @@ onUnmounted(() => {
 }
 
 .participant-item {
-  width: 64px;
+  width: 52px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -274,8 +274,8 @@ onUnmounted(() => {
 }
 
 .participant-avatar {
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   border-radius: 8px;
   object-fit: cover;
   background: #edf1f7;

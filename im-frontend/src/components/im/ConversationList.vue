@@ -486,8 +486,8 @@ defineExpose({ refresh })
   position: absolute;
   top: 0;
   right: 0;
-  width: 9px;
-  height: 9px;
+  width: 12px;
+  height: 12px;
   border: 2px solid #fff;
   border-radius: 50%;
   background: var(--error-color);
@@ -559,7 +559,7 @@ defineExpose({ refresh })
 .muted-icon {
   flex-shrink: 0;
   color: var(--text-color-light);
-  font-size: 15px;
+  font-size: 12px;
   line-height: 1;
 }
 

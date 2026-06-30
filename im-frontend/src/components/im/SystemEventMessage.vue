@@ -7,16 +7,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ChatMessage } from '@/types/im'
-import { useUserProfiles } from '@/composables/useUserProfiles'
 import { formatSystemEventMessage } from '@/utils/im/systemEvent'
 
 const props = defineProps<{
   message: ChatMessage
 }>()
 
-const { userMap } = useUserProfiles()
-
-const text = computed(() => formatSystemEventMessage(props.message, userMap.value))
+const text = computed(() => formatSystemEventMessage(props.message))
 </script>
 
 <style scoped>
