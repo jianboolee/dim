@@ -5,7 +5,6 @@
     :is-group="isGroup"
     :group-id="conversation?.group_id"
     :group-name="groupName"
-    :saving-group-name="savingGroupName"
     :pinned="conversation?.member_state?.pinned"
     :muted="conversation?.member_state?.muted"
     :has-more-participants="groupMembersHasMore"
@@ -14,6 +13,7 @@
     @invite="emit('invite')"
     @search="showMessageSearch = true"
     @load-more-members="loadMoreGroupMembers"
+    @edit-group-name="showGroupNameDrawer = true"
     @update-group-name="handleUpdateGroupName"
     @update-setting="handleUpdateConversationSetting"
     @leave="showLeaveConfirm = true"
@@ -22,6 +22,13 @@
   <ConversationMessageSearchModal
     v-model="showMessageSearch"
     :conversation-id="conversation?.id || ''"
+  />
+
+  <GroupNameEditDrawer
+    v-model="showGroupNameDrawer"
+    :group-name="groupName"
+    :saving="savingGroupName"
+    @save="handleUpdateGroupName"
   />
 
   <ConfirmModal
@@ -45,6 +52,7 @@ import { useConversationList } from '@/composables/useConversationList'
 import { useUserProfiles } from '@/composables/useUserProfiles'
 import ConversationInfoDrawer from '@/components/im/ConversationInfoDrawer.vue'
 import ConversationMessageSearchModal from '@/components/im/ConversationMessageSearchModal.vue'
+import GroupNameEditDrawer from '@/components/im/GroupNameEditDrawer.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import type { Conversation, ConversationMemberState, GroupMember, UserInfo } from '@/sdk/im'
 
@@ -72,6 +80,7 @@ const loadingGroupMembers = ref(false)
 const savingGroupName = ref(false)
 const showMessageSearch = ref(false)
 const showLeaveConfirm = ref(false)
+const showGroupNameDrawer = ref(false)
 const leavingGroup = ref(false)
 
 const isGroup = computed(() => props.conversation?.type === 'group')
@@ -154,6 +163,7 @@ const handleUpdateGroupName = async (name: string) => {
         member_count: detail.group.member_count,
       })
     }
+    showGroupNameDrawer.value = false
     showToast('群名称已更新')
   } catch (error) {
     console.error('修改群名失败:', error)

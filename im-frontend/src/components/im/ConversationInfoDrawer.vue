@@ -44,13 +44,18 @@
               </button>
             </section>
 
+            <section v-if="isGroup" class="drawer-section group-section">
+              <div class="group-name-row">
+                <span class="group-name-label">群名称</span>
+                <span class="group-name-value">{{ groupName }}</span>
+              </div>
+            </section>
+
             <section class="drawer-section action-section">
-              <GroupNameEditor
-                v-if="isGroup"
-                :model-value="groupName || ''"
-                :saving="savingGroupName"
-                @save="emit('update-group-name', $event)"
-              />
+              <button v-if="isGroup" type="button" class="drawer-row action-row" @click="handleEditGroupName">
+                <span>修改群名</span>
+                <i class="ri-arrow-right-s-line"></i>
+              </button>
               <button v-if="isGroup" type="button" class="drawer-row action-row" @click="handleInvite">
                 <span>邀请成员</span>
                 <i class="ri-add-line"></i>
@@ -102,7 +107,6 @@
 
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import GroupNameEditor from '@/components/im/GroupNameEditor.vue'
 import type { UserInfo } from '@/types/user'
 
 const props = defineProps<{
@@ -126,6 +130,7 @@ const emit = defineEmits<{
   'load-more-members': []
   'update-group-name': [name: string]
   'update-setting': [settings: { pinned?: boolean; muted?: boolean }]
+  'edit-group-name': []
 }>()
 
 const pinned = ref(false)
@@ -135,6 +140,10 @@ const displayParticipants = computed(() => props.participants.filter((user) => u
 
 const close = () => {
   emit('update:modelValue', false)
+}
+
+const handleEditGroupName = () => {
+  emit('edit-group-name')
 }
 
 const handleInvite = () => {
@@ -317,6 +326,29 @@ onUnmounted(() => {
 .load-members-btn:disabled {
   cursor: not-allowed;
   opacity: 0.7;
+}
+
+.group-section {
+  padding: 14px 16px;
+  background: #fff;
+}
+
+.group-name-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.group-name-label {
+  font-size: 12px;
+  color: var(--text-color-secondary);
+}
+
+.group-name-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-color-dark);
+  word-break: break-all;
 }
 
 .action-section,
