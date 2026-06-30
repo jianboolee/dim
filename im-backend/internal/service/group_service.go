@@ -36,6 +36,7 @@ type GroupService struct {
 	conversationRepo       *repository.ConversationRepository
 	userRepo               *repository.UserRepository
 	messageService         *MessageService
+	avatarService          *GroupAvatarService
 }
 
 func NewGroupService(
@@ -45,6 +46,7 @@ func NewGroupService(
 	conversationRepo *repository.ConversationRepository,
 	userRepo *repository.UserRepository,
 	messageService *MessageService,
+	avatarService *GroupAvatarService,
 ) *GroupService {
 	return &GroupService{
 		groupRepo:              groupRepo,
@@ -53,6 +55,7 @@ func NewGroupService(
 		conversationRepo:       conversationRepo,
 		userRepo:               userRepo,
 		messageService:         messageService,
+		avatarService:          avatarService,
 	}
 }
 
@@ -97,7 +100,7 @@ func (s *GroupService) createGroup(ctx context.Context, creatorID string, req dt
 	if len(memberIDs) > maxGroupMembers {
 		return nil, ErrGroupMemberLimit
 	}
-	conversation, err := s.conversationRepo.CreateGroupConversation(ctx, groupID, name, strings.TrimSpace(req.AvatarURL), memberIDs)
+	conversation, err := s.conversationRepo.CreateGroupConversation(ctx, groupID, name, "", memberIDs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create group conversation: %w", err)
 	}
@@ -106,7 +109,6 @@ func (s *GroupService) createGroup(ctx context.Context, creatorID string, req dt
 		ID:             groupID,
 		ConversationID: conversation.ID,
 		Name:           name,
-		AvatarURL:      strings.TrimSpace(req.AvatarURL),
 		OwnerID:        creatorID,
 		ScopeUserID:    scopeUserID,
 		UniqueKey:      uniqueKey,
@@ -127,6 +129,10 @@ func (s *GroupService) createGroup(ctx context.Context, creatorID string, req dt
 		return nil, err
 	}
 	if err := s.syncGroupMembers(ctx, group); err != nil {
+		s.cleanupFailedGroupCreate(ctx, group, conversation.ID)
+		return nil, err
+	}
+	if err := s.regenerateGroupAvatar(ctx, group.ID); err != nil {
 		s.cleanupFailedGroupCreate(ctx, group, conversation.ID)
 		return nil, err
 	}
@@ -192,16 +198,6 @@ func (s *GroupService) UpdateGroup(ctx context.Context, groupID primitive.Object
 			group.Name = name
 		}
 	}
-	if req.AvatarURL != nil {
-		avatarURL := strings.TrimSpace(*req.AvatarURL)
-		if avatarURL != group.AvatarURL {
-			set["avatar_url"] = avatarURL
-			eventType = models.SystemEventGroupAvatarUpdated
-			beforeValue = group.AvatarURL
-			afterValue = avatarURL
-			group.AvatarURL = avatarURL
-		}
-	}
 	if len(set) > 0 {
 		now := time.Now()
 		set["updated_at"] = now
@@ -210,7 +206,6 @@ func (s *GroupService) UpdateGroup(ctx context.Context, groupID primitive.Object
 		}
 		if err := s.conversationRepo.UpdateConversation(ctx, group.ConversationID, bson.M{"$set": bson.M{
 			"display_name": group.Name,
-			"image_url":    group.AvatarURL,
 			"updated_at":   now,
 		}}); err != nil {
 			return nil, err
@@ -264,6 +259,9 @@ func (s *GroupService) AddMembers(ctx context.Context, groupID primitive.ObjectI
 	if err := s.syncGroupMembers(ctx, group); err != nil {
 		return nil, err
 	}
+	if err := s.regenerateGroupAvatar(ctx, group.ID); err != nil {
+		return nil, err
+	}
 	_ = s.emitGroupEvent(ctx, group, currentUserID, models.SystemEventMemberJoined, newIDs, "", "")
 
 	return s.GetGroup(ctx, group.ID, currentUserID)
@@ -296,6 +294,9 @@ func (s *GroupService) KickMember(ctx context.Context, groupID primitive.ObjectI
 		return nil, err
 	}
 	if err := s.syncGroupMembers(ctx, group); err != nil {
+		return nil, err
+	}
+	if err := s.regenerateGroupAvatar(ctx, group.ID); err != nil {
 		return nil, err
 	}
 	_ = s.emitGroupEvent(ctx, group, currentUserID, models.SystemEventMemberKicked, []string{targetUserID}, "", "")
@@ -337,6 +338,9 @@ func (s *GroupService) LeaveGroup(ctx context.Context, groupID primitive.ObjectI
 		return err
 	}
 	if err := s.syncGroupMembers(ctx, group); err != nil {
+		return err
+	}
+	if err := s.regenerateGroupAvatar(ctx, group.ID); err != nil {
 		return err
 	}
 	_ = s.emitGroupEvent(ctx, group, currentUserID, models.SystemEventMemberLeft, []string{currentUserID}, "", "")
@@ -464,6 +468,13 @@ func (s *GroupService) syncGroupMembers(ctx context.Context, group *models.Group
 		return err
 	}
 	return s.groupRepo.SetMemberCount(ctx, group.ID, len(participantIDs))
+}
+
+func (s *GroupService) regenerateGroupAvatar(ctx context.Context, groupID primitive.ObjectID) error {
+	if s.avatarService == nil {
+		return nil
+	}
+	return s.avatarService.Regenerate(ctx, groupID)
 }
 
 func (s *GroupService) emitGroupEvent(

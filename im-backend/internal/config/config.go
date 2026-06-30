@@ -12,6 +12,7 @@ type Config struct {
 		Name            string
 		DefaultAvatar   string
 		FrontendBaseURL string
+		PublicBaseURL   string
 	}
 	Server struct {
 		APIPort int
@@ -54,6 +55,11 @@ type Config struct {
 		OSSCustomDomain    string
 		OSSDirectory       string
 	}
+	GroupAvatar struct {
+		Directory    string
+		Size         int
+		KeepVersions int
+	}
 }
 
 func LoadConfig() (*Config, error) {
@@ -86,6 +92,7 @@ func LoadConfig() (*Config, error) {
 
 	viper.SetDefault("INTEGRATION_API_KEY", "")
 	viper.SetDefault("IM_FRONTEND_BASE_URL", "http://localhost:5173")
+	viper.SetDefault("IM_PUBLIC_BASE_URL", "http://localhost:8080")
 
 	viper.SetDefault("APP_NAME", "d-im")
 	viper.SetDefault("APP_DEFAULT_AVATAR", "")
@@ -96,6 +103,9 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("OSS_BUCKET_NAME", "")
 	viper.SetDefault("OSS_CUSTOM_DOMAIN", "")
 	viper.SetDefault("OSS_DIRECTORY", "uploads")
+	viper.SetDefault("IM_GROUP_AVATAR_DIR", "./storage/group-avatars")
+	viper.SetDefault("IM_GROUP_AVATAR_SIZE", 240)
+	viper.SetDefault("IM_GROUP_AVATAR_KEEP_VERSIONS", 3)
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok && !os.IsNotExist(err) {
@@ -131,6 +141,7 @@ func LoadConfig() (*Config, error) {
 
 	cfg.Integration.APIKey = viper.GetString("INTEGRATION_API_KEY")
 	cfg.App.FrontendBaseURL = viper.GetString("IM_FRONTEND_BASE_URL")
+	cfg.App.PublicBaseURL = viper.GetString("IM_PUBLIC_BASE_URL")
 
 	cfg.App.Name = viper.GetString("APP_NAME")
 	cfg.App.DefaultAvatar = viper.GetString("APP_DEFAULT_AVATAR")
@@ -144,6 +155,9 @@ func LoadConfig() (*Config, error) {
 	cfg.Storage.OSSBucketName = viper.GetString("OSS_BUCKET_NAME")
 	cfg.Storage.OSSCustomDomain = viper.GetString("OSS_CUSTOM_DOMAIN")
 	cfg.Storage.OSSDirectory = viper.GetString("OSS_DIRECTORY")
+	cfg.GroupAvatar.Directory = viper.GetString("IM_GROUP_AVATAR_DIR")
+	cfg.GroupAvatar.Size = viper.GetInt("IM_GROUP_AVATAR_SIZE")
+	cfg.GroupAvatar.KeepVersions = viper.GetInt("IM_GROUP_AVATAR_KEEP_VERSIONS")
 
 	return cfg, nil
 }

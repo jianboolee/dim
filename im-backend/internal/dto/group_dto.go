@@ -10,15 +10,13 @@ import (
 
 type GroupCreateRequest struct {
 	Name        string   `json:"name"`
-	AvatarURL   string   `json:"avatar_url,omitempty"`
 	MemberIDs   []string `json:"member_ids,omitempty"`
 	UniqueKey   string   `json:"unique_key,omitempty"`
 	ScopeUserID string   `json:"scope_user_id,omitempty"`
 }
 
 type GroupUpdateRequest struct {
-	Name      *string `json:"name,omitempty"`
-	AvatarURL *string `json:"avatar_url,omitempty"`
+	Name *string `json:"name,omitempty"`
 }
 
 type GroupAddMembersRequest struct {

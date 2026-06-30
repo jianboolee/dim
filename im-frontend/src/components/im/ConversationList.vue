@@ -23,16 +23,6 @@
       >
         <div class="avatar">
           <img v-if="item.avatar" :src="item.avatar" alt="">
-          <div v-else-if="item.groupAvatarMembers.length > 0" class="group-avatar-grid">
-            <div
-              v-for="member in item.groupAvatarMembers"
-              :key="member.user_id"
-              class="group-avatar-cell"
-            >
-              <img v-if="member.user_info?.avatar" :src="member.user_info.avatar" alt="">
-              <span v-else>{{ (member.user_info?.nickname || member.user_id).slice(0, 1) }}</span>
-            </div>
-          </div>
           <PlaceholderImage
             v-else
             bgColor="#EFF1F8"
@@ -85,7 +75,6 @@ import {
   getConversationDisplayName,
   getPeerUserId,
   getUnreadCount,
-  isGroupConversation,
 } from '@/utils/im/conversation'
 import PlaceholderImage from '@/components/common/PlaceholderImage.vue'
 import type { Conversation } from '@/sdk/im'
@@ -183,16 +172,12 @@ const conversationItems = computed(() => {
     const peerId = getPeerUserId(conversation, uid)
     const profile = conversation.peer_user_info ?? userMap.value[peerId]
     const unreadCount = getUnreadCount(conversation, uid)
-    const groupMembers = isGroupConversation(conversation)
-      ? conversation.group_info?.members ?? []
-      : []
 
     return {
       id: conversation.id,
       peerId,
       conversation,
       avatar: getConversationDisplayAvatar(conversation) || profile?.avatar,
-      groupAvatarMembers: groupMembers.slice(0, 4),
       displayName: getConversationDisplayName(conversation, uid),
       lastMessagePreview: formatLastMessagePreview(conversation.last_message),
       time: formatConversationTime(
@@ -477,37 +462,6 @@ defineExpose({ refresh })
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
-}
-
-.group-avatar-grid {
-  width: 100%;
-  height: 100%;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(2, 1fr);
-  gap: 2px;
-  padding: 3px;
-  border-radius: 50%;
-  background: #eef2f7;
-  overflow: hidden;
-}
-
-.group-avatar-cell {
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border-radius: 4px;
-  background: #dde5ef;
-  color: var(--text-color-secondary);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.group-avatar-cell img {
-  border-radius: 4px;
 }
 
 .unread-badge {

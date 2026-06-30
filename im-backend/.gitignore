@@ -35,3 +35,4 @@ tmp/
 node_modules
 dist
 *.log
+storage/

@@ -14,17 +14,20 @@ const (
 )
 
 type Group struct {
-	ID             primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	ConversationID primitive.ObjectID `bson:"conversation_id" json:"conversation_id"`
-	Name           string             `bson:"name" json:"name"`
-	AvatarURL      string             `bson:"avatar_url,omitempty" json:"avatar_url,omitempty"`
-	OwnerID        string             `bson:"owner_id" json:"owner_id"`
-	ScopeUserID    string             `bson:"scope_user_id,omitempty" json:"scope_user_id,omitempty"`
-	UniqueKey      string             `bson:"unique_key,omitempty" json:"unique_key,omitempty"`
-	MemberCount    int                `bson:"member_count" json:"member_count"`
-	Status         GroupStatus        `bson:"status" json:"status"`
-	CreatedAt      time.Time          `bson:"created_at" json:"created_at"`
-	UpdatedAt      time.Time          `bson:"updated_at" json:"updated_at"`
+	ID              primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	ConversationID  primitive.ObjectID `bson:"conversation_id" json:"conversation_id"`
+	Name            string             `bson:"name" json:"name"`
+	AvatarURL       string             `bson:"avatar_url,omitempty" json:"avatar_url,omitempty"`
+	AvatarFilePath  string             `bson:"avatar_file_path,omitempty" json:"avatar_file_path,omitempty"`
+	AvatarVersion   int64              `bson:"avatar_version,omitempty" json:"avatar_version,omitempty"`
+	AvatarUpdatedAt *time.Time         `bson:"avatar_updated_at,omitempty" json:"avatar_updated_at,omitempty"`
+	OwnerID         string             `bson:"owner_id" json:"owner_id"`
+	ScopeUserID     string             `bson:"scope_user_id,omitempty" json:"scope_user_id,omitempty"`
+	UniqueKey       string             `bson:"unique_key,omitempty" json:"unique_key,omitempty"`
+	MemberCount     int                `bson:"member_count" json:"member_count"`
+	Status          GroupStatus        `bson:"status" json:"status"`
+	CreatedAt       time.Time          `bson:"created_at" json:"created_at"`
+	UpdatedAt       time.Time          `bson:"updated_at" json:"updated_at"`
 }
 
 func (g *Group) IsActive() bool {

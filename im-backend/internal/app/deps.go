@@ -32,6 +32,7 @@ type Dependencies struct {
 	AuthHandler           *handler.AuthHandler
 	IntegrationHandler    *handler.IntegrationHandler
 	UploadHandler         *upload.Handler
+	GroupAvatarDirectory  string
 	WSHandler             *handler.WSHandler
 	WSManager             *service.WSManager
 }
@@ -78,6 +79,12 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 		cfg.App.FrontendBaseURL,
 	)
 	uploadHandler := newUploadHandler(cfg)
+	groupAvatarService := service.NewGroupAvatarService(groupRepo, groupMemberRepo, userRepo, conversationRepo, service.GroupAvatarOptions{
+		Directory:     cfg.GroupAvatar.Directory,
+		PublicBaseURL: cfg.App.PublicBaseURL,
+		Size:          cfg.GroupAvatar.Size,
+		KeepVersions:  cfg.GroupAvatar.KeepVersions,
+	})
 
 	var wsManager *service.WSManager
 	var messageService *service.MessageService
@@ -93,7 +100,7 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 	} else {
 		messageService = service.NewMessageService(messageRepo, conversationRepo, conversationMemberRepo, conversationService, groupRepo, groupMemberRepo, sessionService, nil, redisClient, userRepo)
 	}
-	groupService := service.NewGroupService(groupRepo, groupMemberRepo, conversationMemberRepo, conversationRepo, userRepo, messageService)
+	groupService := service.NewGroupService(groupRepo, groupMemberRepo, conversationMemberRepo, conversationRepo, userRepo, messageService, groupAvatarService)
 
 	deps := &Dependencies{
 		Config:                cfg,
@@ -108,6 +115,7 @@ func NewDependencies(cfg *config.Config, db *mongo.Database, redisClient *redis.
 		AuthHandler:           handler.NewAuthHandler(authService),
 		IntegrationHandler:    handler.NewIntegrationHandler(integrationService),
 		UploadHandler:         uploadHandler,
+		GroupAvatarDirectory:  groupAvatarService.Directory(),
 		WSManager:             wsManager,
 	}
 
@@ -147,6 +155,7 @@ func (d *Dependencies) SetupAPIRouter() *gin.Engine {
 		d.AuthHandler,
 		d.IntegrationHandler,
 		d.UploadHandler,
+		d.GroupAvatarDirectory,
 		d.JWTAuthMiddleware,
 		d.IntegrationMiddleware,
 	)

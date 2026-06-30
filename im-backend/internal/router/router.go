@@ -22,6 +22,7 @@ func SetupAPI(
 	authHandler *handler.AuthHandler,
 	integrationHandler *handler.IntegrationHandler,
 	uploadHandler *upload.Handler,
+	groupAvatarDirectory string,
 	jwtAuthMiddleware gin.HandlerFunc,
 	integrationAPIKeyMiddleware gin.HandlerFunc,
 ) *gin.Engine {
@@ -36,6 +37,9 @@ func SetupAPI(
 	})
 
 	im := r.Group("/im")
+	if groupAvatarDirectory != "" {
+		im.StaticFS("/assets/group-avatars", gin.Dir(groupAvatarDirectory, false))
+	}
 
 	integration := im.Group("/api/integration")
 	integration.Use(integrationAPIKeyMiddleware)

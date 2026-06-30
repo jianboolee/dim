@@ -89,6 +89,19 @@ func (r *GroupRepository) SetMemberCount(ctx context.Context, id primitive.Objec
 	return err
 }
 
+func (r *GroupRepository) SetAvatar(ctx context.Context, id primitive.ObjectID, avatarURL string, filePath string, version int64, updatedAt time.Time) error {
+	_, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, bson.M{
+		"$set": bson.M{
+			"avatar_url":        avatarURL,
+			"avatar_file_path":  filePath,
+			"avatar_version":    version,
+			"avatar_updated_at": updatedAt,
+			"updated_at":        updatedAt,
+		},
+	})
+	return err
+}
+
 func (r *GroupRepository) Dissolve(ctx context.Context, id primitive.ObjectID) error {
 	_, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, bson.M{
 		"$set": bson.M{
