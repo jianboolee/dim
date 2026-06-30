@@ -758,11 +758,17 @@ const fetchConversation = async () => {
     }
   }
 
-  const ensuredConversation = await ensureConversationInList(conversationId.value, {
-    activateIfMissing: true,
-  })
-  if (ensuredConversation) {
-    conversation.value = ensuredConversation
+  try {
+    const ensuredConversation = await ensureConversationInList(conversationId.value, {
+      activateIfMissing: true,
+    })
+    if (ensuredConversation) {
+      conversation.value = ensuredConversation
+    }
+  } catch {
+    // activate 接口返回 500/403 等错误时，无法进入该会话，回到聊天首页
+    await router.replace({ name: 'im-chat-index' })
+    return
   }
   requestScrollToConversation(conversationId.value)
   if (!conversation.value) return
