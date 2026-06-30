@@ -1640,6 +1640,10 @@ onUnmounted(() => {
   align-items: center;
   padding: var(--spacing-small);
   height: 40px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
 }
 
 .spinner {
