@@ -11,17 +11,17 @@ type GroupService struct {
 	client *client
 }
 
-func (s *GroupService) Create(ctx context.Context, req CreateGroupRequest) (*GroupDetailResponse, error) {
-	var out GroupDetailResponse
-	if err := s.client.do(ctx, http.MethodPost, "/im/api/groups", req, &out); err != nil {
+func (s *GroupService) CreateConversation(ctx context.Context, req CreateGroupRequest) (*GroupConversationResponse, error) {
+	var out GroupConversationResponse
+	if err := s.client.do(ctx, http.MethodPost, "/im/api/groups/conversations", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-func (s *GroupService) GetOrCreate(ctx context.Context, req GetOrCreateGroupParams) (*GroupDetailResponse, error) {
-	var out GroupDetailResponse
-	if err := s.client.do(ctx, http.MethodPost, "/im/api/groups/get-or-create", req, &out); err != nil {
+func (s *GroupService) GetOrCreateConversation(ctx context.Context, req GetOrCreateGroupParams) (*GroupConversationResponse, error) {
+	var out GroupConversationResponse
+	if err := s.client.do(ctx, http.MethodPost, "/im/api/groups/conversations/get-or-create", req, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

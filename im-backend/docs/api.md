@@ -77,8 +77,8 @@ POST /im/api/conversations/:id/messages
 ## Groups
 
 ```http
-POST   /im/api/groups
-POST   /im/api/groups/get-or-create
+POST   /im/api/groups/conversations
+POST   /im/api/groups/conversations/get-or-create
 GET    /im/api/groups/:id
 PATCH  /im/api/groups/:id
 GET    /im/api/groups/:id/members

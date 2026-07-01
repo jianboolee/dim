@@ -158,10 +158,10 @@ page, err := session.Conversations().List(ctx, im.ListConversationsParams{
 
 ### 5. 群组能力
 
-群聊不是 peer-user 模型，SDK 应明确提供群组 Service，而不是把群聊塞进私聊快捷方法。
+群聊不是 peer-user 模型，SDK 应明确提供群组 Service，而不是把群聊塞进私聊快捷方法。创建或获取群时优先返回轻量的群会话结果，不默认携带成员列表；需要展示群成员时再调用详情或成员分页接口。
 
 ```go
-group, err := session.Groups().Create(ctx, im.CreateGroupParams{
+group, err := session.Groups().CreateConversation(ctx, im.CreateGroupParams{
     Name:      "项目讨论",
     MemberIDs: []string{"user_c", "user_d"},
 })
@@ -178,7 +178,7 @@ msg, err := session.Messages().Send(ctx, group.Group.ConversationID, im.TextMess
 对于“内容审核群”这类全局或业务唯一群，不应通过“某个机器人只能创建一个群”的隐式规则实现，而应显式建模为带业务唯一键的 get-or-create：
 
 ```go
-group, err := session.Groups().GetOrCreate(ctx, im.GetOrCreateGroupParams{
+group, err := session.Groups().GetOrCreateConversation(ctx, im.GetOrCreateGroupParams{
     UniqueKey: "content_audit",
     Name:      "内容审核群",
     MemberIDs: nil,
@@ -362,8 +362,8 @@ _, err = session.Messages().Send(ctx, conv.ID, im.MessageInput{
 3. 私聊会话方法命名为 `GetOrCreatePrivate`，避免 `CreatePrivate` 造成“必定新建”的误解。
 4. SDK 不提供业务快捷 facade，订单消息、审核消息等组合流程由业务系统自行封装。
 5. SDK 不管理 refresh token、多设备登录和自动续期；相关字段只作为响应数据保留。
-6. 群成员管理第一版提供 `Create`、`Detail`、`Invite`、`Kick`、`Leave`。
-7. 业务唯一群使用 `Groups().GetOrCreate(ctx, params)`，通过 `scope_user_id + unique_key + active` 唯一约束实现；群解散后允许重建。
+6. 群成员管理第一版提供 `CreateConversation`、`Detail`、`Invite`、`Kick`、`Leave`。
+7. 业务唯一群使用 `Groups().GetOrCreateConversation(ctx, params)`，通过 `scope_user_id + unique_key + active` 唯一约束实现；群解散后允许重建。
 8. `MessageInput.ClientMessageID` 放在消息 envelope，作为构造参数直接传入，不使用链式方法。
 9. 用户类型沿用 `normal` / `system` / `bot`，不引入新命名和能力矩阵。
 10. 不保留 `CreatePrivateConversationSession`；前端跳转地址通过 `Session.RedirectURL()` 获取，进入指定会话使用 `Session.RedirectURL(im.WithConversationID(conversationID))`。

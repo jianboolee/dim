@@ -20,14 +20,14 @@ func NewGroupHandler(groupService *service.GroupService) *GroupHandler {
 	return &GroupHandler{groupService: groupService}
 }
 
-func (h *GroupHandler) CreateGroup(c *gin.Context) {
+func (h *GroupHandler) CreateGroupConversation(c *gin.Context) {
 	var req dto.GroupCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request body")
 		return
 	}
 
-	result, err := h.groupService.CreateGroup(c.Request.Context(), contextx.MustGetUserID(c), req)
+	result, err := h.groupService.CreateGroupConversation(c.Request.Context(), contextx.MustGetUserID(c), req)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -35,14 +35,14 @@ func (h *GroupHandler) CreateGroup(c *gin.Context) {
 	response.Success(c, "success", result)
 }
 
-func (h *GroupHandler) GetOrCreateGroup(c *gin.Context) {
+func (h *GroupHandler) GetOrCreateGroupConversation(c *gin.Context) {
 	var req dto.GroupCreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request body")
 		return
 	}
 
-	result, err := h.groupService.GetOrCreateGroup(c.Request.Context(), contextx.MustGetUserID(c), req)
+	result, err := h.groupService.GetOrCreateGroupConversation(c.Request.Context(), contextx.MustGetUserID(c), req)
 	if err != nil {
 		h.handleError(c, err)
 		return

@@ -198,6 +198,10 @@ type GroupDetailResponse struct {
 	Members []GroupMember `json:"members,omitempty"`
 }
 
+type GroupConversationResponse struct {
+	Group *Group `json:"group"`
+}
+
 type GroupMemberPage struct {
 	Items      []GroupMember `json:"items"`
 	NextCursor string        `json:"next_cursor,omitempty"`

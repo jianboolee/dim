@@ -140,8 +140,8 @@ ws.send(JSON.stringify({
 - `POST /im/api/integration/users`：业务系统幂等写入 IM 用户资料，请求体使用 `users`。
 - `POST /im/api/integration/login`：业务系统按 `user_id` 登录 IM，进入会话列表。
 - `POST /im/api/conversations`：登录用户创建或获取单聊，请求体使用 `peer_id`。
-- `POST /im/api/groups`：创建群聊，可传 `member_ids`。
-- `POST /im/api/groups/get-or-create`：按 `scope_user_id + unique_key` 获取或创建业务唯一群。
+- `POST /im/api/groups/conversations`：创建群聊会话，可传 `member_ids`，返回群摘要与 `conversation_id`。
+- `POST /im/api/groups/conversations/get-or-create`：按 `scope_user_id + unique_key` 获取或创建业务唯一群聊会话。
 - `GET /im/api/conversations`：获取当前用户会话列表。
 - `GET /im/api/conversations/:id/messages`：按 `conversation_id` 获取消息。
 - `POST /im/api/conversations/:id/messages`：按 `conversation_id` 发送消息。

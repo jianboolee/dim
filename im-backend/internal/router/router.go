@@ -71,8 +71,8 @@ func SetupAPI(
 		api.PATCH("/conversations/:id/settings", conversationHandler.UpdateSettings)
 		api.GET("/conversations/:id", conversationHandler.GetConversation)
 
-		api.POST("/groups", groupHandler.CreateGroup)
-		api.POST("/groups/get-or-create", groupHandler.GetOrCreateGroup)
+		api.POST("/groups/conversations", groupHandler.CreateGroupConversation)
+		api.POST("/groups/conversations/get-or-create", groupHandler.GetOrCreateGroupConversation)
 		api.GET("/groups/:id", groupHandler.GetGroup)
 		api.PATCH("/groups/:id", groupHandler.UpdateGroup)
 		api.GET("/groups/:id/members", groupHandler.GetMembers)

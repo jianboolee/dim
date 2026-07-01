@@ -70,6 +70,10 @@ type GroupDetailResponse struct {
 	Members []GroupMemberDTO `json:"members,omitempty"`
 }
 
+type GroupConversationResponse struct {
+	Group *GroupDTO `json:"group"`
+}
+
 type GroupMemberListResponse struct {
 	Items      []GroupMemberDTO `json:"items"`
 	NextCursor string           `json:"next_cursor,omitempty"`

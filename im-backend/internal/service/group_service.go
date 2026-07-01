@@ -61,11 +61,15 @@ func NewGroupService(
 	}
 }
 
-func (s *GroupService) CreateGroup(ctx context.Context, creatorID string, req dto.GroupCreateRequest) (*dto.GroupDetailResponse, error) {
-	return s.createGroup(ctx, creatorID, req)
+func (s *GroupService) CreateGroupConversation(ctx context.Context, creatorID string, req dto.GroupCreateRequest) (*dto.GroupConversationResponse, error) {
+	group, err := s.createGroupModel(ctx, creatorID, req)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.GroupConversationResponse{Group: dto.ConvertToGroupDTO(group)}, nil
 }
 
-func (s *GroupService) GetOrCreateGroup(ctx context.Context, creatorID string, req dto.GroupCreateRequest) (*dto.GroupDetailResponse, error) {
+func (s *GroupService) GetOrCreateGroupConversation(ctx context.Context, creatorID string, req dto.GroupCreateRequest) (*dto.GroupConversationResponse, error) {
 	uniqueKey := strings.TrimSpace(req.UniqueKey)
 	if uniqueKey == "" {
 		return nil, ErrGroupUniqueKeyRequired
@@ -76,17 +80,24 @@ func (s *GroupService) GetOrCreateGroup(ctx context.Context, creatorID string, r
 	}
 
 	if group, err := s.groupRepo.GetActiveByUniqueKey(ctx, scopeUserID, uniqueKey); err == nil {
-		return s.GetGroup(ctx, group.ID, creatorID)
+		if _, err := s.getActiveAccessibleGroup(ctx, group.ID, creatorID); err != nil {
+			return nil, err
+		}
+		return &dto.GroupConversationResponse{Group: dto.ConvertToGroupDTO(group)}, nil
 	} else if err != mongo.ErrNoDocuments {
 		return nil, err
 	}
 
 	req.UniqueKey = uniqueKey
 	req.ScopeUserID = scopeUserID
-	return s.createGroup(ctx, creatorID, req)
+	group, err := s.createGroupModel(ctx, creatorID, req)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.GroupConversationResponse{Group: dto.ConvertToGroupDTO(group)}, nil
 }
 
-func (s *GroupService) createGroup(ctx context.Context, creatorID string, req dto.GroupCreateRequest) (*dto.GroupDetailResponse, error) {
+func (s *GroupService) createGroupModel(ctx context.Context, creatorID string, req dto.GroupCreateRequest) (*models.Group, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		name = "群聊"
@@ -140,7 +151,7 @@ func (s *GroupService) createGroup(ctx context.Context, creatorID string, req dt
 	}
 	_ = s.emitGroupEvent(ctx, group, creatorID, models.SystemEventGroupCreated, memberIDs, "", name)
 
-	return s.GetGroup(ctx, group.ID, creatorID)
+	return group, nil
 }
 
 func (s *GroupService) cleanupFailedGroupCreate(ctx context.Context, group *models.Group, conversationID primitive.ObjectID) {

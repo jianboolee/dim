@@ -44,23 +44,23 @@ func (s *Services) GetOrCreateGroupConversation(
 		ScopeUserID: target.ScopeUserID,
 	}
 
-	var groupDetail *GroupDetailResponse
+	var groupConversation *GroupConversationResponse
 	if target.UniqueKey != "" {
-		groupDetail, err = session.Groups().GetOrCreate(ctx, req)
+		groupConversation, err = session.Groups().GetOrCreateConversation(ctx, req)
 	} else {
-		groupDetail, err = session.Groups().Create(ctx, req)
+		groupConversation, err = session.Groups().CreateConversation(ctx, req)
 	}
 	if err != nil {
 		return nil, err
 	}
-	if groupDetail == nil || groupDetail.Group == nil || groupDetail.Group.ConversationID == "" {
+	if groupConversation == nil || groupConversation.Group == nil || groupConversation.Group.ConversationID == "" {
 		return nil, ErrGroupConversationIDMissing
 	}
 
 	return &ConversationSession{
 		session: session,
 		Conversation: &Conversation{
-			ID: groupDetail.Group.ConversationID,
+			ID: groupConversation.Group.ConversationID,
 		},
 	}, nil
 }
