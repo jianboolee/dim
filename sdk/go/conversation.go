@@ -11,24 +11,45 @@ type ConversationService struct {
 	client *client
 }
 
-type CreatePrivateConversationOption func(*CreatePrivateConversationRequest)
+type CreatePrivateConversationOption interface {
+	applyCreatePrivateConversationOption(*CreatePrivateConversationRequest)
+}
 
-func WithInitialMemberMuted(userID string, muted bool) CreatePrivateConversationOption {
-	return func(req *CreatePrivateConversationRequest) {
-		if req.InitialMemberSettings == nil {
-			req.InitialMemberSettings = map[string]ConversationInitialMemberSettings{}
-		}
-		settings := req.InitialMemberSettings[userID]
-		settings.Muted = &muted
-		req.InitialMemberSettings[userID] = settings
+type InitialMemberMutedOption interface {
+	CreatePrivateConversationOption
+	SendMessageOption
+}
+
+type initialMemberMutedOption struct {
+	userID string
+	muted  bool
+}
+
+func WithInitialMemberMuted(userID string, muted bool) InitialMemberMutedOption {
+	return initialMemberMutedOption{userID: userID, muted: muted}
+}
+
+func (o initialMemberMutedOption) applyCreatePrivateConversationOption(req *CreatePrivateConversationRequest) {
+	if req.InitialMemberSettings == nil {
+		req.InitialMemberSettings = map[string]ConversationInitialMemberSettings{}
 	}
+	settings := req.InitialMemberSettings[o.userID]
+	settings.Muted = &o.muted
+	req.InitialMemberSettings[o.userID] = settings
+}
+
+func (o initialMemberMutedOption) applySendMessageOption(options *sendMessageOptions) {
+	options.ensureInitialMemberSettings()
+	settings := options.initialMemberSettings[o.userID]
+	settings.Muted = &o.muted
+	options.initialMemberSettings[o.userID] = settings
 }
 
 func (s *ConversationService) GetOrCreatePrivate(ctx context.Context, peerID string, options ...CreatePrivateConversationOption) (*Conversation, error) {
 	var out Conversation
 	req := CreatePrivateConversationRequest{PeerID: peerID}
 	for _, option := range options {
-		option(&req)
+		option.applyCreatePrivateConversationOption(&req)
 	}
 	if err := s.client.do(ctx, http.MethodPost, "/im/api/conversations", req, &out); err != nil {
 		return nil, err

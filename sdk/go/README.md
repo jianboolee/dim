@@ -5,7 +5,10 @@ Go SDK for business systems integrating with d-im over HTTP.
 This module is intentionally outside `im-backend`. It must not import backend
 `internal` packages or write directly to the database.
 
-## Example
+## High-level Services
+
+Use `Services()` when the business system wants to perform a complete workflow
+without manually composing user upsert, login, conversation creation, and send.
 
 ```go
 imClient := dim.New(
@@ -13,6 +16,20 @@ imClient := dim.New(
     dim.WithAPIKey("change-me-integration-key"),
 )
 
+result, err := imClient.Services().SendTextMessage(
+    ctx,
+    dim.UserInput{ID: "system_notice", Nickname: "系统通知", Type: dim.UserTypeSystem},
+    dim.UserInput{ID: "user_a", Nickname: "Alice"},
+    "hello",
+    dim.WithInitialPeerMuted(true),
+)
+```
+
+## Low-level APIs
+
+Use the low-level APIs when you need to control each step.
+
+```go
 if err := imClient.EnsureUsers(ctx,
     dim.UserInput{ID: "user_a", Nickname: "Alice"},
     dim.UserInput{ID: "user_b", Nickname: "Bob"},
