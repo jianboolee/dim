@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	dim "d-im-go-sdk"
-	"d-im-go-sdk/examples/demo"
+	dim "github.com/jianboolee/dim-sdk"
+	"github.com/jianboolee/dim-sdk/examples/demo"
 )
 
 var User = demo.USER_SYSTEM_NOTICE

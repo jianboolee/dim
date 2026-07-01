@@ -1,6 +1,6 @@
 package demo
 
-import dim "d-im-go-sdk"
+import dim "github.com/jianboolee/dim-sdk"
 
 var USER_AUDITOR = dim.User{
 	ID:       "user_auditor",

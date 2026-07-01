@@ -1,3 +1,3 @@
-module d-im-go-sdk
+module github.com/jianboolee/dim-sdk
 
 go 1.21

@@ -1,6 +1,6 @@
 package demo
 
-import dim "d-im-go-sdk"
+import dim "github.com/jianboolee/dim-sdk"
 
 var CARD_INPUT_A = dim.CardInput{
 	Title:       "瑞弗房车 B型房车 2026款 启界R900-六座航空座椅版",
