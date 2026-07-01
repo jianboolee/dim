@@ -38,17 +38,6 @@ func main() {
 	defer cancel()
 
 	imClient := dim.New(dim.WithBaseURL(apiBase), dim.WithAPIKey(integrationKey))
-	if err := imClient.EnsureUsers(ctx, User, PeerUser); err != nil {
-		log.Fatal(err)
-	}
-	session, err := imClient.Login(ctx, User.ID)
-	if err != nil {
-		log.Fatal(err)
-	}
-	conversation, err := session.Conversations().GetOrCreatePrivate(ctx, PeerUser.ID)
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	// var payload = dim.Payload{
 	// 	Title:       "租车订单已提交，等待商家确认",
@@ -66,7 +55,13 @@ func main() {
 		PriceText:   "￥899元/天起",
 	}
 
-	message, err := session.Messages().Send(ctx, conversation.ID, dim.NewMessage(dim.CardMessage(card)))
+	result, err := imClient.Services().SendCardMessage(
+		ctx,
+		User,
+		PeerUser,
+		card,
+		dim.WithInitialPeerMuted(true),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -75,8 +70,8 @@ func main() {
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(output{
-		ConversationID: conversation.ID,
-		Message:        *message,
+		ConversationID: result.Conversation.ID,
+		Message:        *result.Message,
 	}); err != nil {
 		log.Fatal(err)
 	}

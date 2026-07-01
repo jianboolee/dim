@@ -15,6 +15,7 @@ import (
 
 var User = demo.USER_A
 var PeerUser = demo.USER_CUSTOMER_SERVICE
+var card = demo.CARD_INPUT_A
 
 type output struct {
 	ConversationID string      `json:"conversation_id"`
@@ -38,35 +39,8 @@ func main() {
 	defer cancel()
 
 	imClient := dim.New(dim.WithBaseURL(apiBase), dim.WithAPIKey(integrationKey))
-	if err := imClient.EnsureUsers(ctx, User, PeerUser); err != nil {
-		log.Fatal(err)
-	}
-	session, err := imClient.Login(ctx, User.ID)
-	if err != nil {
-		log.Fatal(err)
-	}
-	conversation, err := session.Conversations().GetOrCreatePrivate(ctx, PeerUser.ID)
-	if err != nil {
-		log.Fatal(err)
-	}
 
-	// card := dim.CardInput{
-	// 	Title:       "览众房车 山海炮 2025款 山海炮侧拓",
-	// 	Description: "",
-	// 	ImageURL:    "https://img01.wanfangche.com/public/upload/202507/09/686ddeeb32cd8.jpg?x-oss-process=style/16x9",
-	// 	URL:         "https://www.21rv.com/auto/model/3001",
-	// 	PriceText:   "¥ 59.80万元",
-	// }
-
-	card := dim.CardInput{
-		Title:       "瑞弗房车 B型房车 2026款 启界R900-六座航空座椅版",
-		Description: "",
-		ImageURL:    "https://img01.wanfangche.com/public/upload/202604/30/69f2f4529ed7d.png?x-oss-process=style/16x9",
-		URL:         "https://www.21rv.com/auto/model/3075",
-		PriceText:   "¥ 35.00万元起",
-	}
-
-	message, err := session.Messages().Send(ctx, conversation.ID, dim.NewMessage(dim.CardMessage(card)))
+	result, err := imClient.Services().SendCardMessage(ctx, User, PeerUser, card)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -75,8 +49,8 @@ func main() {
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(output{
-		ConversationID: conversation.ID,
-		Message:        *message,
+		ConversationID: result.Conversation.ID,
+		Message:        *result.Message,
 	}); err != nil {
 		log.Fatal(err)
 	}

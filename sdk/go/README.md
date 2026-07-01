@@ -50,38 +50,39 @@ if err != nil {
 _, err = session.Messages().Send(ctx, conv.ID, dim.NewMessage(dim.TextMessage("hello")))
 ```
 
-## Seed Example
+## Examples
 
-Login as `user_a` and print the redirect URL for the IM home page:
+High-level service examples:
 
 ```bash
 cd sdk/go
-go run ./examples/login-a \
+go run ./examples/send-message \
+  -api-base http://localhost:8901 \
+  -key change-me-integration-key
+
+go run ./examples/system-notice \
+  -api-base http://localhost:8901 \
+  -key change-me-integration-key
+
+go run ./examples/send-order-message \
   -api-base http://localhost:8901 \
   -key change-me-integration-key
 ```
 
-Create the fixed `user_a` / `user_b` demo conversation and print the returned
-conversation info:
+Low-level examples:
 
 ```bash
 cd sdk/go
+go run ./examples/login \
+  -api-base http://localhost:8901 \
+  -key change-me-integration-key
+
 go run ./examples/user-ab \
   -api-base http://localhost:8901 \
   -key change-me-integration-key
 ```
 
-Send a text message from `user_a` to `user_b`:
-
-```bash
-cd sdk/go
-go run ./examples/user-a-send-b \
-  -api-base http://localhost:8901 \
-  -key change-me-integration-key
-```
-
-The seed example simulates a business system creating conversations and sending
-messages through the SDK.
+The seed example simulates a business system creating conversations and sending messages.
 
 ```bash
 cd sdk/go

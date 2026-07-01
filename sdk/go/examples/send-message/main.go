@@ -39,22 +39,8 @@ func main() {
 	defer cancel()
 
 	imClient := dim.New(dim.WithBaseURL(apiBase), dim.WithAPIKey(integrationKey))
-
-	if err := imClient.EnsureUsers(ctx, User, PeerUser); err != nil {
-		log.Fatal(err)
-	}
-	session, err := imClient.Login(ctx, User.ID)
-	if err != nil {
-		log.Fatal(err)
-	}
-	conversation, err := session.Conversations().GetOrCreatePrivate(ctx, PeerUser.ID)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	content := fmt.Sprintf("你好啊~, 当前时间是: %s", time.Now().Format("2006-01-02 15:04:05"))
-
-	message, err := session.Messages().Send(ctx, conversation.ID, dim.NewMessage(dim.TextMessage(content)))
+	result, err := imClient.Services().SendTextMessage(ctx, User, PeerUser, content)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -63,8 +49,8 @@ func main() {
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(output{
-		ConversationID: conversation.ID,
-		Message:        *message,
+		ConversationID: result.Conversation.ID,
+		Message:        *result.Message,
 	}); err != nil {
 		log.Fatal(err)
 	}
