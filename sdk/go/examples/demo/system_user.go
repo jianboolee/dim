@@ -38,7 +38,7 @@
 //	system_report       数据报告 —— 周报、月报、销售数据等统计报告
 package demo
 
-import dim "github.com/jianboolee/dim-sdk"
+import dim "github.com/jianboolee/dim/sdk/go"
 
 const AvatarSuffix = "?x-oss-process=image/resize,m_fill,w_200,h_200"
 

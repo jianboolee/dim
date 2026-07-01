@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	dim "github.com/jianboolee/dim-sdk"
-	"github.com/jianboolee/dim-sdk/examples/demo"
+	dim "github.com/jianboolee/dim/sdk/go"
+	"github.com/jianboolee/dim/sdk/go/examples/demo"
 )
 
 var PeerUser = demo.USER_B
