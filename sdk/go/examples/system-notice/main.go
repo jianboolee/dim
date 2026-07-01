@@ -57,6 +57,16 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// PeerUser 默认消息免打扰
+	muted := true
+	peerSession, err := imClient.Login(ctx, PeerUser.ID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if _, err := peerSession.Conversations().UpdateSettings(ctx, conversation.ID, dim.ConversationSettingsPatch{Muted: &muted}); err != nil {
+		log.Fatal(err)
+	}
+
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
