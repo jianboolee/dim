@@ -30,6 +30,7 @@ vendor/
 
 # Air - live reload
 tmp/ 
+bin/
 
 
 node_modules
