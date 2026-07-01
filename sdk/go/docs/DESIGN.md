@@ -29,7 +29,7 @@ SDK 同时提供两层能力：底层 API 保持清晰、可组合；高层 `Ser
 - 不管理 refresh token、自动续期、多设备登录生命周期。
 - 不做 Web/APP/小程序登录态协调。
 - 不提供设备管理 UI 或设备列表能力。
-- 不内置业务快捷 facade，例如 `SendOrderMessage`、`SendAuditMessage`。
+- 不内置业务专用 facade，例如 `SendOrderMessage`、`SendAuditMessage`；通用会话工作流由 `Services()` 提供。
 - 不直接暴露内部系统事件消息的构造与发送，例如“xxx 创建了群聊”“xxx 加入了群聊”。
 
 SDK 可以接收后端返回的 `refresh_token` / `session_id` 字段以保持响应结构完整，但不主动使用这些字段做续期逻辑。
@@ -270,30 +270,28 @@ type CardInput struct {
 
 ## 推荐业务封装方式
 
-SDK 不提供业务快捷 facade，但业务系统可以在自己的代码中组合：
+SDK 不提供 `SendOrderMessage`、`SendAuditMessage` 这类业务专用 facade；业务语义仍然留在业务系统。但 SDK 提供通用的 conversation-first `Services()` 工作流，业务系统应优先通过“获取/创建会话，再围绕会话发送消息”的方式封装自己的业务动作：
 
 ```go
 func SendOrderMessage(ctx context.Context, imClient *im.Client, order Order) error {
-    err := imClient.EnsureUser(ctx, im.UserInput{
-        ID:       "order_notification",
-        Nickname: "订单消息",
-        Type:     im.UserTypeSystem,
-    })
+    conv, err := imClient.Services().GetOrCreatePrivateConversation(
+        ctx,
+        im.UserInput{
+            ID:       "order_notification",
+            Nickname: "订单消息",
+            Type:     im.UserTypeSystem,
+        },
+        im.UserInput{
+            ID:       order.UserID,
+            Nickname: order.UserNickname,
+        },
+        im.WithInitialPeerMuted(true),
+    )
     if err != nil {
         return err
     }
 
-    session, err := imClient.Login(ctx, "order_notification")
-    if err != nil {
-        return err
-    }
-
-    conv, err := session.Conversations().GetOrCreatePrivate(ctx, order.UserID)
-    if err != nil {
-        return err
-    }
-
-    _, err = session.Messages().Send(ctx, conv.ID, im.MessageInput{
+    _, err = conv.SendMessage(ctx, im.MessageInput{
         ClientMessageID: "order-" + order.ID + "-submitted",
         Body: im.CardMessage(im.CardInput{
             Title:       "订单已提交",
@@ -306,7 +304,7 @@ func SendOrderMessage(ctx context.Context, imClient *im.Client, order Order) err
 }
 ```
 
-这样 SDK 保持稳定，业务语义留在业务系统。
+这样 SDK 保持稳定的通用会话模型，业务语义留在业务系统。
 
 ---
 
@@ -318,31 +316,19 @@ imClient := im.New(
     im.WithAPIKey(integrationKey),
 )
 
-// 1. 确保用户资料存在
-_ = imClient.EnsureUser(ctx, im.UserInput{
-    ID:       "system_order",
-    Nickname: "订单消息",
-    Type:     im.UserTypeSystem,
-})
-_ = imClient.EnsureUser(ctx, im.UserInput{
-    ID:       "user_b",
-    Nickname: "Brock",
-})
-
-// 2. 以订单消息身份登录
-session, err := imClient.Login(ctx, "system_order")
+// 1. 以订单消息身份打开/创建与 user_b 的私聊
+conv, err := imClient.Services().GetOrCreatePrivateConversation(
+    ctx,
+    im.UserInput{ID: "system_order", Nickname: "订单消息", Type: im.UserTypeSystem},
+    im.UserInput{ID: "user_b", Nickname: "Brock"},
+    im.WithInitialPeerMuted(true),
+)
 if err != nil {
     return err
 }
 
-// 3. 打开/创建与 user_b 的私聊
-conv, err := session.Conversations().GetOrCreatePrivate(ctx, "user_b")
-if err != nil {
-    return err
-}
-
-// 4. 发送卡片消息
-_, err = session.Messages().Send(ctx, conv.ID, im.MessageInput{
+// 2. 围绕 conversation_id 发送卡片消息
+_, err = conv.SendMessage(ctx, im.MessageInput{
     ClientMessageID: "order-123-submitted",
     Body: im.CardMessage(im.CardInput{
         Title:       "租车订单已提交",
@@ -360,7 +346,7 @@ _, err = session.Messages().Send(ctx, conv.ID, im.MessageInput{
 1. 新增独立 integration 用户 upsert endpoint（后端需新增 `POST /im/api/integration/users`），SDK 提供 `EnsureUser(s)`，并支持显式传入用户类型。
 2. `Login` 只接收用户 ID，不写用户资料；用户不存在时返回明确错误。
 3. 私聊会话方法命名为 `GetOrCreatePrivate`，避免 `CreatePrivate` 造成“必定新建”的误解。
-4. SDK 不提供业务快捷 facade，订单消息、审核消息等组合流程由业务系统自行封装。
+4. SDK 不提供 `SendOrderMessage` 这类业务专用 facade；通用高层流程使用 `Services().GetOrCreatePrivateConversation` / `Services().GetOrCreateGroupConversation` 获取 `ConversationSession` 后发送。
 5. SDK 不管理 refresh token、多设备登录和自动续期；相关字段只作为响应数据保留。
 6. 群成员管理第一版提供 `CreateConversation`、`Detail`、`Invite`、`Kick`、`Leave`。
 7. 业务唯一群使用 `Groups().GetOrCreateConversation(ctx, params)`，通过 `scope_user_id + unique_key + active` 唯一约束实现；群解散后允许重建。
