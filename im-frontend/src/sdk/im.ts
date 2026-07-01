@@ -73,6 +73,8 @@ export enum MessageType {
     updated_at?: string;
     /** 服务端通过 WS 推送的权威未读数（仅 WS 消息携带，不从 API 返回） */
     _ws_unread_count?: number;
+    /** 服务端通过 WS 推送的接收者会话免打扰状态（仅 WS 消息携带） */
+    _ws_muted?: boolean;
     /** 服务端通过 WS 推送的会话业务预览图（仅 WS 消息携带，不从消息 payload 推导） */
     _ws_preview_image_url?: string;
   }
@@ -401,6 +403,9 @@ export enum MessageType {
             const message = normalizeMessage(raw.message as Record<string, unknown>);
             if (typeof raw.unread_count === 'number') {
               message._ws_unread_count = raw.unread_count;
+            }
+            if (typeof raw.muted === 'boolean') {
+              message._ws_muted = raw.muted;
             }
             if (typeof raw.preview_image_url === 'string') {
               message._ws_preview_image_url = raw.preview_image_url;

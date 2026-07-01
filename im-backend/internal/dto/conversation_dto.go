@@ -43,6 +43,10 @@ type ConversationSettingsPatchRequest struct {
 	Muted  *bool `json:"muted,omitempty"`
 }
 
+type ConversationInitialMemberSettings struct {
+	Muted *bool `json:"muted,omitempty"`
+}
+
 // ConversationQuery 会话查询参数
 type ConversationQuery struct {
 	Limit                int64  `form:"limit,omitempty"`
@@ -59,5 +63,6 @@ type ConversationListResponse struct {
 
 // ConversationCreateRequest 创建会话的请求
 type ConversationCreateRequest struct {
-	PeerID string `json:"peer_id" binding:"required"`
+	PeerID                string                                       `json:"peer_id" binding:"required"`
+	InitialMemberSettings map[string]ConversationInitialMemberSettings `json:"initial_member_settings,omitempty"`
 }

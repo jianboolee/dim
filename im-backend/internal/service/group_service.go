@@ -485,7 +485,7 @@ func (s *GroupService) upsertConversationMembers(ctx context.Context, conversati
 		if userID == ownerID {
 			role = string(models.GroupMemberRoleOwner)
 		}
-		if _, err := s.conversationMemberRepo.UpsertActive(ctx, conversationID, userID, role, now); err != nil {
+		if _, err := s.conversationMemberRepo.UpsertActive(ctx, conversationID, userID, role, now, nil); err != nil {
 			return err
 		}
 	}

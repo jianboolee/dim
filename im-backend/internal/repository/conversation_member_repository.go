@@ -16,6 +16,10 @@ type ConversationMemberRepository struct {
 	collection *mongo.Collection
 }
 
+type ConversationMemberInitialSettings struct {
+	Muted *bool
+}
+
 func NewConversationMemberRepository(db *mongo.Database) *ConversationMemberRepository {
 	return &ConversationMemberRepository{
 		collection: db.Collection(models.CollectionConversationMember),
@@ -28,32 +32,41 @@ func (r *ConversationMemberRepository) UpsertActive(
 	userID string,
 	roleSnapshot string,
 	joinedAt time.Time,
+	initialSettings *ConversationMemberInitialSettings,
 ) (*models.ConversationMember, error) {
 	now := time.Now()
 	if joinedAt.IsZero() {
 		joinedAt = now
 	}
+	initialMuted := false
+	if initialSettings != nil && initialSettings.Muted != nil {
+		initialMuted = *initialSettings.Muted
+	}
 
 	filter := bson.M{"conversation_id": conversationID, "user_id": userID}
+	setOnInsert := bson.M{
+		"_id":             primitive.NewObjectID(),
+		"conversation_id": conversationID,
+		"user_id":         userID,
+		"joined_at":       joinedAt,
+		"sort_at":         joinedAt,
+		"last_read_seq":   int64(0),
+		"unread_count":    int64(0),
+		"mention_count":   int64(0),
+		"muted":           initialMuted,
+		"pinned":          false,
+		"created_at":      now,
+	}
+	if initialMuted {
+		setOnInsert["muted_at"] = now
+	}
 	update := bson.M{
 		"$set": bson.M{
 			"status":        models.ConversationMemberStatusActive,
 			"role_snapshot": roleSnapshot,
 			"updated_at":    now,
 		},
-		"$setOnInsert": bson.M{
-			"_id":             primitive.NewObjectID(),
-			"conversation_id": conversationID,
-			"user_id":         userID,
-			"joined_at":       joinedAt,
-			"sort_at":         joinedAt,
-			"last_read_seq":   int64(0),
-			"unread_count":    int64(0),
-			"mention_count":   int64(0),
-			"muted":           false,
-			"pinned":          false,
-			"created_at":      now,
-		},
+		"$setOnInsert": setOnInsert,
 	}
 
 	_, err := r.collection.UpdateOne(ctx, filter, update, options.Update().SetUpsert(true))

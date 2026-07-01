@@ -11,9 +11,25 @@ type ConversationService struct {
 	client *client
 }
 
-func (s *ConversationService) GetOrCreatePrivate(ctx context.Context, peerID string) (*Conversation, error) {
+type CreatePrivateConversationOption func(*CreatePrivateConversationRequest)
+
+func WithInitialMemberMuted(userID string, muted bool) CreatePrivateConversationOption {
+	return func(req *CreatePrivateConversationRequest) {
+		if req.InitialMemberSettings == nil {
+			req.InitialMemberSettings = map[string]ConversationInitialMemberSettings{}
+		}
+		settings := req.InitialMemberSettings[userID]
+		settings.Muted = &muted
+		req.InitialMemberSettings[userID] = settings
+	}
+}
+
+func (s *ConversationService) GetOrCreatePrivate(ctx context.Context, peerID string, options ...CreatePrivateConversationOption) (*Conversation, error) {
 	var out Conversation
 	req := CreatePrivateConversationRequest{PeerID: peerID}
+	for _, option := range options {
+		option(&req)
+	}
 	if err := s.client.do(ctx, http.MethodPost, "/im/api/conversations", req, &out); err != nil {
 		return nil, err
 	}

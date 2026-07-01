@@ -39,6 +39,8 @@ var ErrInvalidConversationID = errors.New("invalid conversation id")
 var ErrConversationAccessDenied = errors.New("conversation access denied")
 var ErrCannotStartConversationWithSystemUser = errors.New("cannot start conversation with system user")
 
+type InitialConversationMemberSettings = dto.ConversationInitialMemberSettings
+
 type conversationCursor struct {
 	Pinned bool      `json:"pinned"`
 	SortAt time.Time `json:"sort_at"`
@@ -63,15 +65,29 @@ func NewConversationService(
 
 // CreatePrivateConversation 创建或获取单聊会话
 func (s *ConversationService) CreatePrivateConversation(ctx context.Context, userID, peerID string) (*models.Conversation, error) {
-	return s.getOrCreatePrivateConversation(ctx, userID, peerID)
+	return s.getOrCreatePrivateConversation(ctx, userID, peerID, nil)
+}
+
+func (s *ConversationService) CreatePrivateConversationWithInitialSettings(
+	ctx context.Context,
+	userID string,
+	peerID string,
+	initialMemberSettings map[string]InitialConversationMemberSettings,
+) (*models.Conversation, error) {
+	return s.getOrCreatePrivateConversation(ctx, userID, peerID, initialMemberSettings)
 }
 
 // GetOrCreatePrivateConversation 获取或创建单聊会话（参与者顺序无关）
 func (s *ConversationService) GetOrCreatePrivateConversation(ctx context.Context, userAID, userBID string) (*models.Conversation, error) {
-	return s.getOrCreatePrivateConversation(ctx, userAID, userBID)
+	return s.getOrCreatePrivateConversation(ctx, userAID, userBID, nil)
 }
 
-func (s *ConversationService) getOrCreatePrivateConversation(ctx context.Context, userAID, userBID string) (*models.Conversation, error) {
+func (s *ConversationService) getOrCreatePrivateConversation(
+	ctx context.Context,
+	userAID string,
+	userBID string,
+	initialMemberSettings map[string]InitialConversationMemberSettings,
+) (*models.Conversation, error) {
 	if err := s.ensureCanStartPrivateConversation(ctx, userAID, userBID); err != nil {
 		return nil, err
 	}
@@ -81,14 +97,27 @@ func (s *ConversationService) getOrCreatePrivateConversation(ctx context.Context
 	}
 	if s.memberRepo != nil {
 		now := time.Now()
-		if _, err := s.memberRepo.UpsertActive(ctx, conversation.ID, userAID, "", now); err != nil {
+		if _, err := s.memberRepo.UpsertActive(ctx, conversation.ID, userAID, "", now, conversationMemberInitialSettings(initialMemberSettings, userAID)); err != nil {
 			return nil, err
 		}
-		if _, err := s.memberRepo.UpsertActive(ctx, conversation.ID, userBID, "", now); err != nil {
+		if _, err := s.memberRepo.UpsertActive(ctx, conversation.ID, userBID, "", now, conversationMemberInitialSettings(initialMemberSettings, userBID)); err != nil {
 			return nil, err
 		}
 	}
 	return conversation, nil
+}
+
+func conversationMemberInitialSettings(
+	settingsByUserID map[string]InitialConversationMemberSettings,
+	userID string,
+) *repository.ConversationMemberInitialSettings {
+	settings, ok := settingsByUserID[userID]
+	if !ok {
+		return nil
+	}
+	return &repository.ConversationMemberInitialSettings{
+		Muted: settings.Muted,
+	}
 }
 
 func (s *ConversationService) ensureCanStartPrivateConversation(ctx context.Context, initiatorID, peerID string) error {

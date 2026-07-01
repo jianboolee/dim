@@ -46,7 +46,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	conversation, err := session.Conversations().GetOrCreatePrivate(ctx, PeerUser.ID)
+	conversation, err := session.Conversations().GetOrCreatePrivate(
+		ctx,
+		PeerUser.ID,
+		dim.WithInitialMemberMuted(PeerUser.ID, true),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -54,16 +58,6 @@ func main() {
 	content := fmt.Sprintf("你好，欢迎使用消息系统，当前时间是: %s", time.Now().Format("2006-01-02 15:04:05"))
 	message, err := session.Messages().Send(ctx, conversation.ID, dim.NewMessage(dim.TextMessage(content)))
 	if err != nil {
-		log.Fatal(err)
-	}
-
-	// PeerUser 默认消息免打扰
-	muted := true
-	peerSession, err := imClient.Login(ctx, PeerUser.ID)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if _, err := peerSession.Conversations().UpdateSettings(ctx, conversation.ID, dim.ConversationSettingsPatch{Muted: &muted}); err != nil {
 		log.Fatal(err)
 	}
 

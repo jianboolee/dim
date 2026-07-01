@@ -249,6 +249,7 @@ func (s *MessageService) FanoutMessage(ctx context.Context, message *models.Mess
 		payload := WSPushPayload{
 			Message:         messageDTO,
 			UnreadCount:     member.UnreadCount,
+			Muted:           member.Muted,
 			PreviewImageURL: conversation.PreviewImageURL,
 		}
 		payloadBytes, err := json.Marshal(payload)

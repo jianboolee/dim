@@ -97,7 +97,8 @@ export const useIMStore = defineStore('im', () => {
             if (
                 message.type !== MessageType.Pong &&
                 message.type !== MessageType.Ping &&
-                message.from_id !== userStore.userInfo?.id
+                message.from_id !== userStore.userInfo?.id &&
+                !message._ws_muted
             ) {
                 pageNotificationStore.notifyNewMessage()
             }

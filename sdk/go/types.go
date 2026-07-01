@@ -147,8 +147,13 @@ type ConversationSettingsPatch struct {
 	Muted  *bool `json:"muted,omitempty"`
 }
 
+type ConversationInitialMemberSettings struct {
+	Muted *bool `json:"muted,omitempty"`
+}
+
 type CreatePrivateConversationRequest struct {
-	PeerID string `json:"peer_id"`
+	PeerID                string                                       `json:"peer_id"`
+	InitialMemberSettings map[string]ConversationInitialMemberSettings `json:"initial_member_settings,omitempty"`
 }
 
 type LoginRequest struct {
