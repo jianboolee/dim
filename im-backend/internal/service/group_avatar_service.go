@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	groupAvatarRoutePrefix = "/im/assets/group-avatars"
+	groupAvatarRoutePrefix = "/im/api/public/group-avatars"
 	maxGroupAvatarMembers  = 9
 	maxAvatarDownloadBytes = 5 << 20
 )

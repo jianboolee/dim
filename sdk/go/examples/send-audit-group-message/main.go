@@ -44,6 +44,8 @@ func main() {
 		UniqueKey: "content_audit",
 		Name:      groupName,
 		MemberUsers: []dim.UserInput{
+			demo.USER_CUSTOMER_SERVICE,
+			demo.USER_SYSTEM_AUDIT,
 			demo.USER_A,
 			demo.USER_B,
 		},

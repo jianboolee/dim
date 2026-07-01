@@ -50,9 +50,12 @@ make docker-release IMAGE_TAG=2026-06-25
 
 ## Portainer
 
-Use `portainer-stack.example.yml` as the Portainer stack template. Fill the
-inline environment variables before deployment. `stack.env.example` contains
-the same values in env-file format if you prefer managing them separately.
+Use `portainer-stack.example.yml` as the Portainer stack template. For
+production, copy `stack.env.min.example` to your deployment `.env`, fill every
+value there, then load that `.env` in Portainer. `stack.env.example` contains
+sample values for reference only. The stack template intentionally reads
+configuration only from environment variables and does not define fallback
+defaults, so the env file is the single source of truth.
 
 The example exposes:
 

@@ -80,9 +80,9 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("REDIS_DB", 0)
 
 	viper.SetDefault("JWT_SECRET", "")
-	viper.SetDefault("JWT_EXPIRE", "1h")
+	viper.SetDefault("JWT_EXPIRE", "24h")
 	viper.SetDefault("JWT_REFRESH_EXPIRE", "168h")
-	viper.SetDefault("JWT_MAX_SESSION", "168h")
+	viper.SetDefault("JWT_MAX_SESSION", "720h")
 	viper.SetDefault("JWT_ISSUER", "d-im")
 	viper.SetDefault("JWT_REFRESH_COOKIE_NAME", "d_im_refresh_token")
 	viper.SetDefault("JWT_REFRESH_COOKIE_DOMAIN", "")

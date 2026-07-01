@@ -38,7 +38,8 @@ func SetupAPI(
 
 	im := r.Group("/im")
 	if groupAvatarDirectory != "" {
-		im.StaticFS("/assets/group-avatars", gin.Dir(groupAvatarDirectory, false))
+		public := im.Group("/api/public")
+		public.StaticFS("/group-avatars", gin.Dir(groupAvatarDirectory, false))
 	}
 
 	integration := im.Group("/api/integration")

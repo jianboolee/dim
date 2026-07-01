@@ -34,7 +34,7 @@ func TestGroupAvatarPublicURL(t *testing.T) {
 	})
 
 	got := service.publicURL(groupID, "123.png")
-	want := "https://im.example.com/im/assets/group-avatars/" + groupID.Hex() + "/123.png"
+	want := "https://im.example.com/im/api/public/group-avatars/" + groupID.Hex() + "/123.png"
 	if got != want {
 		t.Fatalf("unexpected public url: got %q, want %q", got, want)
 	}
