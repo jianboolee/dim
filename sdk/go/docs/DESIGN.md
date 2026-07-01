@@ -2,9 +2,9 @@
 
 ## 定位
 
-Go SDK 面向业务后端服务使用，提供一组稳定、类型安全、可测试的 HTTP 操作封装。它是“业务服务端内部操作 IM”的能力层，不负责前端登录态、多端在线、refresh token 自动续期，也不内置业务集成快捷 facade。
+Go SDK 面向业务后端服务使用，提供一组稳定、类型安全、可测试的 HTTP 操作封装。它是“业务服务端内部操作 IM”的能力层，不负责前端登录态、多端在线、refresh token 自动续期。
 
-业务系统如果需要“一行发送订单消息”“审核机器人发群消息”等快捷能力，应在自己的业务层封装。SDK 只提供清晰、可组合的底层 IM 操作。
+SDK 同时提供两层能力：底层 API 保持清晰、可组合；高层 `Services()` 提供通用的 conversation-first 工作流，用于完成“以某个用户身份获取/创建会话，再围绕 conversation_id 发送消息”。SDK 不内置业务专用 facade，例如 `SendOrderMessage`、`SendAuditMessage`。
 
 ---
 
@@ -14,7 +14,7 @@ Go SDK 面向业务后端服务使用，提供一组稳定、类型安全、可�
 |------|------|
 | 职责单一 | `Client` 管配置与 integration 能力，`Session` 表示“以某个用户身份操作”，领域 Service 只管自己的资源 |
 | 显式流转 | `Client.EnsureUser(ctx, user)` 写资料，`Client.Login(ctx, userID)` 创建 `Session`，所有用户态操作都从 `Session` 发起 |
-| 不隐藏业务流程 | SDK 不内置“确保用户、创建会话、发送消息”的业务组合；组合流程由业务方决定 |
+| 会话优先 | 高层 `Services()` 先获取/创建 `ConversationSession`，消息发送只围绕 conversation_id 进行 |
 | 上下文优先 | 所有网络方法第一个参数都是 `context.Context` |
 | 值构造器 | 消息 body 用 `TextMessage()` / `CardMessage()` 等纯函数构造，不为每种消息膨胀发送方法 |
 | 参数结构化 | 复杂查询优先使用 Params struct，避免过多函数式 option 导致调用含义分散 |

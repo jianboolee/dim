@@ -15,7 +15,6 @@ import (
 )
 
 type output struct {
-	Group          *dim.Group  `json:"group"`
 	ConversationID string      `json:"conversation_id"`
 	Message        dim.Message `json:"message"`
 }
@@ -44,47 +43,31 @@ func main() {
 
 	imClient := dim.New(dim.WithBaseURL(apiBase), dim.WithAPIKey(integrationKey))
 
-	// 1. 确保客服、卖家、买家用户的资料存在
-	if err := imClient.EnsureUsers(ctx, Bot, PeerUser, User, demo.USER_A, demo.USER_B, demo.USER_C, demo.USER_D); err != nil {
-		log.Fatal(err)
-	}
-
-	// 2. 以客服身份登录并创建/获取咨询群
-	csSession, err := imClient.Login(ctx, Bot.ID)
-	if err != nil {
-		log.Fatalf("login customer service: %v", err)
-	}
-
 	UniqueKey := PeerUser.ID + "_" + User.ID
 
 	groupName := fmt.Sprintf("[咨询] %s", Card.Title)
 
-	group, err := csSession.Groups().GetOrCreate(ctx, dim.GetOrCreateGroupParams{
+	createdConv, err := imClient.Services().GetOrCreateGroupConversation(ctx, Bot, dim.GroupTarget{
 		UniqueKey: UniqueKey,
 		Name:      groupName,
-		MemberIDs: []string{
-			PeerUser.ID,
-			User.ID,
-			demo.USER_A.ID,
-			demo.USER_B.ID,
-			demo.USER_C.ID,
-			demo.USER_D.ID,
+		MemberUsers: []dim.UserInput{
+			PeerUser,
+			User,
+			demo.USER_A,
+			demo.USER_B,
+			demo.USER_C,
+			demo.USER_D,
 		},
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	if group.Group == nil {
-		log.Fatal("create group response missing group")
-	}
 
-	// 3. 以买家 USER_A 身份登录并发送卡片消息到群内
-	userASession, err := imClient.Login(ctx, User.ID)
+	senderConv, err := imClient.Services().GetConversation(ctx, User, createdConv.ID())
 	if err != nil {
-		log.Fatalf("login %s: %v", User.ID, err)
+		log.Fatal(err)
 	}
-
-	message, err := userASession.Messages().Send(ctx, group.Group.ConversationID, dim.NewMessage(dim.CardMessage(Card)))
+	message, err := senderConv.SendCardMessage(ctx, Card)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -93,8 +76,7 @@ func main() {
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(output{
-		Group:          group.Group,
-		ConversationID: group.Group.ConversationID,
+		ConversationID: senderConv.ID(),
 		Message:        *message,
 	}); err != nil {
 		log.Fatal(err)

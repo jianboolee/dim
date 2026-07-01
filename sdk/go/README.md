@@ -7,8 +7,9 @@ This module is intentionally outside `im-backend`. It must not import backend
 
 ## High-level Services
 
-Use `Services()` when the business system wants to perform a complete workflow
-without manually composing user upsert, login, conversation creation, and send.
+Use `Services()` when the business system wants to bind an operation identity to
+a conversation without manually composing user upsert, login, and conversation
+creation.
 
 ```go
 imClient := dim.New(
@@ -16,13 +17,31 @@ imClient := dim.New(
     dim.WithAPIKey("change-me-integration-key"),
 )
 
-result, err := imClient.Services().SendTextMessage(
+conv, err := imClient.Services().GetOrCreatePrivateConversation(
     ctx,
     dim.UserInput{ID: "system_notice", Nickname: "系统通知", Type: dim.UserTypeSystem},
     dim.UserInput{ID: "user_a", Nickname: "Alice"},
-    "hello",
     dim.WithInitialPeerMuted(true),
 )
+if err != nil {
+    return err
+}
+
+message, err := conv.SendTextMessage(ctx, "hello")
+```
+
+Group conversations use the same send model:
+
+```go
+conv, err := imClient.Services().GetOrCreateGroupConversation(ctx, botUser, dim.GroupTarget{
+    UniqueKey: "content_audit",
+    MemberUsers: []dim.UserInput{auditorA, auditorB},
+})
+if err != nil {
+    return err
+}
+
+message, err := conv.SendTextMessage(ctx, "please review this content")
 ```
 
 ## Low-level APIs

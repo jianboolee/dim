@@ -17,7 +17,6 @@ import (
 var AuditBot = demo.USER_SYSTEM_AUDIT
 
 type output struct {
-	Group          *dim.Group  `json:"group"`
 	ConversationID string      `json:"conversation_id"`
 	Message        dim.Message `json:"message"`
 }
@@ -41,30 +40,19 @@ func main() {
 	defer cancel()
 
 	imClient := dim.New(dim.WithBaseURL(apiBase), dim.WithAPIKey(integrationKey))
-	if err := imClient.EnsureUsers(ctx, AuditBot, demo.USER_A, demo.USER_B); err != nil {
-		log.Fatal(err)
-	}
-	botSession, err := imClient.Login(ctx, AuditBot.ID)
-	if err != nil {
-		log.Fatalf("login audit bot: %v", err)
-	}
-
-	group, err := botSession.Groups().GetOrCreate(ctx, dim.GetOrCreateGroupParams{
+	conv, err := imClient.Services().GetOrCreateGroupConversation(ctx, AuditBot, dim.GroupTarget{
 		UniqueKey: "content_audit",
 		Name:      groupName,
-		MemberIDs: []string{
-			demo.USER_A.ID,
-			demo.USER_B.ID,
+		MemberUsers: []dim.UserInput{
+			demo.USER_A,
+			demo.USER_B,
 		},
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
-	if group.Group == nil {
-		log.Fatal("create group response missing group")
-	}
 
-	message, err := botSession.Messages().Send(ctx, group.Group.ConversationID, dim.NewMessage(dim.TextMessage(auditMessageContent())))
+	message, err := conv.SendTextMessage(ctx, auditMessageContent())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -73,8 +61,7 @@ func main() {
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(output{
-		Group:          group.Group,
-		ConversationID: group.Group.ConversationID,
+		ConversationID: conv.ID(),
 		Message:        *message,
 	}); err != nil {
 		log.Fatal(err)

@@ -38,6 +38,10 @@ func main() {
 	defer cancel()
 
 	imClient := dim.New(dim.WithBaseURL(apiBase), dim.WithAPIKey(integrationKey))
+	conv, err := imClient.Services().GetOrCreatePrivateConversation(ctx, User, PeerUser)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	card := dim.CardInput{
 		Title:       "[租车]暑期特惠，租车低至899元/天起",
@@ -47,7 +51,7 @@ func main() {
 		PriceText:   "￥899元/天起",
 	}
 
-	result, err := imClient.Services().SendCardMessage(ctx, User, PeerUser, card)
+	message, err := conv.SendCardMessage(ctx, card)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -56,8 +60,8 @@ func main() {
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(output{
-		ConversationID: result.Conversation.ID,
-		Message:        *result.Message,
+		ConversationID: conv.ID(),
+		Message:        *message,
 	}); err != nil {
 		log.Fatal(err)
 	}

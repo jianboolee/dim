@@ -17,7 +17,7 @@ type CreatePrivateConversationOption interface {
 
 type InitialMemberMutedOption interface {
 	CreatePrivateConversationOption
-	SendMessageOption
+	PrivateConversationServiceOption
 }
 
 type initialMemberMutedOption struct {
@@ -38,7 +38,7 @@ func (o initialMemberMutedOption) applyCreatePrivateConversationOption(req *Crea
 	req.InitialMemberSettings[o.userID] = settings
 }
 
-func (o initialMemberMutedOption) applySendMessageOption(options *sendMessageOptions) {
+func (o initialMemberMutedOption) applyPrivateConversationServiceOption(options *privateConversationServiceOptions) {
 	options.ensureInitialMemberSettings()
 	settings := options.initialMemberSettings[o.userID]
 	settings.Muted = &o.muted

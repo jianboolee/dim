@@ -2,16 +2,15 @@ package dim
 
 import "context"
 
-func (s *Services) SendMessage(
+func (s *Services) GetOrCreatePrivateConversation(
 	ctx context.Context,
 	user UserInput,
 	peerUser UserInput,
-	message MessageInput,
-	options ...SendMessageOption,
-) (*SendMessageResult, error) {
-	opts := defaultSendMessageOptions()
+	options ...PrivateConversationServiceOption,
+) (*ConversationSession, error) {
+	opts := defaultPrivateConversationServiceOptions()
 	for _, option := range options {
-		option.applySendMessageOption(&opts)
+		option.applyPrivateConversationServiceOption(&opts)
 	}
 
 	if opts.ensureUsers {
@@ -25,46 +24,21 @@ func (s *Services) SendMessage(
 		return nil, err
 	}
 
-	conversation, err := session.Conversations().GetOrCreatePrivate(ctx, peerUser.ID, buildCreatePrivateConversationOptions(user, peerUser, opts)...)
+	conversation, err := session.Conversations().GetOrCreatePrivate(ctx, peerUser.ID, buildPrivateConversationOptions(user, peerUser, opts)...)
 	if err != nil {
 		return nil, err
 	}
 
-	sentMessage, err := session.Messages().Send(ctx, conversation.ID, message)
-	if err != nil {
-		return nil, err
-	}
-
-	return &SendMessageResult{
+	return &ConversationSession{
+		session:      session,
 		Conversation: conversation,
-		Message:      sentMessage,
 	}, nil
 }
 
-func (s *Services) SendTextMessage(
-	ctx context.Context,
+func buildPrivateConversationOptions(
 	user UserInput,
 	peerUser UserInput,
-	content string,
-	options ...SendMessageOption,
-) (*SendMessageResult, error) {
-	return s.SendMessage(ctx, user, peerUser, NewMessage(TextMessage(content)), options...)
-}
-
-func (s *Services) SendCardMessage(
-	ctx context.Context,
-	user UserInput,
-	peerUser UserInput,
-	card CardInput,
-	options ...SendMessageOption,
-) (*SendMessageResult, error) {
-	return s.SendMessage(ctx, user, peerUser, NewMessage(CardMessage(card)), options...)
-}
-
-func buildCreatePrivateConversationOptions(
-	user UserInput,
-	peerUser UserInput,
-	options sendMessageOptions,
+	options privateConversationServiceOptions,
 ) []CreatePrivateConversationOption {
 	conversationOptions := make([]CreatePrivateConversationOption, 0, len(options.initialMemberSettings)+2)
 	for userID, settings := range options.initialMemberSettings {

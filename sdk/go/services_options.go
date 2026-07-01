@@ -14,36 +14,72 @@ func defaultLoginUserOptions() loginUserOptions {
 	}
 }
 
-type SendMessageOption interface {
-	applySendMessageOption(*sendMessageOptions)
+type PrivateConversationServiceOption interface {
+	applyPrivateConversationServiceOption(*privateConversationServiceOptions)
 }
 
-type sendMessageOptions struct {
+type privateConversationServiceOptions struct {
 	ensureUsers           bool
 	initialSenderMuted    *bool
 	initialPeerMuted      *bool
 	initialMemberSettings map[string]ConversationInitialMemberSettings
 }
 
-func defaultSendMessageOptions() sendMessageOptions {
-	return sendMessageOptions{
+func defaultPrivateConversationServiceOptions() privateConversationServiceOptions {
+	return privateConversationServiceOptions{
 		ensureUsers: true,
 	}
 }
 
-func (o *sendMessageOptions) ensureInitialMemberSettings() {
+func (o *privateConversationServiceOptions) ensureInitialMemberSettings() {
 	if o.initialMemberSettings == nil {
 		o.initialMemberSettings = map[string]ConversationInitialMemberSettings{}
 	}
 }
 
+type GroupConversationServiceOption interface {
+	applyGroupConversationServiceOption(*groupConversationServiceOptions)
+}
+
+type groupConversationServiceOptions struct {
+	ensureUsers bool
+}
+
+func defaultGroupConversationServiceOptions() groupConversationServiceOptions {
+	return groupConversationServiceOptions{
+		ensureUsers: true,
+	}
+}
+
+type GroupMemberServiceOption interface {
+	applyGroupMemberServiceOption(*groupMemberServiceOptions)
+}
+
+type groupMemberServiceOptions struct {
+	ensureUsers bool
+}
+
+func defaultGroupMemberServiceOptions() groupMemberServiceOptions {
+	return groupMemberServiceOptions{
+		ensureUsers: true,
+	}
+}
+
 type withoutEnsureUsersOption struct{}
 
-func WithoutEnsureUsers() SendMessageOption {
+func WithoutEnsureUsers() withoutEnsureUsersOption {
 	return withoutEnsureUsersOption{}
 }
 
-func (o withoutEnsureUsersOption) applySendMessageOption(options *sendMessageOptions) {
+func (o withoutEnsureUsersOption) applyPrivateConversationServiceOption(options *privateConversationServiceOptions) {
+	options.ensureUsers = false
+}
+
+func (o withoutEnsureUsersOption) applyGroupConversationServiceOption(options *groupConversationServiceOptions) {
+	options.ensureUsers = false
+}
+
+func (o withoutEnsureUsersOption) applyGroupMemberServiceOption(options *groupMemberServiceOptions) {
 	options.ensureUsers = false
 }
 
@@ -51,11 +87,11 @@ type initialPeerMutedOption struct {
 	muted bool
 }
 
-func WithInitialPeerMuted(muted bool) SendMessageOption {
+func WithInitialPeerMuted(muted bool) initialPeerMutedOption {
 	return initialPeerMutedOption{muted: muted}
 }
 
-func (o initialPeerMutedOption) applySendMessageOption(options *sendMessageOptions) {
+func (o initialPeerMutedOption) applyPrivateConversationServiceOption(options *privateConversationServiceOptions) {
 	options.initialPeerMuted = &o.muted
 }
 
@@ -63,10 +99,10 @@ type initialSenderMutedOption struct {
 	muted bool
 }
 
-func WithInitialSenderMuted(muted bool) SendMessageOption {
+func WithInitialSenderMuted(muted bool) initialSenderMutedOption {
 	return initialSenderMutedOption{muted: muted}
 }
 
-func (o initialSenderMutedOption) applySendMessageOption(options *sendMessageOptions) {
+func (o initialSenderMutedOption) applyPrivateConversationServiceOption(options *privateConversationServiceOptions) {
 	options.initialSenderMuted = &o.muted
 }
