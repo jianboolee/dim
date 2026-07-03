@@ -14,7 +14,7 @@ import (
 	"github.com/jianboolee/dim/sdk/go/examples/demo"
 )
 
-var AuditBot = demo.USER_SYSTEM_AUDIT
+var AuditBot = dim.USER_SYSTEM_AUDIT
 
 type output struct {
 	ConversationID string      `json:"conversation_id"`
@@ -45,7 +45,7 @@ func main() {
 		Name:      groupName,
 		MemberUsers: []dim.UserInput{
 			demo.USER_CUSTOMER_SERVICE,
-			demo.USER_SYSTEM_AUDIT,
+			dim.USER_SYSTEM_AUDIT,
 			demo.USER_A,
 			demo.USER_B,
 		},

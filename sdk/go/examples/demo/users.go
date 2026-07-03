@@ -2,6 +2,8 @@ package demo
 
 import dim "github.com/jianboolee/dim/sdk/go"
 
+const AvatarSuffix = "?x-oss-process=image/resize,m_fill,w_200,h_200"
+
 var USER_AUDITOR = dim.User{
 	ID:       "user_auditor",
 	Nickname: "审核员",

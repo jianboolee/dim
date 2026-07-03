@@ -14,7 +14,7 @@ import (
 	"github.com/jianboolee/dim/sdk/go/examples/demo"
 )
 
-var User = demo.USER_SYSTEM_SERVICE
+var User = dim.USER_SYSTEM_SERVICE
 var PeerUser = demo.USER_A
 
 type output struct {
