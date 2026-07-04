@@ -14,7 +14,7 @@ import (
 )
 
 var User = demo.USER_A
-var PeerUser = demo.USER_B
+var PeerUser = demo.USER_CUSTOMER_SERVICE
 
 type output struct {
 	ConversationID string      `json:"conversation_id"`

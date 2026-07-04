@@ -36,13 +36,6 @@ const (
 	// 结构化内容
 	MessageTypeLink MessageType = "link"
 	MessageTypeCard MessageType = "card"
-	MessageTypePoll MessageType = "poll"
-	MessageTypeForm MessageType = "form"
-	MessageTypePost MessageType = "post" // 用于社区动态/帖子
-
-	// 行为类（记录但不展示）
-	MessageTypeFavorite MessageType = "favorite"
-	MessageTypeLike     MessageType = "like"
 )
 
 const (
@@ -73,8 +66,8 @@ type Message struct {
 	Payload     *Payload `bson:"payload,omitempty" json:"payload"`                     // 解码后的动态结构，前端使用
 
 	// 回复/引用关系
-	ParentMessageID *primitive.ObjectID `bson:"parent_message_id,omitempty" json:"parent_message_id,omitempty"` // 回复的消息（用于评论、子消息）
-	RootMessageID   *primitive.ObjectID `bson:"root_message_id,omitempty" json:"root_message_id,omitempty"`     // 所属的主消息（例如帖子）
+	ParentMessageID *primitive.ObjectID `bson:"parent_message_id,omitempty" json:"parent_message_id,omitempty"` // 回复的消息
+	RootMessageID   *primitive.ObjectID `bson:"root_message_id,omitempty" json:"root_message_id,omitempty"`     // 所属的根消息
 
 	// 互动状态
 	Status         MessageStatus       `bson:"status" json:"status"`                                         // 消息状态
@@ -109,7 +102,7 @@ type Payload struct {
 func (m *Message) GenerateDigest() {
 	previewText := m.Content
 	switch m.Type {
-	case MessageTypeText, MessageTypeQuote, MessageTypeSystem, MessageTypeSystemEvent, MessageTypePost:
+	case MessageTypeText, MessageTypeQuote, MessageTypeSystem, MessageTypeSystemEvent:
 		// 文本类：保留原始 content 作为摘要
 	case MessageTypeImage:
 		previewText = "[图片]"
@@ -137,7 +130,7 @@ func (m *Message) GenerateDigest() {
 		previewText = "[消息]"
 	}
 	m.PreviewText = previewText
-	if m.Type != MessageTypeText && m.Type != MessageTypeQuote && m.Type != MessageTypeSystem && m.Type != MessageTypeSystemEvent && m.Type != MessageTypePost {
+	if m.Type != MessageTypeText && m.Type != MessageTypeQuote && m.Type != MessageTypeSystem && m.Type != MessageTypeSystemEvent {
 		m.Content = previewText
 	}
 }

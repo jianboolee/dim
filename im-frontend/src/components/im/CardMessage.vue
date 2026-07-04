@@ -3,26 +3,18 @@
   <div class="message-content message-card">
     <div class="message-arrow"></div>
     <div @click="handleCardClick" class="card-link">
-      <div class="card-thumb">
-        <template v-if="!imageError">
-          <img 
-            v-if="message.payload?.image_url"
-            :src="message.payload.image_url" 
-            alt=""
-            @error="imageError = true"
-          >
-          <PlaceholderImage 
-            v-else
-            text=""
-            bgColor="#EFF1F8"
-            aspect="1:1"
-          />
-        </template>
+      <div v-if="message.payload?.image_url" class="card-thumb">
+        <img 
+          v-if="!imageError"
+          :src="message.payload.image_url" 
+          alt=""
+          @error="imageError = true"
+        >
         <PlaceholderImage 
           v-else
           text=""
           bgColor="#EFF1F8"
-          aspect="1:1"
+          aspect="4:3"
         />
       </div>
       <div class="card-info">
@@ -135,7 +127,7 @@ const openLink = () => {
 }
 
 .card-title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
   color: var(--text-color-dark);
   margin-bottom: 4px;
@@ -148,8 +140,8 @@ const openLink = () => {
 }
 
 .card-desc {
-  font-size: 12px;
-  color: var(--text-color-light);
+  font-size: 13px;
+  color: var(--text-color-muted);
   line-height: 1.5;
   overflow: hidden;
   text-overflow: ellipsis;
